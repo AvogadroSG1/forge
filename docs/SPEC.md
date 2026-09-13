@@ -41,7 +41,8 @@ ADR-0003 (one shared gate pipeline) · ADR-0004 (init fail-fast, no rollback) ·
 (engine: Go + text/template + embed.FS) · ADR-0008 (strict empty-dir precondition) · ADR-0009
 (remote default gh, Phase-3-last, never auto-delete) · ADR-0010 (guideline is the conformance
 floor, not the ceiling) · ADR-0012 (skill provisioning via APM-backed instill) · ADR-0013
-(frontend dimension: fragments under web/) · ADR-0014 (typescript toolchain).
+(frontend dimension: fragments under web/) · ADR-0014 (typescript toolchain) · ADR-0020 (env-gated
+OpenTelemetry bootstrap in every stack).
 
 ---
 
@@ -399,6 +400,37 @@ files** (`mise.toml`, `lefthook.yml`, `.github/`) — the backend overlay's temp
 `{{if .Frontend}}` half. The `.gitignore` merge appends a `Node` section after the backend
 language section.
 
+### 9.4 Observability baseline
+
+*(Authoritative: ADR-0020.)*
+
+Every shipped stack's overlay carries a **telemetry bootstrap**: one telemetry module plus a real
+test, shipped as a vetted extra (ADR-0010, §10.2) with no guideline edit.
+
+- **Module per stack.** Go: `internal/telemetry/` (`cmd/telemetry.go` on cobra). Python:
+  `<package>/telemetry.py` (`src/<package>/` on typer). C#: `Telemetry.cs` +
+  `TelemetryServiceCollectionExtensions.cs` (extension in namespace
+  `Microsoft.Extensions.DependencyInjection` so the verbatim webapi `Program.cs` needs no `using`).
+  TypeScript: `src/lib/telemetry.ts` (vite-ts, sveltekit) / `src/app/telemetry.ts` (angular),
+  built on `@opentelemetry/sdk-trace-web` because the three TS stacks are browser bundles.
+- **Env contract.** Tracer + meter providers, `service.name` and W3C propagation are installed
+  unconditionally; `service.name` is `OTEL_SERVICE_NAME`, else the repo slug. OTLP/HTTP exporters
+  attach **only** when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (browser stacks:
+  `VITE_OTEL_EXPORTER_OTLP_ENDPOINT`, Angular `environment.otlpEndpoint`). Unset means providers
+  only — no exporter, no retry noise. Signals are traces + metrics; logs are a filed follow-up.
+  Python stacks add a `mise run serve` (`run-cli` on typer) task that runs the app under
+  `opentelemetry-instrument`, with the same endpoint guard exporting `OTEL_*_EXPORTER=none` when
+  no collector is configured.
+- **Non-vacuous test.** The module's test injects an in-memory span exporter and metric reader,
+  starts one span, records one metric, and asserts both arrive — the observability slice of the
+  walking-skeleton guarantee (§16). HTTP stacks additionally assert a `/health` request yields
+  a `GET /health` span; CLI stacks assert the command span.
+- **Refresh seam note.** Telemetry files are overlay files. `internal/telemetry/` is an orphan
+  on `forge update` exactly like `internal/httpapi/`; every other placement has a vanilla
+  parent dir. Dependencies are pinned in the stack manifests (`go.mod.tmpl`,
+  `pyproject.toml.tmpl`, `*.csproj.tmpl`, overlay `package.json.tmpl`), the existing precedent
+  for overlay tools. Owning test: `TestGoldenStacksShipTelemetryBootstrap` (§18).
+
 ---
 
 ## 10. Enforced gate pipeline
@@ -414,14 +446,14 @@ One gate definition, multiple callers — no local/CI drift. `mise.toml` holds `
 ### 10.1 Overlay tool table (de-staled — xUnit, pyright, no NUnit/mypy)
 
 Every overlay tool traces to a canonical guideline file; the conformance test (`ebp`) enforces the
-**floor** (§10.2).
+**floor** (§10.2). The **Telemetry** column is a vetted extra above the floor (§9.4, ADR-0020).
 
-| | Format | Lint | Test | Mock | Coverage | Type | Audit |
-|---|---|---|---|---|---|---|---|
-| **Go** | `gofmt` | `golangci-lint` | `testing` + `go-cmp` | *(none — idiomatic fakes)* | `go test -cover` | — | `govulncheck` |
-| **Python** | `ruff format` | `ruff` | `pytest` | `pytest-mock` | `pytest-cov` | `pyright` | `pip-audit` |
-| **C#** | `dotnet format` | StyleCop.Analyzers | **xUnit** | NSubstitute | coverlet | nullable refs | `dotnet list package --vulnerable` |
-| **TypeScript** | `prettier` | `eslint` (typescript-eslint / angular-eslint / eslint-plugin-svelte) | `vitest` | *(vi stubs)* | vitest coverage | `tsc --noEmit` / `svelte-check` | `npm audit --audit-level=high` |
+| | Format | Lint | Test | Mock | Coverage | Type | Audit | Telemetry |
+|---|---|---|---|---|---|---|---|---|
+| **Go** | `gofmt` | `golangci-lint` | `testing` + `go-cmp` | *(none — idiomatic fakes)* | `go test -cover` | — | `govulncheck` | `otel` + `otelhttp` + runtime metrics |
+| **Python** | `ruff format` | `ruff` | `pytest` | `pytest-mock` | `pytest-cov` | `pyright` | `pip-audit` | `opentelemetry-distro` / `opentelemetry-instrument` + `instrumentation-fastapi` |
+| **C#** | `dotnet format` | StyleCop.Analyzers | **xUnit** | NSubstitute | coverlet | nullable refs | `dotnet list package --vulnerable` | `OpenTelemetry.Extensions.Hosting` + AspNetCore/Http/Runtime instrumentation |
+| **TypeScript** | `prettier` | `eslint` (typescript-eslint / angular-eslint / eslint-plugin-svelte) | `vitest` | *(vi stubs)* | vitest coverage | `tsc --noEmit` / `svelte-check` | `npm audit --audit-level=high` | `sdk-trace-web` + `sdk-metrics` + `instrumentation-fetch` |
 
 ### 10.2 Conformance semantics — guideline is the floor, not the ceiling
 
@@ -805,6 +837,7 @@ Feature's `all-children` gate IS the seam test.)*
 | **Update idempotence** | `369` (steps interpreter) × `cjl` (normalization/refresh) | **Maintainer-refresh Feature gate**: `forge update --stack <key>` run twice with no upstream change → `templates/golden/<key>/` byte-identical, overlay untouched, git diff empty. | Feature `all-children` gate. |
 | **Conformance fixture** | `zz8` (publish guidelines) → `ebp` (conformance test) | Precondition, not a composition seam: `ebp` reads the guideline files from the in-repo vendored snapshots (`test/testdata/guidelines/`, **ADR-0018**), refreshed from the canonical path by `cp -f` after `zz8` publishes. | Plain `blockedBy` edge (`ebp` blocked-by `zz8`). |
 | **Chain-mode hooks** | `485` (verify beads hooks survive `lefthook install`) → `x2k` (real multi-job lefthook) | `485` proves chain mode in isolation; the local smoke (§16.1) exercises pre-commit/pre-push at runtime without duplicating the `485` proof. | `x2k` blocked-by `485` (existing edge). |
+| **Telemetry bootstrap** | overlay telemetry module + test × stack manifest OpenTelemetry dependency (`agentic_template_start-6cf`, ADR-0020) | `TestGoldenStacksShipTelemetryBootstrap` (`test/golden_assets_test.go`): for every v1 stack, the manifest pins the OpenTelemetry dependency **and** the overlay ships the telemetry module and its test; `TestPythonStacksRunUnderOpentelemetryInstrument` pins the `serve`/`run-cli` wrapper task. | Epic `all-children` gate; each platform child (`.3`–`.6`) turns its rows green. |
 
 ### 18.1 Work hierarchy (Epic → Feature → Story)
 
