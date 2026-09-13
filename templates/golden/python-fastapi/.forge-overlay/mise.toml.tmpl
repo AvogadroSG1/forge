@@ -20,7 +20,7 @@ run = "pytest -q --cov=."
 
 # opentelemetry-instrument reads OTEL_* from the environment; the endpoint guard keeps exporters off when no OTLP endpoint is set.
 [tasks.serve]
-run = "export OTEL_SERVICE_NAME=\"${OTEL_SERVICE_NAME:-{{.RepoSlug}}}\"; if [ -z \"${OTEL_EXPORTER_OTLP_ENDPOINT:-}\" ]; then export OTEL_TRACES_EXPORTER=none OTEL_METRICS_EXPORTER=none OTEL_LOGS_EXPORTER=none; else export OTEL_EXPORTER_OTLP_PROTOCOL=${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}; fi; opentelemetry-instrument uvicorn {{.PythonPackage}}.main:app --port 8000"
+run = "export OTEL_SERVICE_NAME=\"${OTEL_SERVICE_NAME:-{{.RepoSlug}}}\"; if [ -z \"${OTEL_EXPORTER_OTLP_ENDPOINT:-}${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-}${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:-}\" ]; then export OTEL_TRACES_EXPORTER=none OTEL_METRICS_EXPORTER=none OTEL_LOGS_EXPORTER=none; else export OTEL_EXPORTER_OTLP_PROTOCOL=${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}; fi; opentelemetry-instrument uvicorn {{.PythonPackage}}.main:app --port 8000"
 {{- if .Frontend }}
 
 [tasks.web-fmt]

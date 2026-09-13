@@ -13,6 +13,8 @@ See `AGENTS.md` for contributor workflow.
 ## Observability
 
 OpenTelemetry traces and metrics are wired in from day one. The service name comes from
-`OTEL_SERVICE_NAME` (default: the repository slug). Nothing is exported until
+`OTEL_SERVICE_NAME` (default: the repository slug); browser bundles cannot read the
+environment, so vite/sveltekit use build-time `VITE_OTEL_SERVICE_NAME` and Angular uses
+`environment.serviceName`. Nothing is exported until
 `OTEL_EXPORTER_OTLP_ENDPOINT` points at an OTLP/HTTP collector; browser projects use
 `VITE_OTEL_EXPORTER_OTLP_ENDPOINT` (Angular: `environment.ts`) instead.

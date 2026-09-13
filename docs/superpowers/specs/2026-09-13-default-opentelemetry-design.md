@@ -79,7 +79,7 @@ Every stack gets the same four things in the idiom of its ecosystem:
 
 - `test/golden_assets_test.go`: `TestGoldenStacksShipTelemetryBootstrap` (table of `stack → {manifestPath, depSnippet, modulePath, testPath}`) owns the "telemetry module × manifest dep" seam (SPEC §18); `TestPythonStacksRunUnderOpentelemetryInstrument` pins the wrapper task; per-stack file lists in `TestGoldenCatalogPackagesVanillaAndOverlayAssetsForEveryV1Stack` extended with module + test.
 - `internal/scaffold/writer_test.go` real-asset render tests validate every new `.tmpl` under `missingkey=error`.
-- No changes to `test/guideline_conformance_test.go` or `internal/upgrade`.
+- `test/guideline_conformance_test.go` changes only in two evidence paths (the python-cli-typer and python-web-jinja overlay `mise.toml` became `mise.toml.tmpl`); no rule or floor changes, and no changes to `internal/upgrade`.
 
 ### 3.6 Verification Plan
 
