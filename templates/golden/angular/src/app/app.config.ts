@@ -14,7 +14,10 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes),
     provideAppInitializer(() => {
-      startTelemetry({ otlpEndpoint: environment.otlpEndpoint });
+      startTelemetry({
+        otlpEndpoint: environment.otlpEndpoint,
+        serviceName: environment.serviceName || undefined,
+      });
     }),
   ],
 };

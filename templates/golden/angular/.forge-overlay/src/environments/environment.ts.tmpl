@@ -5,4 +5,7 @@ export const environment = {
   // OTLP/HTTP collector base URL for OpenTelemetry. Empty keeps the providers
   // installed but attaches no exporter, so a repo with no collector stays quiet.
   otlpEndpoint: '',
+  // OpenTelemetry `service.name`. Browsers cannot read OTEL_SERVICE_NAME, so it
+  // is set here at build time; empty means "use the package default".
+  serviceName: '',
 };
