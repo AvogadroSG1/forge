@@ -10,6 +10,7 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()
     .AddInteractiveWebAssemblyComponents();
 builder.Services.AddSingleton<{{.CSharpNamespace}}.IHealthReporter, {{.CSharpNamespace}}.HealthReporter>();
+builder.Services.AddDefaultOpenTelemetry();
 
 var app = builder.Build();
 

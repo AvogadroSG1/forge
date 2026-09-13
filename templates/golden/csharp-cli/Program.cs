@@ -4,5 +4,17 @@
 // </copyright>
 // --------------------------------------------------------------------------------------------------------------------
 
+using Microsoft.Extensions.DependencyInjection;
+using OpenTelemetry.Trace;
+
+var services = new ServiceCollection().AddDefaultOpenTelemetry();
+await using var provider = services.BuildServiceProvider();
+var tracerProvider = provider.GetRequiredService<TracerProvider>();
+
 var target = args.Length > 0 ? args[0] : "world";
-Console.WriteLine(GreetingBuilder.BuildGreeting(target));
+using (Telemetry.Source.StartActivity("greet"))
+{
+    Console.WriteLine(GreetingBuilder.BuildGreeting(target));
+}
+
+tracerProvider.ForceFlush();

@@ -1,0 +1,53 @@
+// <copyright file="Telemetry.cs" company="{{.AuthorName}}">
+// Copyright (c) {{.AuthorName}}. All rights reserved.
+// </copyright>
+
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
+
+/// <summary>
+/// Names the OpenTelemetry service and owns the instrumentation sources used by the application.
+/// </summary>
+public static class Telemetry
+{
+    /// <summary>
+    /// The environment variable that overrides the reported service name.
+    /// </summary>
+    public const string ServiceNameEnvironmentVariable = "OTEL_SERVICE_NAME";
+
+    /// <summary>
+    /// The environment variable that enables the OTLP exporters when it is set.
+    /// </summary>
+    public const string OtlpEndpointEnvironmentVariable = "OTEL_EXPORTER_OTLP_ENDPOINT";
+
+    /// <summary>
+    /// Gets the service name reported on every span and metric.
+    /// </summary>
+    public static string ServiceName { get; } = ResolveServiceName();
+
+    /// <summary>
+    /// Gets the activity source used to start application spans.
+    /// </summary>
+    public static ActivitySource Source { get; } = new(ServiceName);
+
+    /// <summary>
+    /// Gets the meter used to create application instruments.
+    /// </summary>
+    public static Meter Meter { get; } = new(ServiceName);
+
+    /// <summary>
+    /// Gets a value indicating whether an OTLP endpoint is configured in the environment.
+    /// </summary>
+    public static bool OtlpExporterConfigured => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(OtlpEndpointEnvironmentVariable));
+
+    private static string ResolveServiceName()
+    {
+        var configured = Environment.GetEnvironmentVariable(ServiceNameEnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            return configured;
+        }
+
+        return typeof(Telemetry).Assembly.GetName().Name ?? "{{.RepoSlug}}";
+    }
+}
