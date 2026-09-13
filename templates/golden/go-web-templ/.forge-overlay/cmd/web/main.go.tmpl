@@ -2,27 +2,69 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"{{.ModulePath}}/internal/telemetry"
 	"{{.ModulePath}}/internal/web"
 )
 
+// shutdownTimeout bounds both the HTTP drain and the telemetry flush so a
+// stuck exporter cannot keep the process alive after SIGTERM.
+const shutdownTimeout = 10 * time.Second
+
 func main() {
 	logger := log.New(os.Stdout, "web ", log.LstdFlags)
 
-	shutdown, err := telemetry.Setup(context.Background(), telemetry.Options{})
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	shutdown, err := telemetry.Setup(ctx, telemetry.Options{})
 	if err != nil {
 		logger.Fatal(err)
 	}
-	defer func() { _ = shutdown(context.Background()) }()
 
-	handler := web.NewServer("{{.ProjectName}}", logger)
+	srv := &http.Server{
+		Addr:              ":8080",
+		Handler:           web.NewServer("{{.ProjectName}}", logger),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 
-	logger.Println("listening on :8080")
-	if err := http.ListenAndServe(":8080", handler); err != nil {
-		logger.Fatal(err)
+	// A listen failure is delivered here rather than through logger.Fatal so
+	// telemetry still gets flushed before the process exits non-zero.
+	listenErr := make(chan error, 1)
+	go func() {
+		logger.Println("listening on :8080")
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			listenErr <- err
+		}
+	}()
+
+	var exitErr error
+	select {
+	case <-ctx.Done():
+		stop()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			logger.Printf("http shutdown: %v", err)
+		}
+		cancel()
+	case exitErr = <-listenErr:
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	if err := shutdown(shutdownCtx); err != nil {
+		logger.Printf("telemetry shutdown: %v", err)
+	}
+
+	if exitErr != nil {
+		logger.Printf("listen: %v", exitErr)
+		os.Exit(1)
 	}
 }

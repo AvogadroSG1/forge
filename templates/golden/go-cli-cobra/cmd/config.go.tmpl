@@ -6,9 +6,6 @@ var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Exercise the config execution seam",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		_, span := tracer().Start(commandContext(cmd), "config")
-		defer span.End()
-
 		cmd.Println("config command is wired")
 		return nil
 	},

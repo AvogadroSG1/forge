@@ -111,7 +111,10 @@ func Meter() metric.Meter {
 
 // newResource merges the SDK defaults (which already honour OTEL_SERVICE_NAME)
 // with an explicit service.name so a generated repo never reports
-// "unknown_service".
+// "unknown_service". The service.name resource is schemaless on purpose:
+// resource.Merge fails with ErrSchemaURLConflict when both sides carry
+// different schema URLs, and pinning semconv.SchemaURL here would break as soon
+// as the SDK's default resource moved to a newer semconv release.
 func newResource(serviceName string) (*resource.Resource, error) {
 	if serviceName == "" {
 		serviceName = os.Getenv("OTEL_SERVICE_NAME")
@@ -121,7 +124,7 @@ func newResource(serviceName string) (*resource.Resource, error) {
 	}
 	return resource.Merge(
 		resource.Default(),
-		resource.NewWithAttributes(semconv.SchemaURL, semconv.ServiceName(serviceName)),
+		resource.NewSchemaless(semconv.ServiceName(serviceName)),
 	)
 }
 

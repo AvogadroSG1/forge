@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"io"
 	"testing"
 
+	"github.com/spf13/cobra"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -73,9 +75,9 @@ func TestSetupTelemetryWithoutCollectorEndpointInstallsQuietProviders(t *testing
 	}
 }
 
-// retainingExporter keeps exported spans readable after the root command's
-// PersistentPostRunE has shut the tracer provider down, which would otherwise
-// reset the in-memory exporter.
+// retainingExporter keeps exported spans readable after the finalizer has
+// shut the tracer provider down, which would otherwise reset the in-memory
+// exporter.
 type retainingExporter struct {
 	*tracetest.InMemoryExporter
 }
@@ -84,7 +86,10 @@ func (retainingExporter) Shutdown(context.Context) error {
 	return nil
 }
 
-func TestServeCommandRecordsSpanThroughRootHooks(t *testing.T) {
+// installTestExporter points the root command's PersistentPreRunE at an
+// in-memory exporter for the duration of the test.
+func installTestExporter(t *testing.T) retainingExporter {
+	t.Helper()
 	exporter := retainingExporter{InMemoryExporter: tracetest.NewInMemoryExporter()}
 	telemetrySetupOptions = telemetryOptions{
 		SpanExporter: exporter,
@@ -93,20 +98,33 @@ func TestServeCommandRecordsSpanThroughRootHooks(t *testing.T) {
 	t.Cleanup(func() {
 		telemetrySetupOptions = telemetryOptions{}
 	})
+	return exporter
+}
 
+// executeRoot runs the root command with args and silences its output.
+func executeRoot(t *testing.T, args ...string) error {
+	t.Helper()
 	root := RootCommand()
 	root.SetOut(io.Discard)
 	root.SetErr(io.Discard)
-	root.SetArgs([]string{"serve"})
+	root.SetArgs(args)
 	t.Cleanup(func() {
 		root.SetArgs(nil)
 	})
+	return root.Execute()
+}
 
-	if err := root.Execute(); err != nil {
+func TestServeCommandRecordsSpanThroughRootHooks(t *testing.T) {
+	exporter := installTestExporter(t)
+
+	if err := executeRoot(t, "serve"); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
 	if telemetryShutdown != nil {
-		t.Fatal("telemetryShutdown still set after PersistentPostRunE")
+		t.Fatal("telemetryShutdown still set after finalizer")
+	}
+	if telemetryCommandSpan != nil {
+		t.Fatal("telemetryCommandSpan still set after finalizer")
 	}
 
 	spans := exporter.GetSpans()
@@ -115,6 +133,39 @@ func TestServeCommandRecordsSpanThroughRootHooks(t *testing.T) {
 	}
 	if spans[0].Name != "serve" {
 		t.Fatalf("span name = %q, want %q", spans[0].Name, "serve")
+	}
+}
+
+func TestFailingCommandStillExportsSpanThroughFinalizer(t *testing.T) {
+	exporter := installTestExporter(t)
+
+	wantErr := errors.New("boom")
+	failing := &cobra.Command{
+		Use: "telemetry-failing",
+		RunE: func(*cobra.Command, []string) error {
+			return wantErr
+		},
+	}
+	root := RootCommand()
+	root.AddCommand(failing)
+	t.Cleanup(func() {
+		root.RemoveCommand(failing)
+	})
+
+	err := executeRoot(t, "telemetry-failing")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Execute() error = %v, want %v", err, wantErr)
+	}
+	if telemetryShutdown != nil {
+		t.Fatal("telemetryShutdown still set after finalizer")
+	}
+
+	spans := exporter.GetSpans()
+	if len(spans) != 1 {
+		t.Fatalf("exported %d spans, want 1", len(spans))
+	}
+	if spans[0].Name != "telemetry-failing" {
+		t.Fatalf("span name = %q, want %q", spans[0].Name, "telemetry-failing")
 	}
 }
 
