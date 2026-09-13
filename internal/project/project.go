@@ -25,6 +25,7 @@ type Input struct {
 	AuthorName  string
 	AuthorEmail string
 	GitHubUser  string
+	GitHubOrg   string
 	Remote      RemoteKind
 	RemoteURL   string
 	ModulePath  string
@@ -44,6 +45,7 @@ type Variables struct {
 	NpmPackage      string
 	AuthorName      string
 	AuthorEmail     string
+	GitHubOrg       string
 	Remote          RemoteKind
 	RemoteURL       string
 	BdPrefix        string
@@ -110,7 +112,9 @@ func ResolveVariables(input Input) (Variables, error) {
 
 	modulePath := strings.TrimSpace(input.ModulePath)
 	if modulePath == "" {
-		if input.Remote == RemoteGH && strings.TrimSpace(input.GitHubUser) != "" {
+		if strings.TrimSpace(input.GitHubOrg) != "" {
+			modulePath = fmt.Sprintf("github.com/%s/%s", strings.TrimSpace(input.GitHubOrg), slugKebab(slugWords))
+		} else if input.Remote == RemoteGH && strings.TrimSpace(input.GitHubUser) != "" {
 			modulePath = fmt.Sprintf("github.com/%s/%s", strings.TrimSpace(input.GitHubUser), slugKebab(slugWords))
 		} else {
 			modulePath = fmt.Sprintf("github.com/your-org/%s", slugKebab(slugWords))
@@ -135,6 +139,7 @@ func ResolveVariables(input Input) (Variables, error) {
 		NpmPackage:      slugKebab(slugWords),
 		AuthorName:      strings.TrimSpace(input.AuthorName),
 		AuthorEmail:     strings.TrimSpace(input.AuthorEmail),
+		GitHubOrg:       strings.TrimSpace(input.GitHubOrg),
 		Remote:          input.Remote,
 		RemoteURL:       strings.TrimSpace(input.RemoteURL),
 		BdPrefix:        bdPrefix,

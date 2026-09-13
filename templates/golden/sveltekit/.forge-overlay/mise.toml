@@ -1,6 +1,7 @@
 [tools]
 node = "24"
 lefthook = "latest"
+"github:Dicklesworthstone/destructive_command_guard" = "latest"
 
 [tasks.fmt]
 run = "npm run fmt"

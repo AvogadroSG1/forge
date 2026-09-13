@@ -4,6 +4,7 @@ golangci-lint = "latest"
 "go:golang.org/x/vuln/cmd/govulncheck" = "latest"
 "go:github.com/a-h/templ/cmd/templ" = "v0.3.1020"
 lefthook = "latest"
+"github:Dicklesworthstone/destructive_command_guard" = "latest"
 
 [tasks.fmt]
 run = "templ generate && gofmt -w $(find . -name '*.go' -not -path './.git/*')"

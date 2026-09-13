@@ -3,8 +3,11 @@ package prompt
 import (
 	"fmt"
 	"net/url"
+	"os"
+	"os/exec"
 	"regexp"
 	"strings"
+	"testing"
 
 	"forge/internal/catalog"
 	"forge/internal/project"
@@ -24,6 +27,7 @@ type Inputs struct {
 	AuthorName  string
 	AuthorEmail string
 	GitHubUser  string
+	GitHubOrg   string
 	Remote      string
 	RemoteURL   string
 	ModulePath  string
@@ -109,12 +113,65 @@ func Resolve(input Inputs, prompter Prompter) (project.Input, error) {
 	}
 
 	gitHubUser := strings.TrimSpace(input.GitHubUser)
+	if gitHubUser == "" {
+		gitHubUser = DefaultGitHubUser()
+	}
 	if remoteValue == string(project.RemoteGH) && gitHubUser == "" {
 		gitHubUser, err = resolveValue(input.GitHubUser, input.IsTTY, prompter, "github-user", "GitHub user", nil, "")
 		if err != nil {
 			return project.Input{}, err
 		}
 		gitHubUser = strings.TrimSpace(gitHubUser)
+	}
+	if remoteValue != string(project.RemoteGH) {
+		gitHubUser = ""
+	}
+
+	var gitHubOrg string
+	if remoteValue == string(project.RemoteGH) {
+		if strings.TrimSpace(input.GitHubOrg) != "" {
+			gitHubOrg = strings.TrimSpace(input.GitHubOrg)
+		} else if input.IsTTY {
+			if prompter == nil {
+				return project.Input{}, fmt.Errorf("interactive prompt requested for --github-org but no prompter is available")
+			}
+			personalChoice := "Personal"
+			if gitHubUser != "" {
+				personalChoice = fmt.Sprintf("Personal (%s)", gitHubUser)
+			}
+			orgChoices := []string{personalChoice, "StackEng"}
+			seen := map[string]bool{"stackeng": true}
+			for _, o := range ghUserOrgs() {
+				lower := strings.ToLower(o)
+				if !seen[lower] && o != "" {
+					seen[lower] = true
+					orgChoices = append(orgChoices, o)
+				}
+			}
+			orgChoices = append(orgChoices, "Custom")
+
+			selectedOrg, err := prompter.Ask("github-org", "GitHub organization", orgChoices, personalChoice)
+			if err != nil {
+				return project.Input{}, err
+			}
+			selectedOrg = strings.TrimSpace(selectedOrg)
+			if selectedOrg == "Personal" || strings.HasPrefix(selectedOrg, "Personal (") {
+				gitHubOrg = ""
+			} else if selectedOrg == "Custom" {
+				customOrg, err := resolveValue("", input.IsTTY, prompter, "github-org", "Custom GitHub organization", nil, "")
+				if err != nil {
+					return project.Input{}, err
+				}
+				customOrg = strings.TrimSpace(customOrg)
+				if customOrg == "Personal" || strings.HasPrefix(customOrg, "Personal (") {
+					gitHubOrg = ""
+				} else {
+					gitHubOrg = customOrg
+				}
+			} else {
+				gitHubOrg = selectedOrg
+			}
+		}
 	}
 
 	resolved := project.Input{
@@ -127,6 +184,7 @@ func Resolve(input Inputs, prompter Prompter) (project.Input, error) {
 		AuthorName:  authorName,
 		AuthorEmail: authorEmail,
 		GitHubUser:  gitHubUser,
+		GitHubOrg:   gitHubOrg,
 		Remote:      project.RemoteKind(remoteValue),
 		RemoteURL:   strings.TrimSpace(input.RemoteURL),
 		ModulePath:  strings.TrimSpace(input.ModulePath),
@@ -269,3 +327,57 @@ func contains(values []string, want string) bool {
 
 	return false
 }
+
+// DefaultGitHubUser resolves the GitHub username from environment variables,
+// git configuration, or gh CLI authentication.
+func DefaultGitHubUser() string {
+	if u := strings.TrimSpace(os.Getenv("GITHUB_USER")); u != "" {
+		return u
+	}
+	if u := strings.TrimSpace(os.Getenv("GH_USER")); u != "" {
+		return u
+	}
+	if out, err := exec.Command("git", "config", "--global", "github.user").Output(); err == nil {
+		if u := strings.TrimSpace(string(out)); u != "" {
+			return u
+		}
+	}
+	if u := ghAuthUser(); u != "" {
+		return u
+	}
+	return ""
+}
+
+var ghAuthUser = defaultGHAuthUser
+
+func defaultGHAuthUser() string {
+	if testing.Testing() {
+		return ""
+	}
+	out, err := exec.Command("gh", "api", "user", "-q", ".login").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+var ghUserOrgs = defaultGHUserOrgs
+
+func defaultGHUserOrgs() []string {
+	if testing.Testing() {
+		return nil
+	}
+	out, err := exec.Command("gh", "api", "user/orgs", "-q", ".[].login").Output()
+	if err != nil {
+		return nil
+	}
+	var orgs []string
+	for _, line := range strings.Split(string(out), "\n") {
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			orgs = append(orgs, trimmed)
+		}
+	}
+	return orgs
+}
+
+

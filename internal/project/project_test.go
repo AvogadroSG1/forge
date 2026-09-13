@@ -198,3 +198,32 @@ func TestResolveVariablesAppliesPythonPackageOverride(t *testing.T) {
 		t.Fatalf("PythonPackage = %q, want %q", vars.PythonPackage, "cost_investigator")
 	}
 }
+
+func TestResolveVariablesWithGitHubOrg(t *testing.T) {
+	t.Parallel()
+
+	vars, err := ResolveVariables(Input{
+		ProjectName: "Sample App",
+		Language:    "go",
+		ProjectType: "cli",
+		Stack:       "go-cli-cobra",
+		AuthorName:  "Ada Lovelace",
+		AuthorEmail: "ada@example.com",
+		GitHubUser:  "octocat",
+		GitHubOrg:   "StackEng",
+		Remote:      RemoteGH,
+	})
+	if err != nil {
+		t.Fatalf("ResolveVariables() error = %v", err)
+	}
+
+	if vars.GitHubOrg != "StackEng" {
+		t.Fatalf("GitHubOrg = %q, want %q", vars.GitHubOrg, "StackEng")
+	}
+	if vars.ModulePath != "github.com/StackEng/sample-app" {
+		t.Fatalf("ModulePath = %q, want %q", vars.ModulePath, "github.com/StackEng/sample-app")
+	}
+	if vars.GoModule != "github.com/StackEng/sample-app" {
+		t.Fatalf("GoModule = %q, want %q", vars.GoModule, "github.com/StackEng/sample-app")
+	}
+}

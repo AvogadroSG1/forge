@@ -173,10 +173,16 @@ func (w Writer) copyTree(root string, targetDir string, destPrefix string, vars 
 
 func mapOutputPath(path string) string {
 	switch {
+	case path == "claude":
+		return ".claude"
 	case strings.HasPrefix(path, "claude/"):
 		return filepath.Join(".claude", strings.TrimPrefix(path, "claude/"))
+	case path == "codex":
+		return ".codex"
 	case strings.HasPrefix(path, "codex/"):
 		return filepath.Join(".codex", strings.TrimPrefix(path, "codex/"))
+	case path == "opencode":
+		return ".opencode"
 	case strings.HasPrefix(path, "opencode/"):
 		return filepath.Join(".opencode", strings.TrimPrefix(path, "opencode/"))
 	default:

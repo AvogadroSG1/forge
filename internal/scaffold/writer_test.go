@@ -476,3 +476,32 @@ func TestRenderPathAllowsDoubleDotWithinSegment(t *testing.T) {
 		t.Fatalf("renderPath() = %q, want %q", got, "My..Ns/Program.cs")
 	}
 }
+
+func TestMapOutputPath(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{input: "claude", want: ".claude"},
+		{input: "claude/settings.json", want: filepath.Join(".claude", "settings.json")},
+		{input: "codex", want: ".codex"},
+		{input: "codex/hooks.json", want: filepath.Join(".codex", "hooks.json")},
+		{input: "opencode", want: ".opencode"},
+		{input: "opencode/plugins/foo.js", want: filepath.Join(".opencode", "plugins/foo.js")},
+		{input: "other/path", want: "other/path"},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.input, func(t *testing.T) {
+			t.Parallel()
+			got := mapOutputPath(tc.input)
+			if got != tc.want {
+				t.Fatalf("mapOutputPath(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+

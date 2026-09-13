@@ -60,11 +60,13 @@ func TestInitializerRunsPhaseOneThenDelegatesThenRemote(t *testing.T) {
 		"bd init",
 		"instill bootstrap",
 		"instill init",
+		"instill pick plugin",
 		"instill sync",
 		"mise trust",
 		"mise install",
 		"go mod tidy",
 		"lefthook install",
+		"fitness functions onboard",
 		"git add",
 		"git commit",
 	}
@@ -175,11 +177,13 @@ func TestInitializerRunsPipInstallForPythonProjects(t *testing.T) {
 		"bd init",
 		"instill bootstrap",
 		"instill init",
+		"instill pick plugin",
 		"instill sync",
 		"mise trust",
 		"mise install",
 		"pip install",
 		"lefthook install",
+		"fitness functions onboard",
 		"git add",
 		"git commit",
 	}
@@ -394,32 +398,201 @@ func TestInitializerSkipsSkillSetupWhenInstillBootstrapFails(t *testing.T) {
 	}
 }
 
+func TestInitializeInstillPlugin(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	runner := &recordingRunner{}
+	writer := scaffold.Writer{Assets: fstest.MapFS{
+		"templates/common/AGENTS.md.tmpl": {Data: []byte("Project {{.ProjectName}}\n")},
+		"templates/common/gitignore.base": {Data: []byte(".DS_Store\n")},
+		"templates/seed/skills.json.tmpl": {
+			Data: []byte("{\"skills\":[\"golang-cli\",\"mise\"]}\n"),
+		},
+		"templates/common/claude/hooks/secret-scan.sh": {Data: []byte("#!/usr/bin/env bash\n")},
+		"templates/common/codex/hooks.json":            {Data: []byte("{\"hooks\":{}}\n")},
+		"templates/gitignore/Go.gitignore":             {Data: []byte("bin/\n")},
+		"templates/golden/go-cli-cobra/main.go.tmpl":   {Data: []byte("package main\n")},
+	}}
+	init := Initializer{Writer: writer, Runner: runner}
+
+	vars, err := project.ResolveVariables(project.Input{
+		ProjectName: "Sample App",
+		Language:    "go",
+		ProjectType: "cli",
+		Stack:       "go-cli-cobra",
+		AuthorName:  "Ada Lovelace",
+		AuthorEmail: "ada@example.com",
+		Remote:      project.RemoteNone,
+	})
+	if err != nil {
+		t.Fatalf("ResolveVariables() error = %v", err)
+	}
+
+	if err := init.Run(context.Background(), tempDir, vars); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	assertRecordedStepArgs(t, runner.steps, "instill pick plugin", "pick", "--type", "plugin", "peters-bdd-orchestrator")
+
+	var pluginStep *recordedStep
+	for i := range runner.steps {
+		if runner.steps[i].name == "instill pick plugin" {
+			pluginStep = &runner.steps[i]
+			break
+		}
+	}
+	if pluginStep != nil && pluginStep.command != "instill" {
+		t.Errorf("step \"instill pick plugin\" command = %q, want \"instill\"", pluginStep.command)
+	}
+
+	initIdx := slices.Index(runner.stepNames(), "instill init")
+	pluginIdx := slices.Index(runner.stepNames(), "instill pick plugin")
+	syncIdx := slices.Index(runner.stepNames(), "instill sync")
+
+	if initIdx == -1 {
+		t.Fatalf("step \"instill init\" not found in recorded steps: %#v", runner.stepNames())
+	}
+	if syncIdx == -1 {
+		t.Fatalf("step \"instill sync\" not found in recorded steps: %#v", runner.stepNames())
+	}
+	if !(initIdx < pluginIdx && pluginIdx < syncIdx) {
+		t.Fatalf("expected step order instill init < instill pick plugin < instill sync, got initIdx=%d, pluginIdx=%d, syncIdx=%d",
+			initIdx, pluginIdx, syncIdx)
+	}
+}
+
 func TestReadSeedSkills(t *testing.T) {
 	t.Parallel()
 
-	goSkills, err := readSeedSkills(forge.Assets(), "go")
-	if err != nil {
-		t.Fatalf("readSeedSkills(go) error = %v", err)
-	}
-	for _, want := range []string{"coding/golang/golang-cli", "productivity/mise", "superpowers/brainstorming"} {
-		if !slices.Contains(goSkills, want) {
-			t.Fatalf("go seed skills = %#v, want to contain %q", goSkills, want)
-		}
+	universalWant := []string{
+		"ai-workflow/mpocock/code-rewview",
+		"ai-workflow/mpocock/codebase-design",
+		"ai-workflow/mpocock/domain-modeling",
+		"ai-workflow/mpocock/grill-me",
+		"ai-workflow/mpocock/grill-with-docs",
+		"ai-workflow/mpocock/grilling",
+		"ai-workflow/mpocock/handoff",
+		"ai-workflow/mpocock/implement",
+		"ai-workflow/mpocock/research",
+		"ai-workflow/mpocock/tdd",
+		"ai-workflow/mpocock/to-questionnaire",
+		"ai-workflow/mpocock/to-spec",
+		"ai-workflow/mpocock/to-tickets",
+		"ai-workflow/mpocock/wait-what",
+		"ai-workflow/mpocock/wayfinder",
+		"ai-workflow/mpocock/wizard",
+		"ai-workflow/mpocock/writing-for-agents",
+		"ai-workflow/plannotator-compound",
+		"ai-workflow/plannotator-setup-goal",
+		"ai-workflow/plannotator-visual-explainer",
+		"ai-workflow/herdr",
+		"Devops/git/git-pushing",
+		"productivity/mermaid",
+		"productivity/obsidian/obsidian-bases",
+		"productivity/obsidian/obsidian-cli",
+		"productivity/obsidian/obsidian-markdown",
 	}
 
-	pythonSkills, err := readSeedSkills(forge.Assets(), "python")
-	if err != nil {
-		t.Fatalf("readSeedSkills(python) error = %v", err)
-	}
-	if slices.Contains(pythonSkills, "coding/golang/golang-cli") {
-		t.Fatalf("python seed skills = %#v, want no golang-cli", pythonSkills)
-	}
-	if !slices.Contains(pythonSkills, "productivity/mise") {
-		t.Fatalf("python seed skills = %#v, want to contain mise", pythonSkills)
-	}
-	if !slices.Contains(pythonSkills, "coding/python/python-code-style") {
-		t.Fatalf("python seed skills = %#v, want to contain python-code-style", pythonSkills)
-	}
+	languages := []string{"go", "python", "csharp", "typescript"}
+
+	t.Run("UniversalSkillsPresent", func(t *testing.T) {
+		for _, lang := range languages {
+			skills, err := readSeedSkills(forge.Assets(), lang)
+			if err != nil {
+				t.Fatalf("readSeedSkills(%s) error = %v", lang, err)
+			}
+			for _, want := range universalWant {
+				if !slices.Contains(skills, want) {
+					t.Errorf("readSeedSkills(%s) missing universal skill %q", lang, want)
+				}
+			}
+		}
+	})
+
+	t.Run("ObsoleteSkillsAbsent", func(t *testing.T) {
+		for _, lang := range languages {
+			skills, err := readSeedSkills(forge.Assets(), lang)
+			if err != nil {
+				t.Fatalf("readSeedSkills(%s) error = %v", lang, err)
+			}
+			for _, skill := range skills {
+				if strings.HasPrefix(skill, "superpowers/") {
+					t.Errorf("readSeedSkills(%s) contains obsolete superpowers skill %q", lang, skill)
+				}
+				if strings.HasPrefix(skill, "ai-workflow/mattpocock/") {
+					t.Errorf("readSeedSkills(%s) contains obsolete mattpocock skill %q", lang, skill)
+				}
+				if strings.HasPrefix(skill, "ai-workflow/hookify/") {
+					t.Errorf("readSeedSkills(%s) contains obsolete hookify skill %q", lang, skill)
+				}
+			}
+		}
+	})
+
+	t.Run("LanguageSlicesRetained", func(t *testing.T) {
+		type langTest struct {
+			lang             string
+			retainedSkills   []string
+			disallowedPrefix string
+		}
+
+		tests := []langTest{
+			{
+				lang: "go",
+				retainedSkills: []string{
+					"coding/golang/golang-cli",
+					"coding/golang/golang-code-style",
+					"coding/golang/golang-linter",
+				},
+				disallowedPrefix: "coding/python/",
+			},
+			{
+				lang: "python",
+				retainedSkills: []string{
+					"coding/python/python-anti-patterns",
+					"coding/python/python-code-style",
+					"coding/python/uv-package-manager",
+				},
+				disallowedPrefix: "coding/golang/",
+			},
+			{
+				lang: "csharp",
+				retainedSkills: []string{
+					"coding/dotnet/csharp",
+					"coding/dotnet/dotnet-backend-patterns",
+					"coding/dotnet/writing-mstest-tests",
+				},
+				disallowedPrefix: "coding/golang/",
+			},
+			{
+				lang: "typescript",
+				retainedSkills: []string{
+					"coding/front-end/accessibility",
+					"coding/front-end/frontend-design",
+					"coding/front-end/web-component-design",
+				},
+				disallowedPrefix: "coding/golang/",
+			},
+		}
+
+		for _, tc := range tests {
+			skills, err := readSeedSkills(forge.Assets(), tc.lang)
+			if err != nil {
+				t.Fatalf("readSeedSkills(%s) error = %v", tc.lang, err)
+			}
+			for _, want := range tc.retainedSkills {
+				if !slices.Contains(skills, want) {
+					t.Errorf("readSeedSkills(%s) missing retained language skill %q", tc.lang, want)
+				}
+			}
+			for _, skill := range skills {
+				if strings.HasPrefix(skill, tc.disallowedPrefix) {
+					t.Errorf("readSeedSkills(%s) contains disallowed skill %q", tc.lang, skill)
+				}
+			}
+		}
+	})
 }
 
 func TestInitializerStopsAtTheFailedStepWithRecoveryText(t *testing.T) {
@@ -762,11 +935,13 @@ func TestInitializerRunsNpmInstallForTypescriptProjects(t *testing.T) {
 		"bd init",
 		"instill bootstrap",
 		"instill init",
+		"instill pick plugin",
 		"instill sync",
 		"mise trust",
 		"mise install",
 		"npm install",
 		"lefthook install",
+		"fitness functions onboard",
 		"git add",
 		"git commit",
 	}
@@ -822,12 +997,14 @@ func TestInitializerRunsWebNpmInstallForFullstackProjects(t *testing.T) {
 		"bd init",
 		"instill bootstrap",
 		"instill init",
+		"instill pick plugin",
 		"instill sync",
 		"mise trust",
 		"mise install",
 		"go mod tidy",
 		"npm install (web)",
 		"lefthook install",
+		"fitness functions onboard",
 		"git add",
 		"git commit",
 	}
@@ -837,3 +1014,248 @@ func TestInitializerRunsWebNpmInstallForFullstackProjects(t *testing.T) {
 
 	assertRecordedStepArgs(t, runner.steps, "npm install (web)", "exec", "--", "npm", "--prefix", "web", "install")
 }
+
+func TestCleanupEmptyToolDirs(t *testing.T) {
+	t.Parallel()
+
+	t.Run("removes empty tool dirs", func(t *testing.T) {
+		t.Parallel()
+
+		tempDir := t.TempDir()
+		runner := &recordingRunner{
+			afterStep: func(dir string, step string, _ string, _ ...string) error {
+				if step == "instill init" {
+					if err := os.MkdirAll(filepath.Join(dir, "claude"), 0o755); err != nil {
+						return err
+					}
+					if err := os.MkdirAll(filepath.Join(dir, "codex"), 0o755); err != nil {
+						return err
+					}
+					if err := os.MkdirAll(filepath.Join(dir, "opencode"), 0o755); err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+		}
+		writer := scaffold.Writer{Assets: fstest.MapFS{
+			"templates/common/AGENTS.md.tmpl":              {Data: []byte("Project {{.ProjectName}}\n")},
+			"templates/common/gitignore.base":              {Data: []byte(".DS_Store\n")},
+			"templates/seed/skills.json.tmpl":              {Data: []byte("{\"skills\":[\"mise\"]}\n")},
+			"templates/common/claude/hooks/secret-scan.sh": {Data: []byte("#!/usr/bin/env bash\n")},
+			"templates/common/codex/hooks.json":            {Data: []byte("{\"hooks\":{}}\n")},
+			"templates/gitignore/Go.gitignore":             {Data: []byte("bin/\n")},
+			"templates/golden/go-cli-cobra/main.go.tmpl":   {Data: []byte("package main\n")},
+		}}
+		init := Initializer{Writer: writer, Runner: runner}
+
+		vars, err := project.ResolveVariables(project.Input{
+			ProjectName: "Sample App",
+			Language:    "go",
+			ProjectType: "cli",
+			Stack:       "go-cli-cobra",
+			AuthorName:  "Ada Lovelace",
+			AuthorEmail: "ada@example.com",
+			Remote:      project.RemoteNone,
+		})
+		if err != nil {
+			t.Fatalf("ResolveVariables() error = %v", err)
+		}
+
+		if err := init.Run(context.Background(), tempDir, vars); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+
+		for _, toolDir := range []string{"claude", "codex", "opencode"} {
+			target := filepath.Join(tempDir, toolDir)
+			if _, err := os.Stat(target); !os.IsNotExist(err) {
+				t.Errorf("empty tool directory %q was not removed", toolDir)
+			}
+		}
+	})
+
+	t.Run("preserves non-empty tool dirs", func(t *testing.T) {
+		t.Parallel()
+
+		tempDir := t.TempDir()
+		runner := &recordingRunner{
+			afterStep: func(dir string, step string, _ string, _ ...string) error {
+				if step == "instill init" {
+					if err := os.MkdirAll(filepath.Join(dir, "claude"), 0o755); err != nil {
+						return err
+					}
+					if err := os.MkdirAll(filepath.Join(dir, "codex"), 0o755); err != nil {
+						return err
+					}
+					opencodeDir := filepath.Join(dir, "opencode")
+					if err := os.MkdirAll(opencodeDir, 0o755); err != nil {
+						return err
+					}
+					if err := os.WriteFile(filepath.Join(opencodeDir, "plugin.js"), []byte("// custom"), 0o644); err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+		}
+		writer := scaffold.Writer{Assets: fstest.MapFS{
+			"templates/common/AGENTS.md.tmpl":              {Data: []byte("Project {{.ProjectName}}\n")},
+			"templates/common/gitignore.base":              {Data: []byte(".DS_Store\n")},
+			"templates/seed/skills.json.tmpl":              {Data: []byte("{\"skills\":[\"mise\"]}\n")},
+			"templates/common/claude/hooks/secret-scan.sh": {Data: []byte("#!/usr/bin/env bash\n")},
+			"templates/common/codex/hooks.json":            {Data: []byte("{\"hooks\":{}}\n")},
+			"templates/gitignore/Go.gitignore":             {Data: []byte("bin/\n")},
+			"templates/golden/go-cli-cobra/main.go.tmpl":   {Data: []byte("package main\n")},
+		}}
+		init := Initializer{Writer: writer, Runner: runner}
+
+		vars, err := project.ResolveVariables(project.Input{
+			ProjectName: "Sample App",
+			Language:    "go",
+			ProjectType: "cli",
+			Stack:       "go-cli-cobra",
+			AuthorName:  "Ada Lovelace",
+			AuthorEmail: "ada@example.com",
+			Remote:      project.RemoteNone,
+		})
+		if err != nil {
+			t.Fatalf("ResolveVariables() error = %v", err)
+		}
+
+		if err := init.Run(context.Background(), tempDir, vars); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+
+		for _, emptyDir := range []string{"claude", "codex"} {
+			target := filepath.Join(tempDir, emptyDir)
+			if _, err := os.Stat(target); !os.IsNotExist(err) {
+				t.Errorf("empty tool directory %q was not removed", emptyDir)
+			}
+		}
+
+		opencodeDir := filepath.Join(tempDir, "opencode")
+		info, err := os.Stat(opencodeDir)
+		if err != nil || !info.IsDir() {
+			t.Errorf("expected non-empty tool directory %q to be preserved: %v", opencodeDir, err)
+		}
+		opencodeFile := filepath.Join(opencodeDir, "plugin.js")
+		if _, err := os.Stat(opencodeFile); err != nil {
+			t.Errorf("expected non-empty tool file %q to be preserved: %v", opencodeFile, err)
+		}
+	})
+}
+
+func TestInitializeFitnessFunctions(t *testing.T) {
+	t.Parallel()
+
+	newWriter := func() scaffold.Writer {
+		return scaffold.Writer{Assets: fstest.MapFS{
+			"templates/common/AGENTS.md.tmpl": {Data: []byte("Project {{.ProjectName}}\n")},
+			"templates/common/gitignore.base": {Data: []byte(".DS_Store\n")},
+			"templates/seed/skills.json.tmpl": {
+				Data: []byte("{\"skills\":[\"golang-cli\",\"mise\"]}\n"),
+			},
+			"templates/common/claude/hooks/secret-scan.sh": {Data: []byte("#!/usr/bin/env bash\n")},
+			"templates/common/codex/hooks.json":            {Data: []byte("{\"hooks\":{}}\n")},
+			"templates/gitignore/Go.gitignore":             {Data: []byte("bin/\n")},
+			"templates/golden/go-cli-cobra/main.go.tmpl":   {Data: []byte("package main\n")},
+		}}
+	}
+
+	resolveVars := func(t *testing.T) project.Variables {
+		t.Helper()
+		vars, err := project.ResolveVariables(project.Input{
+			ProjectName: "Sample App",
+			Language:    "go",
+			ProjectType: "cli",
+			Stack:       "go-cli-cobra",
+			AuthorName:  "Ada Lovelace",
+			AuthorEmail: "ada@example.com",
+			Remote:      project.RemoteNone,
+		})
+		if err != nil {
+			t.Fatalf("ResolveVariables() error = %v", err)
+		}
+		return vars
+	}
+
+	t.Run("records onboarding step in order", func(t *testing.T) {
+		t.Parallel()
+
+		tempDir := t.TempDir()
+		runner := &recordingRunner{}
+		init := Initializer{Writer: newWriter(), Runner: runner}
+		vars := resolveVars(t)
+
+		if err := init.Run(context.Background(), tempDir, vars); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+
+		assertRecordedStepArgs(t, runner.steps, "fitness functions onboard", "client", "onboard", "--enforcement", "advisory")
+
+		var onboardStep *recordedStep
+		for i := range runner.steps {
+			if runner.steps[i].name == "fitness functions onboard" {
+				onboardStep = &runner.steps[i]
+				break
+			}
+		}
+		if onboardStep == nil {
+			t.Fatalf("step %q not recorded", "fitness functions onboard")
+		}
+		if onboardStep.command != "agent-fitness-functions" {
+			t.Errorf("step %q command = %q, want \"agent-fitness-functions\"", "fitness functions onboard", onboardStep.command)
+		}
+
+		stepNames := runner.stepNames()
+		lefthookIdx := slices.Index(stepNames, "lefthook install")
+		fitnessIdx := slices.Index(stepNames, "fitness functions onboard")
+		gitAddIdx := slices.Index(stepNames, "git add")
+		gitCommitIdx := slices.Index(stepNames, "git commit")
+
+		if lefthookIdx == -1 {
+			t.Fatalf("step \"lefthook install\" not found: %#v", stepNames)
+		}
+		if fitnessIdx == -1 {
+			t.Fatalf("step \"fitness functions onboard\" not found: %#v", stepNames)
+		}
+		if gitAddIdx == -1 {
+			t.Fatalf("step \"git add\" not found: %#v", stepNames)
+		}
+		if gitCommitIdx == -1 {
+			t.Fatalf("step \"git commit\" not found: %#v", stepNames)
+		}
+		if !(lefthookIdx < fitnessIdx && fitnessIdx < gitAddIdx && fitnessIdx < gitCommitIdx) {
+			t.Fatalf("expected step order lefthook install (%d) < fitness functions onboard (%d) < git add (%d) / git commit (%d)",
+				lefthookIdx, fitnessIdx, gitAddIdx, gitCommitIdx)
+		}
+	})
+
+	t.Run("advisory failure does not abort init", func(t *testing.T) {
+		t.Parallel()
+
+		tempDir := t.TempDir()
+		runner := &recordingRunner{
+			failRun: func(step string, command string, args []string) error {
+				if command == "agent-fitness-functions" || step == "fitness functions onboard" {
+					return errors.New("agent-fitness-functions unavailable")
+				}
+				return nil
+			},
+		}
+		init := Initializer{Writer: newWriter(), Runner: runner}
+		vars := resolveVars(t)
+
+		if err := init.Run(context.Background(), tempDir, vars); err != nil {
+			t.Fatalf("Run() error = %v, want nil", err)
+		}
+
+		if !hasStep(runner.steps, "fitness functions onboard") {
+			t.Fatalf("step %q not recorded", "fitness functions onboard")
+		}
+		if !hasStep(runner.steps, "git commit") {
+			t.Fatalf("step %q not recorded after advisory failure", "git commit")
+		}
+	})
+}
+

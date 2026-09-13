@@ -61,13 +61,48 @@ func TestPublishRemoteGHPassesPushFlag(t *testing.T) {
 	}
 }
 
+func TestPublishRemoteGHWithOrg(t *testing.T) {
+	t.Parallel()
+
+	runner := &recordingRunner{}
+	err := Publish(context.Background(), runner, t.TempDir(), PublishOptions{
+		Remote:   project.RemoteGH,
+		RepoName: "sample-app",
+		Org:      "StackEng",
+	})
+	if err != nil {
+		t.Fatalf("Publish() error = %v", err)
+	}
+
+	var found bool
+	for _, call := range runner.calls {
+		if call.command == "gh" && len(call.args) >= 3 && call.args[0] == "repo" && call.args[1] == "create" {
+			found = true
+			if call.args[2] != "StackEng/sample-app" {
+				t.Fatalf("gh repo create target = %q, want %q", call.args[2], "StackEng/sample-app")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("gh repo create was not executed")
+	}
+}
+
+type runCall struct {
+	step    string
+	command string
+	args    []string
+}
+
 type recordingRunner struct {
 	failStep string
 	steps    []string
+	calls    []runCall
 }
 
-func (r *recordingRunner) Run(_ context.Context, _ string, step string, _ string, _ ...string) error {
+func (r *recordingRunner) Run(_ context.Context, _ string, step string, command string, args ...string) error {
 	r.steps = append(r.steps, step)
+	r.calls = append(r.calls, runCall{step: step, command: command, args: append([]string(nil), args...)})
 	if step == r.failStep {
 		return errors.New("boom")
 	}

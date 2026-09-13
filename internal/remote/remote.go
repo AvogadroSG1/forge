@@ -11,6 +11,7 @@ import (
 
 type PublishOptions struct {
 	RepoName string
+	Org      string
 	Remote   project.RemoteKind
 	URL      string
 }
@@ -38,7 +39,11 @@ func Publish(ctx context.Context, runner delegate.Runner, dir string, options Pu
 		if strings.TrimSpace(options.RepoName) == "" {
 			return fmt.Errorf("repository name is required for --remote gh")
 		}
-		if err := runner.Run(ctx, dir, "gh repo create", "gh", "repo", "create", options.RepoName, "--source=.", "--remote=origin", "--private", "--push"); err != nil {
+		repoTarget := strings.TrimSpace(options.RepoName)
+		if strings.TrimSpace(options.Org) != "" && !strings.Contains(options.RepoName, "/") {
+			repoTarget = fmt.Sprintf("%s/%s", strings.TrimSpace(options.Org), strings.TrimSpace(options.RepoName))
+		}
+		if err := runner.Run(ctx, dir, "gh repo create", "gh", "repo", "create", repoTarget, "--source=.", "--remote=origin", "--private", "--push"); err != nil {
 			return fmt.Errorf("gh repo create failed: %w", err)
 		}
 		return nil

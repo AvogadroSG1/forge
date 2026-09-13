@@ -623,6 +623,65 @@ func TestGoAPIChiPinsPatchedGoToolchainForVulnerabilityGate(t *testing.T) {
 	}
 }
 
+func TestGoldenOverlayMiseTomlIncludesDCGTool(t *testing.T) {
+	repoRoot := repoRoot(t)
+
+	stacks := []string{
+		"go-cli-cobra",
+		"go-api-chi",
+		"go-web-templ",
+		"python-cli-typer",
+		"python-fastapi",
+		"python-web-jinja",
+		"csharp-cli",
+		"csharp-webapi",
+		"csharp-blazor",
+		"vite-ts",
+		"sveltekit",
+		"angular",
+	}
+
+	const requiredTool = `"github:Dicklesworthstone/destructive_command_guard" = "latest"`
+
+	for _, stack := range stacks {
+		t.Run(stack, func(t *testing.T) {
+			tomlPath := filepath.Join(repoRoot, "templates", "golden", stack, ".forge-overlay", "mise.toml")
+			tmplPath := filepath.Join(repoRoot, "templates", "golden", stack, ".forge-overlay", "mise.toml.tmpl")
+
+			var (
+				contentBytes []byte
+				targetPath   string
+				err          error
+			)
+
+			if contentBytes, err = os.ReadFile(tomlPath); err == nil {
+				targetPath = tomlPath
+			} else if contentBytes, err = os.ReadFile(tmplPath); err == nil {
+				targetPath = tmplPath
+			} else {
+				t.Fatalf("neither %s nor %s exists", tomlPath, tmplPath)
+			}
+
+			content := string(contentBytes)
+			toolsIdx := strings.Index(content, "[tools]")
+			if toolsIdx == -1 {
+				t.Fatalf("%s missing [tools] section:\n%s", targetPath, content)
+			}
+
+			rest := content[toolsIdx+len("[tools]"):]
+			nextSectionIdx := strings.Index(rest, "\n[")
+			toolsSection := rest
+			if nextSectionIdx != -1 {
+				toolsSection = rest[:nextSectionIdx]
+			}
+
+			if !strings.Contains(toolsSection, requiredTool) {
+				t.Fatalf("%s [tools] section missing %s:\n%s", targetPath, requiredTool, toolsSection)
+			}
+		})
+	}
+}
+
 func repoRoot(t *testing.T) string {
 	t.Helper()
 

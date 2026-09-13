@@ -92,6 +92,9 @@ func (i Initializer) Run(ctx context.Context, targetDir string, vars project.Var
 					return failWithRecovery(targetDir, "instill init", err)
 				}
 				if len(initializedSkills) > 0 {
+					if err := i.Runner.Run(ctx, targetDir, "instill pick plugin", "instill", "pick", "--type", "plugin", "peters-bdd-orchestrator"); err != nil {
+						return failWithRecovery(targetDir, "instill pick plugin", err)
+					}
 					if err := i.Runner.Run(ctx, targetDir, "instill sync", "instill", "sync"); err != nil {
 						return failWithRecovery(targetDir, "instill sync", err)
 					}
@@ -123,11 +126,19 @@ func (i Initializer) Run(ctx context.Context, targetDir string, vars project.Var
 			if err := repairBeadsHookChain(targetDir); err != nil {
 				return failWithRecovery(targetDir, "lefthook chain repair", err)
 			}
+			if err := i.Runner.Run(ctx, targetDir, "fitness functions onboard", "agent-fitness-functions", "client", "onboard", "--enforcement", "advisory"); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: agent-fitness-functions onboarding failed: %v\n", err)
+			}
 		}
+	}
+
+	if err := cleanupEmptyToolDirs(targetDir); err != nil {
+		return failWithRecovery(targetDir, "tool directory cleanup", err)
 	}
 
 	if err := remote.Publish(ctx, i.Runner, targetDir, remote.PublishOptions{
 		RepoName: vars.RepoSlug,
+		Org:      vars.GitHubOrg,
 		Remote:   vars.Remote,
 		URL:      vars.RemoteURL,
 	}); err != nil {
@@ -248,6 +259,33 @@ script_dir="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
 "$script_dir/%[1]s.old" "$@"
 exec "$script_dir/%[1]s.lefthook" "$@"
 `, hookName)
+}
+
+func cleanupEmptyToolDirs(targetDir string) error {
+	candidates := []string{"claude", "codex", "opencode"}
+	for _, candidate := range candidates {
+		candidateDir := filepath.Join(targetDir, candidate)
+		info, err := os.Stat(candidateDir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return err
+		}
+		if !info.IsDir() {
+			continue
+		}
+		entries, err := os.ReadDir(candidateDir)
+		if err != nil {
+			return err
+		}
+		if len(entries) == 0 {
+			if err := os.Remove(candidateDir); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func failWithRecovery(targetDir string, step string, err error) error {

@@ -134,6 +134,174 @@ func TestResolveSkipsGitHubUserPromptWhenRemoteIsNotGH(t *testing.T) {
 	}
 }
 
+func TestGitHubUserPrompt(t *testing.T) {
+	baseInputs := Inputs{
+		ProjectName: "Sample App",
+		Language:    "go",
+		ProjectType: "cli",
+		Stack:       "go-cli-cobra",
+		AuthorName:  "Ada",
+		AuthorEmail: "ada@example.com",
+		Remote:      "gh",
+		IsTTY:       true,
+	}
+
+	t.Run("configured_via_input_skips_prompt", func(t *testing.T) {
+		inputs := baseInputs
+		inputs.GitHubUser = "configured-user"
+
+		prompter := &stubPrompter{responses: map[string]string{}}
+		resolved, err := Resolve(inputs, prompter)
+		if err != nil {
+			t.Fatalf("Resolve() error = %v", err)
+		}
+		if promptedFor(prompter.calls, "github-user") {
+			t.Fatalf("Resolve() prompts = %#v, should not ask for github-user", prompter.calls)
+		}
+		if resolved.GitHubUser != "configured-user" {
+			t.Fatalf("GitHubUser = %q, want configured-user", resolved.GitHubUser)
+		}
+	})
+
+	t.Run("configured_via_env_skips_prompt", func(t *testing.T) {
+		t.Setenv("GITHUB_USER", "env-user")
+
+		inputs := baseInputs
+		inputs.GitHubUser = ""
+
+		prompter := &stubPrompter{responses: map[string]string{}}
+		resolved, err := Resolve(inputs, prompter)
+		if err != nil {
+			t.Fatalf("Resolve() error = %v", err)
+		}
+		if promptedFor(prompter.calls, "github-user") {
+			t.Fatalf("Resolve() prompts = %#v, should not ask for github-user", prompter.calls)
+		}
+		if resolved.GitHubUser != "env-user" {
+			t.Fatalf("GitHubUser = %q, want env-user", resolved.GitHubUser)
+		}
+	})
+
+	t.Run("unconfigured_prompts_user", func(t *testing.T) {
+		t.Setenv("GITHUB_USER", "")
+		t.Setenv("GH_USER", "")
+		t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+		t.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
+
+		inputs := baseInputs
+		inputs.GitHubUser = ""
+
+		prompter := &stubPrompter{responses: map[string]string{
+			"github-user": "prompted-user",
+		}}
+		resolved, err := Resolve(inputs, prompter)
+		if err != nil {
+			t.Fatalf("Resolve() error = %v", err)
+		}
+		if !promptedFor(prompter.calls, "github-user") {
+			t.Fatalf("Resolve() prompts = %#v, want github-user prompt", prompter.calls)
+		}
+		if resolved.GitHubUser != "prompted-user" {
+			t.Fatalf("GitHubUser = %q, want prompted-user", resolved.GitHubUser)
+		}
+	})
+}
+
+func TestGitHubOrgPrompt(t *testing.T) {
+	baseInputs := Inputs{
+		ProjectName: "Sample App",
+		Language:    "go",
+		ProjectType: "cli",
+		Stack:       "go-cli-cobra",
+		AuthorName:  "Ada",
+		AuthorEmail: "ada@example.com",
+		Remote:      "gh",
+		GitHubUser:  "AvogadroSG1",
+		IsTTY:       true,
+	}
+
+	t.Run("configured_via_input_skips_prompt", func(t *testing.T) {
+		inputs := baseInputs
+		inputs.GitHubOrg = "StackEng"
+
+		prompter := &stubPrompter{responses: map[string]string{}}
+		resolved, err := Resolve(inputs, prompter)
+		if err != nil {
+			t.Fatalf("Resolve() error = %v", err)
+		}
+		if promptedForOrg(prompter.calls) {
+			t.Fatalf("Resolve() prompts = %#v, should not ask for github-org", prompter.calls)
+		}
+		if resolved.GitHubOrg != "StackEng" {
+			t.Fatalf("GitHubOrg = %q, want StackEng", resolved.GitHubOrg)
+		}
+	})
+
+	t.Run("interactive_selects_stackeng", func(t *testing.T) {
+		inputs := baseInputs
+		inputs.GitHubOrg = ""
+
+		prompter := &stubPrompter{responses: map[string]string{
+			"github-org": "StackEng",
+			"org":        "StackEng",
+		}}
+		resolved, err := Resolve(inputs, prompter)
+		if err != nil {
+			t.Fatalf("Resolve() error = %v", err)
+		}
+		if !promptedForOrg(prompter.calls) {
+			t.Fatalf("Resolve() prompts = %#v, want github-org prompt", prompter.calls)
+		}
+		if resolved.GitHubOrg != "StackEng" {
+			t.Fatalf("GitHubOrg = %q, want StackEng", resolved.GitHubOrg)
+		}
+	})
+
+	t.Run("interactive_selects_personal_account_with_username", func(t *testing.T) {
+		inputs := baseInputs
+		inputs.GitHubOrg = ""
+
+		prompter := &stubPrompter{responses: map[string]string{
+			"github-org": "Personal (AvogadroSG1)",
+			"org":        "Personal (AvogadroSG1)",
+		}}
+		resolved, err := Resolve(inputs, prompter)
+		if err != nil {
+			t.Fatalf("Resolve() error = %v", err)
+		}
+		if !promptedForOrg(prompter.calls) {
+			t.Fatalf("Resolve() prompts = %#v, want github-org prompt", prompter.calls)
+		}
+		if resolved.GitHubOrg != "" {
+			t.Fatalf("GitHubOrg = %q, want empty for personal account", resolved.GitHubOrg)
+		}
+	})
+
+	t.Run("interactive_selects_personal", func(t *testing.T) {
+		inputs := baseInputs
+		inputs.GitHubOrg = ""
+
+		prompter := &stubPrompter{responses: map[string]string{
+			"github-org": "Personal",
+			"org":        "Personal",
+		}}
+		resolved, err := Resolve(inputs, prompter)
+		if err != nil {
+			t.Fatalf("Resolve() error = %v", err)
+		}
+		if !promptedForOrg(prompter.calls) {
+			t.Fatalf("Resolve() prompts = %#v, want github-org prompt", prompter.calls)
+		}
+		if resolved.GitHubOrg != "" {
+			t.Fatalf("GitHubOrg = %q, want empty for personal account", resolved.GitHubOrg)
+		}
+	})
+}
+
+func promptedForOrg(calls []promptCall) bool {
+	return promptedFor(calls, "github-org") || promptedFor(calls, "org")
+}
+
 func promptedFor(calls []promptCall, name string) bool {
 	for _, call := range calls {
 		if call.name == name {
