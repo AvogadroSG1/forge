@@ -1,0 +1,11 @@
+"""Issue one request against the app; run under ``opentelemetry-instrument``.
+
+``tests/test_telemetry.py`` executes this file through the auto-instrumentation
+wrapper with the console exporter and asserts the server span is printed.
+"""
+
+from fastapi.testclient import TestClient
+
+from {{.PythonPackage}}.main import app
+
+TestClient(app).get("/health")

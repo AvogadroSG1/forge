@@ -1,11 +1,16 @@
 import typer
 
+from .telemetry import configure, get_tracer
+
+configure()
+
 app = typer.Typer(no_args_is_help=True)
 
 
 @app.command()
 def hello(name: str = "world") -> None:
-    print(f"hello, {name}!")
+    with get_tracer().start_as_current_span("hello"):
+        print(f"hello, {name}!")
 
 
 def main() -> None:
