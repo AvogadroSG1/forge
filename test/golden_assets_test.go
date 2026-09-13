@@ -626,12 +626,21 @@ func TestCSharpWebAPIWeatherForecastControllerExposesControllerRoute(t *testing.
 	}
 }
 
-func TestGoAPIChiPinsPatchedGoToolchainForVulnerabilityGate(t *testing.T) {
+func TestGoStacksPinPatchedGoToolchainForVulnerabilityGate(t *testing.T) {
 	repoRoot := repoRoot(t)
 
+	// govulncheck runs in every Go stack's `mise run ci`; the OpenTelemetry
+	// exporters make net/http and crypto/tls reachable, so the pinned patch
+	// release must carry the stdlib fixes (GO-2026-5026, -5856, -6090, ...).
+	const patchedToolchain = "1.26.8"
+
 	files := []string{
+		filepath.Join(repoRoot, "templates", "golden", "go-cli-cobra", "go.mod.tmpl"),
+		filepath.Join(repoRoot, "templates", "golden", "go-cli-cobra", ".forge-overlay", "mise.toml"),
 		filepath.Join(repoRoot, "templates", "golden", "go-api-chi", "go.mod.tmpl"),
 		filepath.Join(repoRoot, "templates", "golden", "go-api-chi", ".forge-overlay", "mise.toml.tmpl"),
+		filepath.Join(repoRoot, "templates", "golden", "go-web-templ", "go.mod.tmpl"),
+		filepath.Join(repoRoot, "templates", "golden", "go-web-templ", ".forge-overlay", "mise.toml"),
 	}
 
 	for _, path := range files {
@@ -641,8 +650,8 @@ func TestGoAPIChiPinsPatchedGoToolchainForVulnerabilityGate(t *testing.T) {
 		}
 
 		content := string(contentBytes)
-		if !strings.Contains(content, "1.26.4") {
-			t.Fatalf("%s must pin a Go patch release that satisfies the vulnerability gate:\n%s", path, content)
+		if !strings.Contains(content, patchedToolchain) {
+			t.Fatalf("%s must pin Go %s so govulncheck passes:\n%s", path, patchedToolchain, content)
 		}
 	}
 }
