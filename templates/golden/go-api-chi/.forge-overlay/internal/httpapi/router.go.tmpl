@@ -5,11 +5,24 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
+// NewRouter builds the HTTP API and wraps it in OpenTelemetry server
+// instrumentation so every request produces a span on the global tracer
+// provider installed by internal/telemetry.
 func NewRouter(logger *log.Logger) http.Handler {
 	router := chi.NewRouter()
 	router.Get("/health", Health(logger))
 
-	return router
+	// The span name uses the raw request path rather than the chi route
+	// pattern: otelhttp names the span before chi routes the request, so
+	// chi.RouteContext is nil at that point. This is fine for the fixed set of
+	// routes in the walking skeleton; switch to a route-pattern formatter
+	// before adding path parameters to keep span-name cardinality bounded.
+	return otelhttp.NewHandler(router, "http.server",
+		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
+			return r.Method + " " + r.URL.Path
+		}),
+	)
 }

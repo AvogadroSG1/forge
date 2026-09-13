@@ -63,7 +63,7 @@ func TestShippedV1StacksSatisfyGuidelineFloor(t *testing.T) {
 			language: "python",
 			files: []string{
 				"templates/golden/python-cli-typer/pyproject.toml.tmpl",
-				"templates/golden/python-cli-typer/.forge-overlay/mise.toml",
+				"templates/golden/python-cli-typer/.forge-overlay/mise.toml.tmpl",
 				"templates/golden/python-cli-typer/.forge-overlay/tests/test_cli.py.tmpl",
 			},
 		},
@@ -112,7 +112,7 @@ func TestShippedV1StacksSatisfyGuidelineFloor(t *testing.T) {
 			language: "python",
 			files: []string{
 				"templates/golden/python-web-jinja/pyproject.toml.tmpl",
-				"templates/golden/python-web-jinja/.forge-overlay/mise.toml",
+				"templates/golden/python-web-jinja/.forge-overlay/mise.toml.tmpl",
 				"templates/golden/python-web-jinja/.forge-overlay/tests/test_health.py.tmpl",
 			},
 		},

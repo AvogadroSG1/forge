@@ -69,6 +69,8 @@ func TestGoldenCatalogPackagesVanillaAndOverlayAssetsForEveryV1Stack(t *testing.
 				"templates/golden/go-cli-cobra/cmd/serve.go.tmpl",
 				"templates/golden/go-cli-cobra/cmd/config.go.tmpl",
 				"templates/golden/go-cli-cobra/.forge-overlay/cmd/root_test.go.tmpl",
+				"templates/golden/go-cli-cobra/.forge-overlay/cmd/telemetry.go.tmpl",
+				"templates/golden/go-cli-cobra/.forge-overlay/cmd/telemetry_test.go.tmpl",
 			},
 		},
 		{
@@ -83,6 +85,8 @@ func TestGoldenCatalogPackagesVanillaAndOverlayAssetsForEveryV1Stack(t *testing.
 				"templates/golden/go-api-chi/.forge-overlay/internal/httpapi/router.go.tmpl",
 				"templates/golden/go-api-chi/.forge-overlay/internal/httpapi/health.go.tmpl",
 				"templates/golden/go-api-chi/.forge-overlay/internal/httpapi/health_test.go.tmpl",
+				"templates/golden/go-api-chi/.forge-overlay/internal/telemetry/telemetry.go.tmpl",
+				"templates/golden/go-api-chi/.forge-overlay/internal/telemetry/telemetry_test.go.tmpl",
 			},
 		},
 		{
@@ -92,6 +96,8 @@ func TestGoldenCatalogPackagesVanillaAndOverlayAssetsForEveryV1Stack(t *testing.
 				"templates/golden/python-cli-typer/src/{{.PythonPackage}}/__init__.py",
 				"templates/golden/python-cli-typer/src/{{.PythonPackage}}/main.py",
 				"templates/golden/python-cli-typer/.forge-overlay/tests/test_cli.py.tmpl",
+				"templates/golden/python-cli-typer/.forge-overlay/src/{{.PythonPackage}}/telemetry.py.tmpl",
+				"templates/golden/python-cli-typer/.forge-overlay/tests/test_telemetry.py.tmpl",
 			},
 		},
 		{
@@ -101,6 +107,8 @@ func TestGoldenCatalogPackagesVanillaAndOverlayAssetsForEveryV1Stack(t *testing.
 				"templates/golden/python-fastapi/{{.PythonPackage}}/__init__.py",
 				"templates/golden/python-fastapi/{{.PythonPackage}}/main.py",
 				"templates/golden/python-fastapi/.forge-overlay/tests/test_health.py.tmpl",
+				"templates/golden/python-fastapi/.forge-overlay/{{.PythonPackage}}/telemetry.py.tmpl",
+				"templates/golden/python-fastapi/.forge-overlay/tests/test_telemetry.py.tmpl",
 			},
 		},
 		{
@@ -111,6 +119,9 @@ func TestGoldenCatalogPackagesVanillaAndOverlayAssetsForEveryV1Stack(t *testing.
 				"templates/golden/csharp-cli/GreetingBuilder.cs",
 				"templates/golden/csharp-cli/.forge-overlay/tests/Project.Tests/Project.Tests.csproj.tmpl",
 				"templates/golden/csharp-cli/.forge-overlay/tests/Project.Tests/ProgramTests.cs",
+				"templates/golden/csharp-cli/.forge-overlay/Telemetry.cs.tmpl",
+				"templates/golden/csharp-cli/.forge-overlay/TelemetryServiceCollectionExtensions.cs.tmpl",
+				"templates/golden/csharp-cli/.forge-overlay/tests/Project.Tests/TelemetryTests.cs.tmpl",
 			},
 		},
 		{
@@ -125,6 +136,9 @@ func TestGoldenCatalogPackagesVanillaAndOverlayAssetsForEveryV1Stack(t *testing.
 				"templates/golden/csharp-webapi/.forge-overlay/Controllers/HealthController.cs.tmpl",
 				"templates/golden/csharp-webapi/.forge-overlay/Controllers/HealthStatus.cs.tmpl",
 				"templates/golden/csharp-webapi/.forge-overlay/tests/Project.Tests/HealthEndpointTests.cs.tmpl",
+				"templates/golden/csharp-webapi/.forge-overlay/Telemetry.cs.tmpl",
+				"templates/golden/csharp-webapi/.forge-overlay/TelemetryServiceCollectionExtensions.cs.tmpl",
+				"templates/golden/csharp-webapi/.forge-overlay/tests/Project.Tests/TelemetryTests.cs.tmpl",
 			},
 		},
 		{
@@ -137,6 +151,8 @@ func TestGoldenCatalogPackagesVanillaAndOverlayAssetsForEveryV1Stack(t *testing.
 				"templates/golden/go-web-templ/.forge-overlay/internal/web/server.go",
 				"templates/golden/go-web-templ/.forge-overlay/internal/web/server_test.go",
 				"templates/golden/go-web-templ/.forge-overlay/internal/web/static/htmx.min.js",
+				"templates/golden/go-web-templ/.forge-overlay/internal/telemetry/telemetry.go.tmpl",
+				"templates/golden/go-web-templ/.forge-overlay/internal/telemetry/telemetry_test.go.tmpl",
 			},
 		},
 		{
@@ -149,6 +165,8 @@ func TestGoldenCatalogPackagesVanillaAndOverlayAssetsForEveryV1Stack(t *testing.
 				"templates/golden/python-web-jinja/.forge-overlay/{{.PythonPackage}}/static/htmx.min.js",
 				"templates/golden/python-web-jinja/.forge-overlay/tests/test_health.py.tmpl",
 				"templates/golden/python-web-jinja/.forge-overlay/tests/test_index.py.tmpl",
+				"templates/golden/python-web-jinja/.forge-overlay/{{.PythonPackage}}/telemetry.py.tmpl",
+				"templates/golden/python-web-jinja/.forge-overlay/tests/test_telemetry.py.tmpl",
 			},
 		},
 		{
@@ -166,6 +184,9 @@ func TestGoldenCatalogPackagesVanillaAndOverlayAssetsForEveryV1Stack(t *testing.
 				"templates/golden/csharp-blazor/.forge-overlay/Components/Pages/Home.razor.tmpl",
 				"templates/golden/csharp-blazor/.forge-overlay/tests/Project.Tests/Project.Tests.csproj.tmpl",
 				"templates/golden/csharp-blazor/.forge-overlay/tests/Project.Tests/HealthReporterTests.cs.tmpl",
+				"templates/golden/csharp-blazor/.forge-overlay/Telemetry.cs.tmpl",
+				"templates/golden/csharp-blazor/.forge-overlay/TelemetryServiceCollectionExtensions.cs.tmpl",
+				"templates/golden/csharp-blazor/.forge-overlay/tests/Project.Tests/TelemetryTests.cs.tmpl",
 			},
 		},
 		{
@@ -184,6 +205,8 @@ func TestGoldenCatalogPackagesVanillaAndOverlayAssetsForEveryV1Stack(t *testing.
 				"templates/golden/vite-ts/.forge-overlay/src/lib/.keep",
 				"templates/golden/vite-ts/.forge-overlay/eslint.config.js",
 				"templates/golden/vite-ts/.forge-overlay/vitest.config.ts",
+				"templates/golden/vite-ts/.forge-overlay/src/lib/telemetry.ts.tmpl",
+				"templates/golden/vite-ts/.forge-overlay/src/lib/telemetry.test.ts",
 			},
 		},
 		{
@@ -199,6 +222,8 @@ func TestGoldenCatalogPackagesVanillaAndOverlayAssetsForEveryV1Stack(t *testing.
 				"templates/golden/sveltekit/.forge-overlay/src/routes/+page.svelte",
 				"templates/golden/sveltekit/.forge-overlay/eslint.config.js",
 				"templates/golden/sveltekit/.forge-overlay/vitest.config.ts",
+				"templates/golden/sveltekit/.forge-overlay/src/lib/telemetry.ts.tmpl",
+				"templates/golden/sveltekit/.forge-overlay/src/lib/telemetry.test.ts",
 			},
 		},
 		{
@@ -215,6 +240,8 @@ func TestGoldenCatalogPackagesVanillaAndOverlayAssetsForEveryV1Stack(t *testing.
 				"templates/golden/angular/.forge-overlay/src/app/app.spec.ts.tmpl",
 				"templates/golden/angular/.forge-overlay/src/environments/environment.ts.tmpl",
 				"templates/golden/angular/.forge-overlay/eslint.config.js",
+				"templates/golden/angular/.forge-overlay/src/app/telemetry.ts.tmpl",
+				"templates/golden/angular/.forge-overlay/src/app/telemetry.spec.ts",
 			},
 		},
 	}
@@ -602,12 +629,21 @@ func TestCSharpWebAPIWeatherForecastControllerExposesControllerRoute(t *testing.
 	}
 }
 
-func TestGoAPIChiPinsPatchedGoToolchainForVulnerabilityGate(t *testing.T) {
+func TestGoStacksPinPatchedGoToolchainForVulnerabilityGate(t *testing.T) {
 	repoRoot := repoRoot(t)
 
+	// govulncheck runs in every Go stack's `mise run ci`; the OpenTelemetry
+	// exporters make net/http and crypto/tls reachable, so the pinned patch
+	// release must carry the stdlib fixes (GO-2026-5026, -5856, -6090, ...).
+	const patchedToolchain = "1.26.8"
+
 	files := []string{
+		filepath.Join(repoRoot, "templates", "golden", "go-cli-cobra", "go.mod.tmpl"),
+		filepath.Join(repoRoot, "templates", "golden", "go-cli-cobra", ".forge-overlay", "mise.toml"),
 		filepath.Join(repoRoot, "templates", "golden", "go-api-chi", "go.mod.tmpl"),
 		filepath.Join(repoRoot, "templates", "golden", "go-api-chi", ".forge-overlay", "mise.toml.tmpl"),
+		filepath.Join(repoRoot, "templates", "golden", "go-web-templ", "go.mod.tmpl"),
+		filepath.Join(repoRoot, "templates", "golden", "go-web-templ", ".forge-overlay", "mise.toml"),
 	}
 
 	for _, path := range files {
@@ -617,8 +653,8 @@ func TestGoAPIChiPinsPatchedGoToolchainForVulnerabilityGate(t *testing.T) {
 		}
 
 		content := string(contentBytes)
-		if !strings.Contains(content, "1.26.4") {
-			t.Fatalf("%s must pin a Go patch release that satisfies the vulnerability gate:\n%s", path, content)
+		if !strings.Contains(content, patchedToolchain) {
+			t.Fatalf("%s must pin Go %s so govulncheck passes:\n%s", path, patchedToolchain, content)
 		}
 	}
 }
@@ -677,6 +713,167 @@ func TestGoldenOverlayMiseTomlIncludesDCGTool(t *testing.T) {
 
 			if !strings.Contains(toolsSection, requiredTool) {
 				t.Fatalf("%s [tools] section missing %s:\n%s", targetPath, requiredTool, toolsSection)
+			}
+		})
+	}
+}
+
+func TestGoldenStacksShipTelemetryBootstrap(t *testing.T) {
+	repoRoot := repoRoot(t)
+
+	tests := []struct {
+		stack      string
+		manifest   string
+		depSnippet string
+		module     string
+		test       string
+	}{
+		{
+			stack:      "go-cli-cobra",
+			manifest:   "go.mod.tmpl",
+			depSnippet: "go.opentelemetry.io/otel",
+			module:     ".forge-overlay/cmd/telemetry.go.tmpl",
+			test:       ".forge-overlay/cmd/telemetry_test.go.tmpl",
+		},
+		{
+			stack:      "go-api-chi",
+			manifest:   "go.mod.tmpl",
+			depSnippet: "go.opentelemetry.io/otel",
+			module:     ".forge-overlay/internal/telemetry/telemetry.go.tmpl",
+			test:       ".forge-overlay/internal/telemetry/telemetry_test.go.tmpl",
+		},
+		{
+			stack:      "go-web-templ",
+			manifest:   "go.mod.tmpl",
+			depSnippet: "go.opentelemetry.io/otel",
+			module:     ".forge-overlay/internal/telemetry/telemetry.go.tmpl",
+			test:       ".forge-overlay/internal/telemetry/telemetry_test.go.tmpl",
+		},
+		{
+			stack:      "python-cli-typer",
+			manifest:   "pyproject.toml.tmpl",
+			depSnippet: "opentelemetry-distro",
+			module:     ".forge-overlay/src/{{.PythonPackage}}/telemetry.py.tmpl",
+			test:       ".forge-overlay/tests/test_telemetry.py.tmpl",
+		},
+		{
+			stack:      "python-fastapi",
+			manifest:   "pyproject.toml.tmpl",
+			depSnippet: "opentelemetry-distro",
+			module:     ".forge-overlay/{{.PythonPackage}}/telemetry.py.tmpl",
+			test:       ".forge-overlay/tests/test_telemetry.py.tmpl",
+		},
+		{
+			stack:      "python-web-jinja",
+			manifest:   "pyproject.toml.tmpl",
+			depSnippet: "opentelemetry-distro",
+			module:     ".forge-overlay/{{.PythonPackage}}/telemetry.py.tmpl",
+			test:       ".forge-overlay/tests/test_telemetry.py.tmpl",
+		},
+		{
+			stack:      "csharp-cli",
+			manifest:   "Project.csproj.tmpl",
+			depSnippet: `Include="OpenTelemetry.Extensions.Hosting"`,
+			module:     ".forge-overlay/Telemetry.cs.tmpl",
+			test:       ".forge-overlay/tests/Project.Tests/TelemetryTests.cs.tmpl",
+		},
+		{
+			stack:      "csharp-webapi",
+			manifest:   "Project.csproj.tmpl",
+			depSnippet: `Include="OpenTelemetry.Extensions.Hosting"`,
+			module:     ".forge-overlay/Telemetry.cs.tmpl",
+			test:       ".forge-overlay/tests/Project.Tests/TelemetryTests.cs.tmpl",
+		},
+		{
+			stack:      "csharp-blazor",
+			manifest:   "Project.csproj.tmpl",
+			depSnippet: `Include="OpenTelemetry.Extensions.Hosting"`,
+			module:     ".forge-overlay/Telemetry.cs.tmpl",
+			test:       ".forge-overlay/tests/Project.Tests/TelemetryTests.cs.tmpl",
+		},
+		{
+			stack:      "vite-ts",
+			manifest:   ".forge-overlay/package.json.tmpl",
+			depSnippet: `"@opentelemetry/sdk-trace-web"`,
+			module:     ".forge-overlay/src/lib/telemetry.ts.tmpl",
+			test:       ".forge-overlay/src/lib/telemetry.test.ts",
+		},
+		{
+			stack:      "sveltekit",
+			manifest:   ".forge-overlay/package.json.tmpl",
+			depSnippet: `"@opentelemetry/sdk-trace-web"`,
+			module:     ".forge-overlay/src/lib/telemetry.ts.tmpl",
+			test:       ".forge-overlay/src/lib/telemetry.test.ts",
+		},
+		{
+			stack:      "angular",
+			manifest:   ".forge-overlay/package.json.tmpl",
+			depSnippet: `"@opentelemetry/sdk-trace-web"`,
+			module:     ".forge-overlay/src/app/telemetry.ts.tmpl",
+			test:       ".forge-overlay/src/app/telemetry.spec.ts",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.stack, func(t *testing.T) {
+			stackRoot := filepath.Join(repoRoot, "templates", "golden", tt.stack)
+
+			manifestPath := filepath.Join(stackRoot, tt.manifest)
+			manifestBytes, err := os.ReadFile(manifestPath)
+			if err != nil {
+				t.Errorf("%s manifest: read %s: %v", tt.stack, manifestPath, err)
+			} else if !strings.Contains(string(manifestBytes), tt.depSnippet) {
+				t.Errorf("%s manifest %s missing OpenTelemetry dependency %q", tt.stack, manifestPath, tt.depSnippet)
+			}
+
+			for _, relPath := range []string{tt.module, tt.test} {
+				fullPath := filepath.Join(stackRoot, relPath)
+				info, err := os.Stat(fullPath)
+				if err != nil {
+					t.Errorf("%s telemetry asset: stat %s: %v", tt.stack, fullPath, err)
+					continue
+				}
+				if info.IsDir() {
+					t.Errorf("%s telemetry asset %s is a directory, want file", tt.stack, fullPath)
+				}
+			}
+		})
+	}
+}
+
+func TestPythonStacksRunUnderOpentelemetryInstrument(t *testing.T) {
+	repoRoot := repoRoot(t)
+
+	stacks := []string{
+		"python-cli-typer",
+		"python-fastapi",
+		"python-web-jinja",
+	}
+
+	const requiredSnippet = "opentelemetry-instrument"
+
+	for _, stack := range stacks {
+		t.Run(stack, func(t *testing.T) {
+			tomlPath := filepath.Join(repoRoot, "templates", "golden", stack, ".forge-overlay", "mise.toml")
+			tmplPath := filepath.Join(repoRoot, "templates", "golden", stack, ".forge-overlay", "mise.toml.tmpl")
+
+			var (
+				contentBytes []byte
+				targetPath   string
+				err          error
+			)
+
+			if contentBytes, err = os.ReadFile(tomlPath); err == nil {
+				targetPath = tomlPath
+			} else if contentBytes, err = os.ReadFile(tmplPath); err == nil {
+				targetPath = tmplPath
+			} else {
+				t.Fatalf("neither %s nor %s exists", tomlPath, tmplPath)
+			}
+
+			content := string(contentBytes)
+			if !strings.Contains(content, requiredSnippet) {
+				t.Fatalf("%s must run the %s app under %s:\n%s", targetPath, stack, requiredSnippet, content)
 			}
 		})
 	}

@@ -18,3 +18,13 @@ This repository was scaffolded by `forge`.
 - Review feedback SHOULD use Conventional Comments.
 - Pull requests SHOULD stay under 300 changed lines when practical.
 <!-- END FORGE CONVENTIONS -->
+
+## Observability
+
+- This repository ships an OpenTelemetry bootstrap: a telemetry module plus a real test that proves a span and a metric are exported.
+- Traces and metrics are the supported signals. Logs are not yet bridged; new work SHOULD keep application logging as-is until a logs bridge lands.
+- `OTEL_SERVICE_NAME` defaults to the repository slug. Callers MAY override it via the environment; browser stacks cannot read the environment and take `VITE_OTEL_SERVICE_NAME` (vite, sveltekit) or `environment.serviceName` (Angular) at build time instead.
+- Exporters are off until `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Browser stacks use `VITE_OTEL_EXPORTER_OTLP_ENDPOINT` (Angular: `environment.ts`). With no endpoint the app MUST stay silent — no collector, no noise.
+- New request handlers and commands SHOULD run inside a span from the shared tracer; new counters and histograms SHOULD come from the shared meter.
+- Contributors MUST NOT remove or skip the telemetry test; it is part of the walking-skeleton guarantee.
+- Python repositories MAY run under `opentelemetry-instrument` with `mise run serve` (`mise run run-cli` for CLI projects); the task keeps exporters disabled until an endpoint is configured.

@@ -1,0 +1,124 @@
+// OpenTelemetry bootstrap for the browser bundle (traces + metrics).
+//
+// Providers are always installed so instrumentation and manual spans work on
+// day one. OTLP/HTTP exporters are attached only when a collector endpoint is
+// passed as `otlpEndpoint` (app.config.ts forwards `environment.otlpEndpoint`),
+// so a repository with no collector produces no export noise.
+// Tests inject in-memory exporters through `spanExporter` / `metricReader`.
+import { context, metrics, propagation, trace } from '@opentelemetry/api';
+import type { Meter, Tracer } from '@opentelemetry/api';
+import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import { registerInstrumentations } from '@opentelemetry/instrumentation';
+import { FetchInstrumentation } from '@opentelemetry/instrumentation-fetch';
+import { resourceFromAttributes } from '@opentelemetry/resources';
+import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
+import type { IMetricReader } from '@opentelemetry/sdk-metrics';
+import {
+  BatchSpanProcessor,
+  SimpleSpanProcessor,
+  WebTracerProvider,
+} from '@opentelemetry/sdk-trace-web';
+import type { SpanExporter, SpanProcessor } from '@opentelemetry/sdk-trace-web';
+import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
+
+const DEFAULT_SERVICE_NAME = '{{.NpmPackage}}';
+
+export interface TelemetryOptions {
+  /**
+   * Resource `service.name`. Browsers cannot read OTEL_SERVICE_NAME, so
+   * app.config.ts forwards `environment.serviceName`; empty means "use the package name".
+   */
+  serviceName?: string;
+  /**
+   * OTLP/HTTP collector base URL; `/v1/traces` and `/v1/metrics` are appended.
+   * Empty (the default) means "do not export".
+   */
+  otlpEndpoint?: string;
+  /** Replaces the OTLP span exporter (tests inject `InMemorySpanExporter`). */
+  spanExporter?: SpanExporter;
+  /** Replaces the OTLP metric reader (tests inject an in-memory reader). */
+  metricReader?: IMetricReader;
+  /** Trace `fetch()` calls and propagate W3C trace context. Default `true`. */
+  instrumentFetch?: boolean;
+  /** Install the providers as the global `@opentelemetry/api` singletons. Default `true`. */
+  register?: boolean;
+}
+
+export interface Telemetry {
+  tracer: Tracer;
+  meter: Meter;
+  shutdown(): Promise<void>;
+}
+
+let started: Telemetry | undefined;
+
+// Idempotent: repeat calls return the running instance until `shutdown()`.
+export function startTelemetry(options: TelemetryOptions = {}): Telemetry {
+  if (started) {
+    return started;
+  }
+
+  const serviceName = options.serviceName || DEFAULT_SERVICE_NAME;
+  const endpoint = (options.otlpEndpoint ?? '').replace(/\/+$/, '');
+  const resource = resourceFromAttributes({ [ATTR_SERVICE_NAME]: serviceName });
+
+  const spanProcessors: SpanProcessor[] = [];
+  if (options.spanExporter) {
+    spanProcessors.push(new SimpleSpanProcessor(options.spanExporter));
+  } else if (endpoint) {
+    spanProcessors.push(
+      new BatchSpanProcessor(new OTLPTraceExporter({ url: `${endpoint}/v1/traces` })),
+    );
+  }
+
+  const readers: IMetricReader[] = [];
+  if (options.metricReader) {
+    readers.push(options.metricReader);
+  } else if (endpoint) {
+    readers.push(
+      new PeriodicExportingMetricReader({
+        exporter: new OTLPMetricExporter({ url: `${endpoint}/v1/metrics` }),
+      }),
+    );
+  }
+
+  const tracerProvider = new WebTracerProvider({ resource, spanProcessors });
+  const meterProvider = new MeterProvider({ resource, readers });
+
+  const registered = options.register ?? true;
+  if (registered) {
+    // register() also installs the W3C trace-context + baggage propagators.
+    tracerProvider.register();
+    metrics.setGlobalMeterProvider(meterProvider);
+  }
+
+  let disableInstrumentations: (() => void) | undefined;
+  if (options.instrumentFetch ?? true) {
+    disableInstrumentations = registerInstrumentations({
+      instrumentations: [new FetchInstrumentation()],
+      tracerProvider,
+      meterProvider,
+    });
+  }
+
+  const telemetry: Telemetry = {
+    tracer: tracerProvider.getTracer(serviceName),
+    meter: meterProvider.getMeter(serviceName),
+    async shutdown() {
+      disableInstrumentations?.();
+      if (registered) {
+        // The API refuses to replace a registered global, so release everything
+        // register() installed; a later startTelemetry() then re-registers cleanly.
+        trace.disable();
+        metrics.disable();
+        context.disable();
+        propagation.disable();
+      }
+      started = undefined;
+      await Promise.all([tracerProvider.shutdown(), meterProvider.shutdown()]);
+    },
+  };
+  started = telemetry;
+  return telemetry;
+}

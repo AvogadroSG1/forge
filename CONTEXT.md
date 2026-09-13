@@ -44,6 +44,13 @@ governed by (and tested against) the canonical language guideline files. There i
 tooling is one *part* of the overlay, not a separate layer. `forge update` regenerates the
 snapshot beneath it but never touches the overlay.
 
+### Telemetry bootstrap
+The observability slice of every shipped stack's overlay: one telemetry module that installs
+OpenTelemetry tracer + meter providers and `service.name` unconditionally, attaches OTLP/HTTP
+exporters **only** when `OTEL_EXPORTER_OTLP_ENDPOINT` (browser: `VITE_…` / Angular
+`environment.otlpEndpoint`) is set, plus a real test that proves a span and a metric flow through
+in-memory exporters. A vetted extra (ADR-0010), refresh-immune like the rest of the overlay. (See ADR-0020, SPEC §9.4.)
+
 ### Gate
 An automated quality check (lint, format, test) defined once as a `mise` task and invoked
 by multiple callers (lefthook locally, GitHub Actions in CI) so the definition never

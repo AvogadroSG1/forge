@@ -1,0 +1,181 @@
+package cmd
+
+import (
+	"context"
+	"errors"
+	"io"
+	"testing"
+
+	"github.com/spf13/cobra"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+)
+
+func TestSetupTelemetryExportsSpansAndMetricsThroughInjectedSinks(t *testing.T) {
+	ctx := context.Background()
+	exporter := tracetest.NewInMemoryExporter()
+	reader := sdkmetric.NewManualReader()
+
+	shutdown, err := setupTelemetry(ctx, telemetryOptions{
+		ServiceName:  "telemetry-test",
+		SpanExporter: exporter,
+		MetricReader: reader,
+	})
+	if err != nil {
+		t.Fatalf("setupTelemetry() error = %v", err)
+	}
+
+	_, span := tracer().Start(ctx, "telemetry.test")
+	span.End()
+
+	counter, err := meter().Int64Counter("telemetry.test.invocations")
+	if err != nil {
+		t.Fatalf("Int64Counter() error = %v", err)
+	}
+	counter.Add(ctx, 1)
+
+	var metrics metricdata.ResourceMetrics
+	if err := reader.Collect(ctx, &metrics); err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
+	if !hasMetric(metrics, "telemetry.test.invocations") {
+		t.Fatalf("collected metrics missing telemetry.test.invocations: %+v", metrics.ScopeMetrics)
+	}
+
+	spans := exporter.GetSpans()
+	if len(spans) != 1 {
+		t.Fatalf("exported %d spans, want 1", len(spans))
+	}
+	if spans[0].Name != "telemetry.test" {
+		t.Fatalf("span name = %q, want %q", spans[0].Name, "telemetry.test")
+	}
+
+	if err := shutdown(ctx); err != nil {
+		t.Fatalf("shutdown() error = %v", err)
+	}
+}
+
+func TestSetupTelemetryWithoutCollectorEndpointInstallsQuietProviders(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "")
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "")
+	ctx := context.Background()
+
+	shutdown, err := setupTelemetry(ctx, telemetryOptions{})
+	if err != nil {
+		t.Fatalf("setupTelemetry() error = %v", err)
+	}
+
+	_, span := tracer().Start(ctx, "telemetry.quiet")
+	span.End()
+
+	if err := shutdown(ctx); err != nil {
+		t.Fatalf("shutdown() error = %v", err)
+	}
+}
+
+// retainingExporter keeps exported spans readable after the finalizer has
+// shut the tracer provider down, which would otherwise reset the in-memory
+// exporter.
+type retainingExporter struct {
+	*tracetest.InMemoryExporter
+}
+
+func (retainingExporter) Shutdown(context.Context) error {
+	return nil
+}
+
+// installTestExporter points the root command's PersistentPreRunE at an
+// in-memory exporter for the duration of the test.
+func installTestExporter(t *testing.T) retainingExporter {
+	t.Helper()
+	exporter := retainingExporter{InMemoryExporter: tracetest.NewInMemoryExporter()}
+	telemetrySetupOptions = telemetryOptions{
+		SpanExporter: exporter,
+		MetricReader: sdkmetric.NewManualReader(),
+	}
+	t.Cleanup(func() {
+		telemetrySetupOptions = telemetryOptions{}
+	})
+	return exporter
+}
+
+// executeRoot runs the root command with args and silences its output.
+func executeRoot(t *testing.T, args ...string) error {
+	t.Helper()
+	root := RootCommand()
+	root.SetOut(io.Discard)
+	root.SetErr(io.Discard)
+	root.SetArgs(args)
+	t.Cleanup(func() {
+		root.SetArgs(nil)
+	})
+	return root.Execute()
+}
+
+func TestServeCommandRecordsSpanThroughRootHooks(t *testing.T) {
+	exporter := installTestExporter(t)
+
+	if err := executeRoot(t, "serve"); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if telemetryShutdown != nil {
+		t.Fatal("telemetryShutdown still set after finalizer")
+	}
+	if telemetryCommandSpan != nil {
+		t.Fatal("telemetryCommandSpan still set after finalizer")
+	}
+
+	spans := exporter.GetSpans()
+	if len(spans) != 1 {
+		t.Fatalf("exported %d spans, want 1", len(spans))
+	}
+	if spans[0].Name != "serve" {
+		t.Fatalf("span name = %q, want %q", spans[0].Name, "serve")
+	}
+}
+
+func TestFailingCommandStillExportsSpanThroughFinalizer(t *testing.T) {
+	exporter := installTestExporter(t)
+
+	wantErr := errors.New("boom")
+	failing := &cobra.Command{
+		Use: "telemetry-failing",
+		RunE: func(*cobra.Command, []string) error {
+			return wantErr
+		},
+	}
+	root := RootCommand()
+	root.AddCommand(failing)
+	t.Cleanup(func() {
+		root.RemoveCommand(failing)
+	})
+
+	err := executeRoot(t, "telemetry-failing")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Execute() error = %v, want %v", err, wantErr)
+	}
+	if telemetryShutdown != nil {
+		t.Fatal("telemetryShutdown still set after finalizer")
+	}
+
+	spans := exporter.GetSpans()
+	if len(spans) != 1 {
+		t.Fatalf("exported %d spans, want 1", len(spans))
+	}
+	if spans[0].Name != "telemetry-failing" {
+		t.Fatalf("span name = %q, want %q", spans[0].Name, "telemetry-failing")
+	}
+}
+
+func hasMetric(metrics metricdata.ResourceMetrics, name string) bool {
+	for _, scope := range metrics.ScopeMetrics {
+		for _, m := range scope.Metrics {
+			if m.Name == name {
+				return true
+			}
+		}
+	}
+	return false
+}

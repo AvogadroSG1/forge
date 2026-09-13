@@ -2,12 +2,18 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+
+	"{{.ModulePath}}/internal/telemetry"
 )
 
 func TestHealthEndpointReturnsOK(t *testing.T) {
@@ -28,5 +34,38 @@ func TestHealthEndpointReturnsOK(t *testing.T) {
 
 	if !bytes.Contains(logs.Bytes(), []byte("health endpoint served")) {
 		t.Fatalf("log output = %q, want health trace", logs.String())
+	}
+}
+
+func TestHealthRequestRecordsServerSpan(t *testing.T) {
+	ctx := context.Background()
+	exporter := tracetest.NewInMemoryExporter()
+	shutdown, err := telemetry.Setup(ctx, telemetry.Options{
+		SpanExporter: exporter,
+		MetricReader: sdkmetric.NewManualReader(),
+	})
+	if err != nil {
+		t.Fatalf("telemetry.Setup() error = %v", err)
+	}
+
+	router := NewRouter(log.New(io.Discard, "", 0))
+	request := httptest.NewRequest(http.MethodGet, "/health", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+
+	spans := exporter.GetSpans()
+	if len(spans) != 1 {
+		t.Fatalf("exported %d spans, want 1", len(spans))
+	}
+	if spans[0].Name != "GET /health" {
+		t.Fatalf("span name = %q, want %q", spans[0].Name, "GET /health")
+	}
+
+	if err := shutdown(ctx); err != nil {
+		t.Fatalf("shutdown() error = %v", err)
 	}
 }

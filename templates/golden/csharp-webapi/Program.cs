@@ -25,6 +25,7 @@ public partial class Program
         builder.Services.AddControllers();
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
+        builder.Services.AddDefaultOpenTelemetry();
 
         return builder;
     }

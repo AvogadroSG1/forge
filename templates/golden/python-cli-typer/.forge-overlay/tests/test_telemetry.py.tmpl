@@ -1,0 +1,84 @@
+import os
+import subprocess
+import sys
+
+from opentelemetry.sdk.metrics.export import InMemoryMetricReader
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+    InMemorySpanExporter,
+)
+from typer.testing import CliRunner
+
+from {{.PythonPackage}}.main import app
+from {{.PythonPackage}}.telemetry import build_providers, configure
+
+# The `opentelemetry-instrument` console script is this function; calling it via
+# the interpreter keeps the test independent of the virtualenv's bin layout.
+OPENTELEMETRY_INSTRUMENT = [
+    sys.executable,
+    "-c",
+    "from opentelemetry.instrumentation.auto_instrumentation import run; run()",
+]
+
+
+def test_build_providers_exports_span_and_metric() -> None:
+    exporter = InMemorySpanExporter()
+    reader = InMemoryMetricReader()
+
+    tracer_provider, meter_provider = build_providers(
+        "unit-test", span_exporter=exporter, metric_reader=reader
+    )
+    with tracer_provider.get_tracer("tests").start_as_current_span("unit"):
+        pass
+    meter_provider.get_meter("tests").create_counter("unit_hits").add(1)
+
+    assert [span.name for span in exporter.get_finished_spans()] == ["unit"]
+    assert tracer_provider.resource.attributes["service.name"] == "unit-test"
+
+    metrics_data = reader.get_metrics_data()
+    assert metrics_data is not None
+    metric_names = [
+        metric.name
+        for resource_metrics in metrics_data.resource_metrics
+        for scope_metrics in resource_metrics.scope_metrics
+        for metric in scope_metrics.metrics
+    ]
+    assert "unit_hits" in metric_names
+
+
+def test_hello_command_records_span() -> None:
+    exporter = InMemorySpanExporter()
+    configure().add_span_processor(SimpleSpanProcessor(exporter))
+
+    result = CliRunner().invoke(app, ["--name", "Peter"])
+
+    assert result.exit_code == 0
+    assert "hello" in [span.name for span in exporter.get_finished_spans()]
+
+
+def test_runs_under_opentelemetry_instrument() -> None:
+    result = subprocess.run(
+        [
+            *OPENTELEMETRY_INSTRUMENT,
+            "--traces_exporter",
+            "console",
+            "--metrics_exporter",
+            "none",
+            "--logs_exporter",
+            "none",
+            sys.executable,
+            "-m",
+            "{{.PythonPackage}}.main",
+            "--name",
+            "instrumented",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+        env={**os.environ, "OTEL_SERVICE_NAME": "instrumented"},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "hello, instrumented!" in result.stdout
+    assert '"name": "hello"' in result.stdout

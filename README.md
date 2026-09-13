@@ -30,6 +30,8 @@ API client points at `--api-base-url` (a third-party API or an existing backend)
 
 Each shipped stack is expected to scaffold a repo that can run `mise install` and `mise run ci` with at least one real passing test.
 
+Every stack's overlay also ships an env-gated OpenTelemetry bootstrap (traces + metrics) with a real test: providers are always installed, and OTLP/HTTP export turns on only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (see ADR-0020).
+
 ## How It Works
 
 ```mermaid
