@@ -1,15 +1,24 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
 
+	"{{.ModulePath}}/internal/telemetry"
 	"{{.ModulePath}}/internal/web"
 )
 
 func main() {
 	logger := log.New(os.Stdout, "web ", log.LstdFlags)
+
+	shutdown, err := telemetry.Setup(context.Background(), telemetry.Options{})
+	if err != nil {
+		logger.Fatal(err)
+	}
+	defer func() { _ = shutdown(context.Background()) }()
+
 	handler := web.NewServer("{{.ProjectName}}", logger)
 
 	logger.Println("listening on :8080")

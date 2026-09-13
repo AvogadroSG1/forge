@@ -1,15 +1,24 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
 
 	"{{.ModulePath}}/internal/httpapi"
+	"{{.ModulePath}}/internal/telemetry"
 )
 
 func main() {
 	logger := log.New(os.Stdout, "httpapi ", log.LstdFlags)
+
+	shutdown, err := telemetry.Setup(context.Background(), telemetry.Options{})
+	if err != nil {
+		logger.Fatal(err)
+	}
+	defer func() { _ = shutdown(context.Background()) }()
+
 	handler := httpapi.NewRouter(logger)
 
 	if err := http.ListenAndServe(":8080", handler); err != nil {

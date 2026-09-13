@@ -6,6 +6,9 @@ var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Exercise the serve execution seam",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		_, span := tracer().Start(commandContext(cmd), "serve")
+		defer span.End()
+
 		cmd.Println("serve command is wired")
 		return nil
 	},

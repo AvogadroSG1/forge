@@ -1,0 +1,84 @@
+package telemetry
+
+import (
+	"context"
+	"testing"
+
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+)
+
+func TestSetupExportsSpansAndMetricsThroughInjectedSinks(t *testing.T) {
+	ctx := context.Background()
+	exporter := tracetest.NewInMemoryExporter()
+	reader := sdkmetric.NewManualReader()
+
+	shutdown, err := Setup(ctx, Options{
+		ServiceName:  "telemetry-test",
+		SpanExporter: exporter,
+		MetricReader: reader,
+	})
+	if err != nil {
+		t.Fatalf("Setup() error = %v", err)
+	}
+
+	_, span := Tracer().Start(ctx, "telemetry.test")
+	span.End()
+
+	counter, err := Meter().Int64Counter("telemetry.test.requests")
+	if err != nil {
+		t.Fatalf("Int64Counter() error = %v", err)
+	}
+	counter.Add(ctx, 1)
+
+	var metrics metricdata.ResourceMetrics
+	if err := reader.Collect(ctx, &metrics); err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
+	if !hasMetric(metrics, "telemetry.test.requests") {
+		t.Fatalf("collected metrics missing telemetry.test.requests: %+v", metrics.ScopeMetrics)
+	}
+
+	spans := exporter.GetSpans()
+	if len(spans) != 1 {
+		t.Fatalf("exported %d spans, want 1", len(spans))
+	}
+	if spans[0].Name != "telemetry.test" {
+		t.Fatalf("span name = %q, want %q", spans[0].Name, "telemetry.test")
+	}
+
+	if err := shutdown(ctx); err != nil {
+		t.Fatalf("shutdown() error = %v", err)
+	}
+}
+
+func TestSetupWithoutCollectorEndpointInstallsQuietProviders(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "")
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "")
+	ctx := context.Background()
+
+	shutdown, err := Setup(ctx, Options{})
+	if err != nil {
+		t.Fatalf("Setup() error = %v", err)
+	}
+
+	_, span := Tracer().Start(ctx, "telemetry.quiet")
+	span.End()
+
+	if err := shutdown(ctx); err != nil {
+		t.Fatalf("shutdown() error = %v", err)
+	}
+}
+
+func hasMetric(metrics metricdata.ResourceMetrics, name string) bool {
+	for _, scope := range metrics.ScopeMetrics {
+		for _, m := range scope.Metrics {
+			if m.Name == name {
+				return true
+			}
+		}
+	}
+	return false
+}

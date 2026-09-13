@@ -7,13 +7,16 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 //go:embed static
 var staticFiles embed.FS
 
 // NewServer wires the walking skeleton: the page shell, the health
-// contract consumed by HTMX, and the locally vendored static assets.
+// contract consumed by HTMX, and the locally vendored static assets. The
+// router is wrapped in OpenTelemetry server instrumentation so every request
+// produces a span on the global tracer provider installed by the entrypoint.
 func NewServer(title string, logger *log.Logger) http.Handler {
 	router := chi.NewRouter()
 
@@ -44,5 +47,14 @@ func NewServer(title string, logger *log.Logger) http.Handler {
 	}
 	router.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 
-	return router
+	// The span name uses the raw request path rather than the chi route
+	// pattern: otelhttp names the span before chi routes the request, so
+	// chi.RouteContext is nil at that point. This is fine for the fixed set of
+	// routes in the walking skeleton; switch to a route-pattern formatter
+	// before adding path parameters to keep span-name cardinality bounded.
+	return otelhttp.NewHandler(router, "http.server",
+		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
+			return r.Method + " " + r.URL.Path
+		}),
+	)
 }

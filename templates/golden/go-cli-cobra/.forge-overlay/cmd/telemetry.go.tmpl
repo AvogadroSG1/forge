@@ -1,0 +1,164 @@
+package cmd
+
+import (
+	"context"
+	"errors"
+	"os"
+
+	"github.com/spf13/cobra"
+	"go.opentelemetry.io/contrib/instrumentation/runtime"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/propagation"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
+	"go.opentelemetry.io/otel/trace"
+)
+
+// telemetryInstrumentationName scopes the tracer and meter used by commands.
+const telemetryInstrumentationName = "{{.ModulePath}}"
+
+// telemetryDefaultServiceName is used when neither
+// telemetryOptions.ServiceName nor OTEL_SERVICE_NAME is set.
+const telemetryDefaultServiceName = "{{.RepoSlug}}"
+
+// telemetryOptions tunes setupTelemetry. The zero value is production-ready:
+// exporters are selected from the environment. Tests inject SpanExporter and
+// MetricReader to observe telemetry in memory without touching the network.
+type telemetryOptions struct {
+	// ServiceName overrides OTEL_SERVICE_NAME and the built-in default.
+	ServiceName string
+	// SpanExporter, when set, replaces the env-gated OTLP trace exporter and
+	// is wired synchronously so a test can read spans as soon as they end.
+	SpanExporter sdktrace.SpanExporter
+	// MetricReader, when set, replaces the env-gated OTLP metric reader.
+	MetricReader sdkmetric.Reader
+}
+
+// telemetrySetupOptions is read by the root command's PersistentPreRunE.
+// Production leaves it zero; tests assign in-memory sinks before Execute.
+var telemetrySetupOptions telemetryOptions
+
+// telemetryShutdown is stored by PersistentPreRunE and drained by
+// PersistentPostRunE so every command flushes its telemetry on exit.
+var telemetryShutdown func(context.Context) error
+
+func init() {
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+		shutdown, err := setupTelemetry(commandContext(cmd), telemetrySetupOptions)
+		if err != nil {
+			return err
+		}
+		telemetryShutdown = shutdown
+		return nil
+	}
+	rootCmd.PersistentPostRunE = func(cmd *cobra.Command, _ []string) error {
+		if telemetryShutdown == nil {
+			return nil
+		}
+		shutdown := telemetryShutdown
+		telemetryShutdown = nil
+		return shutdown(commandContext(cmd))
+	}
+}
+
+// setupTelemetry installs the global tracer provider, meter provider, and W3C
+// propagators, then starts Go runtime metrics collection. OTLP/HTTP exporters
+// are attached only when the standard OTEL_EXPORTER_OTLP_* environment
+// variables name a collector, so a CLI run without one stays silent. The
+// returned function flushes and stops both providers.
+func setupTelemetry(ctx context.Context, opts telemetryOptions) (shutdown func(context.Context) error, err error) {
+	res, err := newTelemetryResource(opts.ServiceName)
+	if err != nil {
+		return nil, err
+	}
+
+	traceOpts := []sdktrace.TracerProviderOption{sdktrace.WithResource(res)}
+	switch {
+	case opts.SpanExporter != nil:
+		traceOpts = append(traceOpts, sdktrace.WithSyncer(opts.SpanExporter))
+	case otlpConfigured("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"):
+		spanExporter, exporterErr := otlptracehttp.New(ctx)
+		if exporterErr != nil {
+			return nil, exporterErr
+		}
+		traceOpts = append(traceOpts, sdktrace.WithBatcher(spanExporter))
+	}
+	tracerProvider := sdktrace.NewTracerProvider(traceOpts...)
+
+	metricOpts := []sdkmetric.Option{sdkmetric.WithResource(res)}
+	metricReader := opts.MetricReader
+	if metricReader == nil && otlpConfigured("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT") {
+		metricExporter, exporterErr := otlpmetrichttp.New(ctx)
+		if exporterErr != nil {
+			return nil, errors.Join(exporterErr, tracerProvider.Shutdown(ctx))
+		}
+		metricReader = sdkmetric.NewPeriodicReader(metricExporter)
+	}
+	if metricReader != nil {
+		metricOpts = append(metricOpts, sdkmetric.WithReader(metricReader))
+	}
+	meterProvider := sdkmetric.NewMeterProvider(metricOpts...)
+
+	shutdown = func(ctx context.Context) error {
+		return errors.Join(tracerProvider.Shutdown(ctx), meterProvider.Shutdown(ctx))
+	}
+
+	otel.SetTracerProvider(tracerProvider)
+	otel.SetMeterProvider(meterProvider)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
+
+	if err := runtime.Start(runtime.WithMeterProvider(meterProvider)); err != nil {
+		return nil, errors.Join(err, shutdown(ctx))
+	}
+
+	return shutdown, nil
+}
+
+// tracer returns the tracer for this module from the global provider.
+func tracer() trace.Tracer {
+	return otel.Tracer(telemetryInstrumentationName)
+}
+
+// meter returns the meter for this module from the global provider.
+func meter() metric.Meter {
+	return otel.Meter(telemetryInstrumentationName)
+}
+
+// commandContext returns the command's context, falling back to Background
+// for commands invoked outside Execute.
+func commandContext(cmd *cobra.Command) context.Context {
+	if ctx := cmd.Context(); ctx != nil {
+		return ctx
+	}
+	return context.Background()
+}
+
+// newTelemetryResource merges the SDK defaults (which already honour
+// OTEL_SERVICE_NAME) with an explicit service.name so a generated CLI never
+// reports "unknown_service".
+func newTelemetryResource(serviceName string) (*resource.Resource, error) {
+	if serviceName == "" {
+		serviceName = os.Getenv("OTEL_SERVICE_NAME")
+	}
+	if serviceName == "" {
+		serviceName = telemetryDefaultServiceName
+	}
+	return resource.Merge(
+		resource.Default(),
+		resource.NewWithAttributes(semconv.SchemaURL, semconv.ServiceName(serviceName)),
+	)
+}
+
+// otlpConfigured reports whether a collector endpoint has been provided for
+// the given signal, either through the shared endpoint or the per-signal one.
+func otlpConfigured(signalEndpointEnv string) bool {
+	return os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" || os.Getenv(signalEndpointEnv) != ""
+}
