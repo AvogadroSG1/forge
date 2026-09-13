@@ -106,6 +106,15 @@ flowchart LR
   like today's `internal/httpapi/`, `internal/web/` and `tests/Project.Tests/`; no new failure
   class. Cobra places the module at `cmd/telemetry.go` (vanilla parent) and the Python, C# root,
   `src/lib/`, `src/app/` and `src/hooks.client.ts` placements all have vanilla parents.
+- **Entrypoint wiring in vanilla files.** The one-line calls that start the bootstrap live in
+  the already hand-authored vanilla entrypoints (`python-fastapi` and `python-cli-typer`
+  `main.py`, `csharp-cli` and `csharp-webapi` `Program.cs`, Angular `app.config.ts`), matching
+  the existing precedent (StyleCop and pytest pins in vanilla manifests, `partial class
+  Program`). `forge update` is Go-only today and those Go vanilla files are untouched: the cobra
+  stack starts its per-command span from the overlay `PersistentPreRunE`, so `cmd/serve.go`
+  and `cmd/config.go` stay byte-identical to `cobra-cli` output. Re-capturing a Python, C# or
+  Angular vanilla layer by hand must re-apply those calls or the overlay telemetry test goes red
+  by design.
 - `templates/common/AGENTS.md.tmpl` and `README.md.tmpl` document the env contract outside the
   managed block; they are not in `internal/upgrade` managed hashes, so no infra version bump.
 - Logs signal, `TestLocalRelease` coverage for the three fullstack stacks, and chi route-pattern
