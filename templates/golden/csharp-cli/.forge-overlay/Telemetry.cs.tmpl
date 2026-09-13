@@ -21,7 +21,7 @@ public static class Telemetry
     public const string OtlpEndpointEnvironmentVariable = "OTEL_EXPORTER_OTLP_ENDPOINT";
 
     /// <summary>
-    /// Gets the service name reported on every span and metric.
+    /// Gets the service name reported on every span and metric: OTEL_SERVICE_NAME when set, otherwise the repository slug.
     /// </summary>
     public static string ServiceName { get; } = ResolveServiceName();
 
@@ -48,6 +48,6 @@ public static class Telemetry
             return configured;
         }
 
-        return typeof(Telemetry).Assembly.GetName().Name ?? "{{.RepoSlug}}";
+        return "{{.RepoSlug}}";
     }
 }
