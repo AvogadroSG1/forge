@@ -1,0 +1,177 @@
+{
+  "plan_path": "/Users/poconnor/.plannotator/plans/plan-resolve-pr-54-review-find-2026-09-25-approved.md",
+  "plan_digest_algorithm": "sha256",
+  "plan_digest": "10e4daebbaaa29f9abca88ddc43ba645a8ec1bc6aea7c4b537cde044bf29e674",
+  "scope": [
+    "F1+F3 (voz.1)",
+    "F4 (voz.2)",
+    "F5 (voz.3)",
+    "PartA cleanup",
+    "F2 (voz.4)"
+  ],
+  "baseline_revision": "329c12e5e96c1c58ddbb700ddca2185186f056cf",
+  "branch": "claude/forge-otel-docker-setup-ma11n2",
+  "baseline_results": "PASS: go test ./... -count=1",
+  "transport": "native",
+  "commit_policy": "one commit per issue, explicit-path staging only, no push",
+  "commit_range": "329c12e..49c2813",
+  "dispute_count": 0,
+  "mise_findings": "/Users/poconnor/peter_code/scratch_work/forge-pr54-mise_code/FINDINGS.md",
+  "current": {
+    "issue": "F2",
+    "phase": "BLOCKED before RED — awaiting human decision on bundle oracle"
+  },
+  "gates": [
+    {
+      "issue": "F1+F3",
+      "gate": "RED",
+      "status": "APPROVED",
+      "revision": "329c12e",
+      "changed_files": [
+        "test/otel_tasks_test.go"
+      ],
+      "task_scope_digest": "aaddff486a838f7768f21851017c182d3e03ea087e2cbde738c08e11f922c413",
+      "evidence": "RunUnderDash: dash Illegal option -o pipefail exit 2; PathMetacharactersInert: INJECTED created; NoConfigRootInRunBodies: {{config_root}} in [tasks.otel]",
+      "verdict": "APPROVE (independent RED reviewer), non-blocking: errors.As, regex for spaced {{ config_root }}"
+    },
+    {
+      "issue": "F1+F3",
+      "gate": "GREEN",
+      "status": "PASS",
+      "changed_files": [
+        "templates/common/mise/conf.d/otel.toml",
+        "internal/upgrade/testdata/pinned-hashes.txt",
+        ".github/workflows/verify-templates.yml",
+        "docs/adr/0021-system-wide-otel-collector-via-mise.md",
+        "docs/SPEC.md"
+      ],
+      "evidence": "OtelTasks 3/3 PASS; go test ./... PASS; go build OK; diff --check clean"
+    },
+    {
+      "issue": "F1+F3",
+      "gate": "REFACTOR",
+      "status": "SKIPPED",
+      "evidence": "no concrete cleanup warranted"
+    },
+    {
+      "issue": "F1+F3",
+      "gate": "TASK_REVIEW",
+      "status": "APPROVED",
+      "task_scope_digest": "8c9d9891d146291844cd788140de1bb4521c5af03878835c656b26765f871ff2",
+      "verdict": "APPROVE; non-blocking: pin mise version in CI, cache:false question"
+    },
+    {
+      "issue": "F1+F3",
+      "gate": "DURABLE_COMPLETION",
+      "status": "COMMITTED",
+      "revision": "a1c7388"
+    },
+    {
+      "issue": "F4",
+      "gate": "RED",
+      "status": "APPROVED",
+      "changed_files": [
+        "test/otel_tasks_test.go",
+        "test/otel_lifecycle_test.go"
+      ],
+      "task_scope_digest": "3e6cb511.../ab679d47...",
+      "evidence": "stub argv lacks --force-recreate; live container ID unchanged, trace absent from traces-changed.jsonl",
+      "verdict": "APPROVE after one correction round (non-blocking robustness)"
+    },
+    {
+      "issue": "F4",
+      "gate": "GREEN",
+      "status": "PASS",
+      "evidence": "OtelTasks 4/4, OtelLifecycle PASS live, go test ./... PASS"
+    },
+    {
+      "issue": "F4",
+      "gate": "REFACTOR",
+      "status": "SKIPPED"
+    },
+    {
+      "issue": "F4",
+      "gate": "TASK_REVIEW",
+      "status": "APPROVED",
+      "task_scope_digest": "f3820580f7265fa17edf91f09328c6dd9f3f94f3e7609a1a32d14431d6e85c0a",
+      "verdict": "APPROVE; mutation check confirmed; nits: assert otel-collector target, SPEC line wrap, ADR Consequences bullet"
+    },
+    {
+      "issue": "F4",
+      "gate": "DURABLE_COMPLETION",
+      "status": "COMMITTED",
+      "revision": "afe7285"
+    },
+    {
+      "issue": "F5",
+      "gate": "RED",
+      "status": "APPROVED",
+      "task_scope_digest": "ec9c03c98e01638c074b75dbf2c46185171a4f3891a39fceec6811c9ad166ffe",
+      "evidence": "both OtelCompose tests fail: no logging block"
+    },
+    {
+      "issue": "F5",
+      "gate": "GREEN",
+      "status": "PASS",
+      "evidence": "OtelCompose|OtelTasks 6/6, OtelLifecycle live PASS, go test ./... PASS"
+    },
+    {
+      "issue": "F5",
+      "gate": "REFACTOR",
+      "status": "SKIPPED"
+    },
+    {
+      "issue": "F5",
+      "gate": "TASK_REVIEW",
+      "status": "APPROVED"
+    },
+    {
+      "issue": "F5",
+      "gate": "DURABLE_COMPLETION",
+      "status": "COMMITTED",
+      "revision": "b30ef69"
+    },
+    {
+      "gate": "FINAL_WHOLE_PLAN_REVIEW",
+      "scope": "F1+F3,F4,F5 (F2 deferred)",
+      "status": "APPROVED",
+      "revision": "b30ef69",
+      "verdict": "APPROVE, no blocking findings"
+    },
+    {
+      "issue": "PartA",
+      "gate": "TASK_REVIEW",
+      "status": "APPROVED",
+      "verdict": "APPROVE after 2 correction rounds (unhedged SDK claim)",
+      "revision": "49c2813",
+      "diff_digest": "0bc04276de0fb7328d002b302d494904a5808ff6f896c16cec8be43545247364"
+    },
+    {
+      "issue": "PartA",
+      "gate": "DURABLE_COMPLETION",
+      "status": "COMMITTED",
+      "revision": "49c2813",
+      "concern": "harness appends Generated-with trailer to every commit despite handoff; left as-is"
+    },
+    {
+      "issue": "F2",
+      "gate": "PREFLIGHT_DISCOVERY",
+      "status": "BLOCKED",
+      "evidence": "scratch_work/forge-pr54-angular-define_code/out_02_build_define.txt:30 — no-define prod bundle contains localhost:4318 (OTel exporter default URL). Plan F2 oracle unsatisfiable/vacuous. --define accepted by ng build and ng serve (@angular/build 21.2.24).",
+      "required_decision": "test oracle for F2 BDD scenarios; requires plan re-acceptance at new digest"
+    }
+  ],
+  "updated_at": "2026-09-25T13:00:00Z",
+  "completion_state": "F1+F3, F4, F5 complete; not pushed",
+  "session2": {
+    "baseline_revision": "b30ef692ee86e396e5fc0187324f7fd84beaba18",
+    "baseline_results": "PASS go test ./... -count=1",
+    "tools": "mise 2026.9.12, dash /bin/dash, node v26.9.0",
+    "commit_policy": "PartA one commit; F2 one commit; explicit-path staging; no push"
+  },
+  "beads_followups": [
+    "agentic_template_start-28p",
+    "agentic_template_start-7jd",
+    "agentic_template_start-mcu"
+  ]
+}
