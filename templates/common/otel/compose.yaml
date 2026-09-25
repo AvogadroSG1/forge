@@ -1,0 +1,39 @@
+# forge-otel: a single, system-wide OpenTelemetry Collector shared by every
+# repo on this machine. `mise run otel` copies this file (and collector.yaml)
+# to ${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel/ and runs
+# `docker compose -p forge-otel -f <that dir>/compose.yaml up -d --wait`.
+# Do not run `docker compose` on this file directly from the repo -- use
+# `mise run otel` / `mise run otel:down` / `mise run otel:status`.
+
+name: forge-otel
+
+services:
+  # otelcol-contrib runs as the non-root uid 10001. The named volume below is
+  # created and owned by root on first use, so this one-shot init step chowns
+  # it to 10001:10001 before the collector starts; it then exits and the
+  # collector's `depends_on` condition waits for that success.
+  otel-data-init:
+    image: busybox:1.36
+    entrypoint: ["sh", "-c", "chown -R 10001:10001 /data"]
+    user: "0"
+    volumes:
+      - forge-otel-data:/data
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.161.0
+    container_name: forge-otel-collector
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    depends_on:
+      otel-data-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - forge-otel-data:/data
+    ports:
+      - "127.0.0.1:4317:4317" # OTLP gRPC
+      - "127.0.0.1:4318:4318" # OTLP HTTP
+      - "127.0.0.1:13133:13133" # health_check extension
+
+volumes:
+  forge-otel-data:
