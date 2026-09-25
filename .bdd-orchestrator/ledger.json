@@ -1,0 +1,67 @@
+{
+  "plan_path": "/Users/poconnor/.plannotator/plans/plan-agentic-template-start-8j-2026-09-24-approved.md",
+  "plan_digest_algorithm": "sha256",
+  "plan_digest": "7bb5a3437b14d81804ccb3a0b2f227af26ec27d84f51b8a34562afa1a798c72a",
+  "baseline_revision": "682816d72dd86a403bb64a8e4ad0c84665db8ba5",
+  "baseline_results": "PASS: GOCACHE=$PWD/.cache/go-build go test ./... -count=1 passed cleanly on all packages",
+  "transport": "native",
+  "commit_policy": "none during worker phases; single commit at session close",
+  "commit_range": "none",
+  "dispute_count": 0,
+  "upstream_bead": {
+    "repo": "agent-fitness-functions",
+    "id": "aff-13k",
+    "title": "Go import-name resolution treats /vN and gopkg.in .vN suffixes as package names (false dependency-discipline violations)"
+  },
+  "current_phase": "Durable Completion",
+  "current_scenario": "All Scenarios Complete (A, B, C, D)",
+  "next_action": "Execute Session Close protocol: stage task files, commit with co-authors, close bead, and push",
+  "gates": [
+    {
+      "gate": "RED",
+      "status": "APPROVED",
+      "changed_files": [
+        "test/aff_fitness_smoke_test.go"
+      ],
+      "task_scope_digest": "94574240e3b9d46e3936935ad9c41a3c5f9091bf6aec1bb6779c4a55af680e21",
+      "evidence": "Observed expected RED failures across all 3 stacks: setupTelemetry CC=10 in go-cli-cobra; Setup CC=10 and router.go DDC=0.75 in go-api-chi; Setup CC=10 in go-web-templ. templ-generated files excluded per D2.",
+      "verdict": "APPROVE by independent RED Reviewer"
+    },
+    {
+      "gate": "GREEN",
+      "status": "APPROVED",
+      "changed_files": [
+        "templates/golden/go-api-chi/.forge-overlay/internal/httpapi/router.go.tmpl",
+        "templates/golden/go-web-templ/.forge-overlay/internal/web/server.go",
+        "templates/golden/go-api-chi/.forge-overlay/internal/telemetry/telemetry.go.tmpl",
+        "templates/golden/go-web-templ/.forge-overlay/internal/telemetry/telemetry.go.tmpl",
+        "templates/golden/go-cli-cobra/.forge-overlay/cmd/telemetry.go.tmpl"
+      ],
+      "evidence": "Smoke test and all package tests pass GREEN. Setup / setupTelemetry CC <= 5, helpers CC <= 4, router.go DDC = 1.0 >= 0.8.",
+      "verdict": "PASS"
+    },
+    {
+      "gate": "TASK_REVIEW",
+      "status": "APPROVED",
+      "changed_files": [
+        "test/aff_fitness_smoke_test.go",
+        "templates/golden/go-api-chi/.forge-overlay/internal/httpapi/router.go.tmpl",
+        "templates/golden/go-web-templ/.forge-overlay/internal/web/server.go",
+        "templates/golden/go-api-chi/.forge-overlay/internal/telemetry/telemetry.go.tmpl",
+        "templates/golden/go-web-templ/.forge-overlay/internal/telemetry/telemetry.go.tmpl",
+        "templates/golden/go-cli-cobra/.forge-overlay/cmd/telemetry.go.tmpl",
+        "README.md"
+      ],
+      "task_scope_digest": "b11cb88924c3755fb707a01d650c6988e39f2f4b0ed6222bdf7221f4dca844d0",
+      "evidence": "Remediated subtest concurrency by running sequentially and documented -timeout 15m in README.md. Test completed cleanly in 522s. All BDD contracts A-D verified.",
+      "verdict": "APPROVE by independent Task Reviewer"
+    },
+    {
+      "gate": "FINAL_WHOLE_PLAN_REVIEW",
+      "status": "APPROVED",
+      "verdict": "APPROVE by independent Final Whole-Plan Reviewer",
+      "evidence": "All 4 BDD contracts verified, cumulative diff matches plan (~426 lines across 7 files), regression tests pass, bead aff-13k verified, no blocking findings."
+    }
+  ],
+  "updated_at": "2026-09-24T01:30:00Z"
+}

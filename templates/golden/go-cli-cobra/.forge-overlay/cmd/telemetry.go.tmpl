@@ -96,32 +96,17 @@ func setupTelemetry(ctx context.Context, opts telemetryOptions) (shutdown func(c
 		return nil, err
 	}
 
-	traceOpts := []sdktrace.TracerProviderOption{sdktrace.WithResource(res)}
-	switch {
-	case opts.SpanExporter != nil:
-		traceOpts = append(traceOpts, sdktrace.WithSyncer(opts.SpanExporter))
-	case otlpConfigured("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"):
-		spanExporter, exporterErr := otlptracehttp.New(ctx)
-		if exporterErr != nil {
-			return nil, exporterErr
-		}
-		traceOpts = append(traceOpts, sdktrace.WithBatcher(spanExporter))
+	traceOpts, err := telemetryTraceProviderOptions(ctx, res, opts)
+	if err != nil {
+		return nil, err
 	}
 	tracerProvider := sdktrace.NewTracerProvider(traceOpts...)
 
-	metricOpts := []sdkmetric.Option{sdkmetric.WithResource(res)}
-	metricReader := opts.MetricReader
-	if metricReader == nil && otlpConfigured("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT") {
-		metricExporter, exporterErr := otlpmetrichttp.New(ctx)
-		if exporterErr != nil {
-			return nil, errors.Join(exporterErr, tracerProvider.Shutdown(ctx))
-		}
-		metricReader = sdkmetric.NewPeriodicReader(metricExporter)
+	reader, err := telemetryMetricReader(ctx, opts)
+	if err != nil {
+		return nil, errors.Join(err, tracerProvider.Shutdown(ctx))
 	}
-	if metricReader != nil {
-		metricOpts = append(metricOpts, sdkmetric.WithReader(metricReader))
-	}
-	meterProvider := sdkmetric.NewMeterProvider(metricOpts...)
+	meterProvider := sdkmetric.NewMeterProvider(telemetryMeterProviderOptions(res, reader)...)
 
 	shutdown = func(ctx context.Context) error {
 		return errors.Join(tracerProvider.Shutdown(ctx), meterProvider.Shutdown(ctx))
@@ -139,6 +124,44 @@ func setupTelemetry(ctx context.Context, opts telemetryOptions) (shutdown func(c
 	}
 
 	return shutdown, nil
+}
+
+func telemetryTraceProviderOptions(ctx context.Context, res *resource.Resource, opts telemetryOptions) ([]sdktrace.TracerProviderOption, error) {
+	traceOpts := []sdktrace.TracerProviderOption{sdktrace.WithResource(res)}
+	switch {
+	case opts.SpanExporter != nil:
+		return append(traceOpts, sdktrace.WithSyncer(opts.SpanExporter)), nil
+	case otlpConfigured("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"):
+		spanExporter, exporterErr := otlptracehttp.New(ctx)
+		if exporterErr != nil {
+			return nil, exporterErr
+		}
+		return append(traceOpts, sdktrace.WithBatcher(spanExporter)), nil
+	default:
+		return traceOpts, nil
+	}
+}
+
+func telemetryMetricReader(ctx context.Context, opts telemetryOptions) (sdkmetric.Reader, error) {
+	if opts.MetricReader != nil {
+		return opts.MetricReader, nil
+	}
+	if !otlpConfigured("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT") {
+		return nil, nil
+	}
+	metricExporter, exporterErr := otlpmetrichttp.New(ctx)
+	if exporterErr != nil {
+		return nil, exporterErr
+	}
+	return sdkmetric.NewPeriodicReader(metricExporter), nil
+}
+
+func telemetryMeterProviderOptions(res *resource.Resource, reader sdkmetric.Reader) []sdkmetric.Option {
+	metricOpts := []sdkmetric.Option{sdkmetric.WithResource(res)}
+	if reader != nil {
+		metricOpts = append(metricOpts, sdkmetric.WithReader(reader))
+	}
+	return metricOpts
 }
 
 // tracer returns the tracer for this module from the global provider.
