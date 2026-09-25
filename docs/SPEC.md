@@ -449,7 +449,13 @@ bootstrap somewhere to send data:
     as §9.4 describes.
   - **`[tasks]`** `otel` (alias `otel:up`), `otel:down`, `otel:status`, `otel:logs`. `otel` copies
     `.otel/*` to `${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel/` and runs
-    `docker compose -p forge-otel up -d --wait`, then polls the health endpoint.
+    `docker compose -p forge-otel up -d --wait`, then polls the health endpoint. `otel` runs in the
+    repo root via `dir = "{{config_root}}"` (resolved by `mise`, not a shell) and copies from
+    relative `.otel/` paths; no `run` body interpolates `{{config_root}}` or any other path
+    template. Every `run` body MUST be POSIX `sh` (`set -eu`, no bashisms), since `mise`'s default
+    inline shell is `sh`, which is `dash` on Debian/Ubuntu. Owning tests:
+    `TestOtelTasksRunUnderDash`, `TestOtelTasksPathMetacharactersInert`,
+    `TestOtelTasksNoConfigRootInRunBodies`.
 - `templates/common/otel/compose.yaml` → `.otel/compose.yaml`: Docker Compose project
   `forge-otel`, image `otel/opentelemetry-collector-contrib` (pinned), `container_name:
   forge-otel-collector`, `restart: unless-stopped`, ports bound to `127.0.0.1` only (`4317` gRPC,

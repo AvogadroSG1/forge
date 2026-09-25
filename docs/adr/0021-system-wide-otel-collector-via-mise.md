@@ -58,6 +58,15 @@ the machine converges on the same one collector — the second repo's copy overw
 (identical byte-for-byte across repos on the same forge version; last-writer-wins across differing
 forge versions, see Consequences) and `docker compose up` on an already-running stack is a no-op.
 
+**Task bodies are POSIX `sh`, and checkout paths are never shell source.** `mise` runs inline
+`run` bodies with `sh`, which is `dash` on Debian/Ubuntu (including GitHub's `ubuntu-latest`), so
+every body uses `set -eu` and no bashisms (`pipefail`, `[[`, arrays, `local`, `source`, process
+substitution, `&>`). The `otel` task sets its working directory declaratively with
+`dir = "{{config_root}}"` — `mise` resolves that to the repo root itself, without a shell — and
+copies from relative `.otel/` paths. No `{{config_root}}` or other path template appears inside a
+`run` body: `mise` renders templates into the script text before the shell parses it, so a
+checkout path containing `$(...)` or quotes would otherwise execute.
+
 ```mermaid
 flowchart LR
     subgraph RepoA["Repo A (any stack)"]

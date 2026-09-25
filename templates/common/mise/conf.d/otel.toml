@@ -2,6 +2,8 @@
 # mise merges every file under .config/mise/conf.d/ with this repo's own
 # mise.toml, so these apply on top of whatever the stack defines. See .otel/
 # for the collector's Docker Compose stack, started with `mise run otel`.
+# Task bodies MUST stay POSIX sh (`set -eu`, no bashisms): mise's default
+# inline shell is `sh`, which is dash on Debian/Ubuntu.
 # Do not hand-edit; a future `forge upgrade` may overwrite this file.
 
 [env]
@@ -18,8 +20,11 @@ VITE_OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4318"
 [tasks.otel]
 description = "Start the system-wide forge OpenTelemetry collector (Docker)"
 alias = "otel:up"
+# mise resolves `dir` itself (never through a shell), so the checkout path is
+# data, not shell source; the run body then copies from relative .otel/ paths.
+dir = "{{config_root}}"
 run = '''
-set -euo pipefail
+set -eu
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "otel: docker is required but was not found on PATH" >&2
@@ -32,10 +37,9 @@ if ! docker compose version >/dev/null 2>&1; then
   exit 1
 fi
 
-repo_root="{{config_root}}"
 data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel"
 mkdir -p "$data_dir"
-cp -f "$repo_root/.otel/compose.yaml" "$repo_root/.otel/collector.yaml" "$data_dir/"
+cp -f .otel/compose.yaml .otel/collector.yaml "$data_dir/"
 
 docker compose -p forge-otel -f "$data_dir/compose.yaml" up -d --wait
 
@@ -68,7 +72,7 @@ EOF
 [tasks."otel:down"]
 description = "Stop the system-wide forge OpenTelemetry collector"
 run = '''
-set -euo pipefail
+set -eu
 
 data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel"
 if [ ! -f "$data_dir/compose.yaml" ]; then
@@ -82,7 +86,7 @@ docker compose -p forge-otel -f "$data_dir/compose.yaml" down
 [tasks."otel:status"]
 description = "Show the system-wide forge OpenTelemetry collector's status"
 run = '''
-set -euo pipefail
+set -eu
 
 data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel"
 if [ ! -f "$data_dir/compose.yaml" ]; then
@@ -102,7 +106,7 @@ fi
 [tasks."otel:logs"]
 description = "Tail the system-wide forge OpenTelemetry collector's logs"
 run = '''
-set -euo pipefail
+set -eu
 
 data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel"
 if [ ! -f "$data_dir/compose.yaml" ]; then
