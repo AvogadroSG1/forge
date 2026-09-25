@@ -22,6 +22,7 @@ jobs:
       # binary is needed, so skip `mise install` of the root mise.toml.
       - uses: jdx/mise-action@v2
         with:
+          version: 2026.9.12
           install: false
       - name: go test ./...
         run: |

@@ -442,24 +442,26 @@ bootstrap somewhere to send data:
   file under a project's `.config/mise/conf.d/*.toml` on top of its own `mise.toml`, so this one
   forge-owned file applies to all twelve stacks with no per-stack `mise.toml` edit. It carries:
   - **`[env]`**, always set (not endpoint-gated): `OTEL_EXPORTER_OTLP_ENDPOINT`,
-    `OTEL_EXPORTER_OTLP_PROTOCOL`, and per-signal `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_ENDPOINT`,
-    plus `VITE_OTEL_EXPORTER_OTLP_ENDPOINT` for the browser stacks. This is the amendment: every
-    process `mise` launches now takes §9.4's "endpoint set" branch. The §9.4 in-code gate is
-    unchanged; outside `mise` the environment is unset and a generated repo stays silent exactly
-    as §9.4 describes.
+    `OTEL_EXPORTER_OTLP_PROTOCOL`, and per-signal
+    `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_ENDPOINT`, plus `VITE_OTEL_EXPORTER_OTLP_ENDPOINT`
+    for the browser stacks. This is the amendment: every process `mise` launches now takes §9.4's
+    "endpoint set" branch. The §9.4 in-code gate is unchanged; outside `mise` the environment is
+    unset and a generated repo stays silent exactly as §9.4 describes.
   - **`[tasks]`** `otel` (alias `otel:up`), `otel:down`, `otel:status`, `otel:logs`. `otel` copies
     `.otel/*` to `${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel/` and runs
     `docker compose -p forge-otel up -d --wait --force-recreate otel-collector`, then polls the
     health endpoint. `--force-recreate` is required: `collector.yaml` is bind-mounted, so an edit
     does not change the Compose config hash and a plain `up` would keep the old pipeline running.
     Re-running `otel` therefore restarts the shared collector every time; telemetry from every
-    repo pauses briefly while SDKs buffer or retry (accepted trade-off, ADR-0021). `depends_on`
-    still runs the one-shot volume init first. `otel` runs in the repo root via
+    repo pauses briefly. SDKs typically buffer or retry across the gap, but telemetry emitted
+    during it MAY be dropped (accepted trade-off, ADR-0021). `depends_on` still runs the one-shot
+    volume init first. `otel` runs in the repo root via
     `dir = "{{config_root}}"` (resolved by `mise`, not a shell) and copies from relative `.otel/`
-    paths; no `run` body interpolates `{{config_root}}` or any other path template. Every `run` body MUST be POSIX `sh` (`set -eu`, no bashisms), since `mise`'s default
-    inline shell is `sh`, which is `dash` on Debian/Ubuntu. Owning tests:
+    paths; no `run` body interpolates `{{config_root}}` or any other path template. Every `run`
+    body MUST be POSIX `sh` (`set -eu`, no bashisms), since `mise`'s default inline shell is `sh`,
+    which is `dash` on Debian/Ubuntu. Owning tests:
     `TestOtelTasksRunUnderDash`, `TestOtelTasksPathMetacharactersInert`,
-    `TestOtelTasksNoConfigRootInRunBodies`, `TestOtelTasksUpForceRecreates`. The live Docker
+    `TestOtelTasksNoTemplatesInRunBodies`, `TestOtelTasksUpForceRecreates`. The live Docker
     lifecycle test `TestOtelLifecycleRecreatesOnConfigChange` (a config edit plus re-run yields a
     new container that exports through the new pipeline) is gated behind `FORGE_DOCKER_TESTS=1`
     and skips otherwise.

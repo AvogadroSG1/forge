@@ -63,8 +63,9 @@ bind-mounted into the container, so editing it does not change the Compose confi
 `docker compose up` would leave the running collector on the old pipeline and silently ignore the
 edit. `--force-recreate` guarantees the copied config is the one that runs. The accepted
 trade-off: each run briefly pauses telemetry from every repo on the machine while the collector
-is recreated; OTLP SDKs buffer or retry across the gap. `depends_on` still runs the one-shot
-`otel-data-init` step before the collector starts.
+is recreated. OTLP SDKs typically buffer or retry across the gap, but telemetry emitted during it
+MAY be dropped (see Consequences). `depends_on` still runs the one-shot `otel-data-init` step
+before the collector starts.
 
 **Task bodies are POSIX `sh`, and checkout paths are never shell source.** `mise` runs inline
 `run` bodies with `sh`, which is `dash` on Debian/Ubuntu (including GitHub's `ubuntu-latest`), so
@@ -87,7 +88,7 @@ flowchart LR
     end
     OA -- "mise run otel" --> SD["~/.local/share/forge-otel/<br/>(XDG_DATA_HOME)"]
     OB -- "mise run otel" --> SD
-    SD -- "docker compose -p forge-otel up -d --wait --force-recreate" --> C[("forge-otel-collector<br/>restart: unless-stopped<br/>127.0.0.1:4317/4318/13133")]
+    SD -- "docker compose -p forge-otel up -d --wait --force-recreate otel-collector" --> C[("forge-otel-collector<br/>restart: unless-stopped<br/>127.0.0.1:4317/4318/13133")]
     EA -. "OTEL_EXPORTER_OTLP_* always set" .-> AppA["Repo A process"]
     EB -. "OTEL_EXPORTER_OTLP_* always set" .-> AppB["Repo B process"]
     AppA -- OTLP/HTTP --> C
@@ -165,6 +166,11 @@ the zero-setup `docker logs` verification path, and the log bound removes its on
   managed infrastructure set (SPEC §19): `.config/mise/conf.d/otel.toml` is wholly forge-owned and
   blind-copied; `.otel/compose.yaml` and `.otel/collector.yaml` likewise. The infrastructure
   version is bumped so existing repos pick the files up on their next `forge upgrade`.
+- **Every `mise run otel` restarts the shared collector.** `--force-recreate` is what makes a
+  `collector.yaml` edit take effect (see Decision), but it recreates the container on every run,
+  not just when the config changed. Running `mise run otel` in any repo briefly pauses telemetry
+  from all repos on the machine; OTLP SDKs typically buffer or retry across the gap, but
+  telemetry emitted during it MAY be dropped.
 - **Bounded, not zero, disk use.** A long-running collector holds at most about 30 MB of Docker
   logs plus about 600 MB of rotated `.jsonl` files (see "Why `debug` + `file` exporters"). Older
   telemetry is discarded on rotation; this is a local verification path, not retention.

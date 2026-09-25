@@ -139,7 +139,7 @@ func TestOtelTasksPathMetacharactersInert(t *testing.T) {
 	}
 }
 
-func TestOtelTasksNoConfigRootInRunBodies(t *testing.T) {
+func TestOtelTasksNoTemplatesInRunBodies(t *testing.T) {
 	const templatePath = "templates/common/mise/conf.d/otel.toml"
 	data, err := fs.ReadFile(forge.Assets(), templatePath)
 	if err != nil {
@@ -156,8 +156,10 @@ func TestOtelTasksNoConfigRootInRunBodies(t *testing.T) {
 		}
 	}
 	for table, body := range bodies {
-		if strings.Contains(body, "{{config_root}}") {
-			t.Errorf("%s: [%s] run body interpolates %q into shell source", templatePath, table, "{{config_root}}")
+		// mise renders run bodies as Tera before the shell parses them, so
+		// any template there (e.g. {{config_root}}) splices data into source.
+		if m := teraTemplateOpener.FindString(body); m != "" {
+			t.Errorf("%s: [%s] run body contains Tera template opener %q; mise would render it into shell source (set paths via `dir` instead)", templatePath, table, m)
 		}
 	}
 }
@@ -187,6 +189,19 @@ func TestOtelTasksUpForceRecreates(t *testing.T) {
 			if !slices.Contains(up, flag) {
 				t.Errorf("docker compose up argv = %q, want it to contain %q", up, flag)
 			}
+		}
+		// Only the collector is recreated; naming the service keeps the
+		// one-shot otel-data-init as a depends_on prerequisite, not a target.
+		// Strict by design: a future flag taking a separate value (e.g.
+		// `--timeout 30`) would count `30` as a service and fail loudly.
+		var services []string
+		for _, arg := range up[slices.Index(up, "up")+1:] {
+			if !strings.HasPrefix(arg, "-") {
+				services = append(services, arg)
+			}
+		}
+		if want := []string{"otel-collector"}; !slices.Equal(services, want) {
+			t.Errorf("docker compose up argv = %q, services after `up` = %q, want exactly %q", up, services, want)
 		}
 	}
 }
@@ -377,6 +392,10 @@ func (h *otelTaskHarness) stubInvocations(t *testing.T) [][]string {
 var (
 	tomlTableHeader = regexp.MustCompile(`^\s*\[([^\[\]]+)\]\s*(#.*)?$`)
 	tomlRunKey      = regexp.MustCompile(`^\s*run\s*=\s*(.*)$`)
+	// teraTemplateOpener matches any Tera expression (`{{`, including
+	// `{{-` whitespace control) or statement (`{%`) opener. It omits Tera's
+	// `{#` comment opener, which would false-positive on POSIX `${#var}`.
+	teraTemplateOpener = regexp.MustCompile(`\{\{|\{%`)
 )
 
 // parseTomlRunBodies extracts every `run` string value keyed by its table
