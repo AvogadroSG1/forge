@@ -1,6 +1,7 @@
 # Every stack ships an env-gated OpenTelemetry bootstrap
 
-**Status:** accepted · 2026-09-13
+**Status:** accepted · 2026-09-13 · amended by ADR-0021 (2026-09-25): under `mise`, the OTLP
+endpoints are now always set — see ADR-0021 for the system-wide collector this connects to.
 
 ## Context
 

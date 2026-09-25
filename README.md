@@ -30,7 +30,7 @@ API client points at `--api-base-url` (a third-party API or an existing backend)
 
 Each shipped stack is expected to scaffold a repo that can run `mise install` and `mise run ci` with at least one real passing test.
 
-Every stack's overlay also ships an env-gated OpenTelemetry bootstrap (traces + metrics) with a real test: providers are always installed, and OTLP/HTTP export turns on only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (see ADR-0020).
+Every stack's overlay also ships an env-gated OpenTelemetry bootstrap (traces + metrics) with a real test: providers are always installed, and OTLP/HTTP export turns on only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (see ADR-0020). Every repo also ships a `mise run otel` task that starts a shared, system-wide collector and always points the OTLP endpoints at it under `mise` (see ADR-0021).
 
 ## How It Works
 

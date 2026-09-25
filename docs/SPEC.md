@@ -431,6 +431,42 @@ test, shipped as a vetted extra (ADR-0010, §10.2) with no guideline edit.
   `pyproject.toml.tmpl`, `*.csproj.tmpl`, overlay `package.json.tmpl`), the existing precedent
   for overlay tools. Owning test: `TestGoldenStacksShipTelemetryBootstrap` (§18).
 
+### 9.5 System-wide OTel collector — `mise run otel`
+
+*(Authoritative: ADR-0021. Amends 9.4's exporter default under `mise`.)*
+
+Every stack, common rather than golden, additionally ships three assets that give the §9.4
+bootstrap somewhere to send data:
+
+- `templates/common/mise/conf.d/otel.toml` → `.config/mise/conf.d/otel.toml`. `mise` merges every
+  file under a project's `.config/mise/conf.d/*.toml` on top of its own `mise.toml`, so this one
+  forge-owned file applies to all twelve stacks with no per-stack `mise.toml` edit. It carries:
+  - **`[env]`**, always set (not endpoint-gated): `OTEL_EXPORTER_OTLP_ENDPOINT`,
+    `OTEL_EXPORTER_OTLP_PROTOCOL`, and per-signal `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_ENDPOINT`,
+    plus `VITE_OTEL_EXPORTER_OTLP_ENDPOINT` for the browser stacks. This is the amendment: every
+    process `mise` launches now takes §9.4's "endpoint set" branch. The §9.4 in-code gate is
+    unchanged; outside `mise` the environment is unset and a generated repo stays silent exactly
+    as §9.4 describes.
+  - **`[tasks]`** `otel` (alias `otel:up`), `otel:down`, `otel:status`, `otel:logs`. `otel` copies
+    `.otel/*` to `${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel/` and runs
+    `docker compose -p forge-otel up -d --wait`, then polls the health endpoint.
+- `templates/common/otel/compose.yaml` → `.otel/compose.yaml`: Docker Compose project
+  `forge-otel`, image `otel/opentelemetry-collector-contrib` (pinned), `container_name:
+  forge-otel-collector`, `restart: unless-stopped`, ports bound to `127.0.0.1` only (`4317` gRPC,
+  `4318` HTTP, `13133` health), a `busybox` one-shot init step that `chown`s the named volume
+  `forge-otel-data` to the collector's non-root uid before it starts.
+- `templates/common/otel/collector.yaml` → `.otel/collector.yaml`: `otlp` receiver (grpc + http,
+  CORS allowing `http://localhost:*` / `http://127.0.0.1:*` for browser stacks),
+  `memory_limiter`/`batch` processors, `debug` + `file/{traces,metrics,logs}` exporters writing
+  `/data/{traces,metrics,logs}.jsonl` in the volume, `health_check` extension.
+
+Because the copy target and Compose project name are fixed, `mise run otel` from any forge repo on
+the machine converges on one shared collector; a second repo's copy overwrites the first's
+(last-writer-wins — identical across repos on the same forge version). No UI ships; `docker logs
+forge-otel-collector` (or `mise run otel:logs`) and the `.jsonl` files are the verification path.
+These three files are part of the managed/upgrade set (§19): `forge upgrade` propagates them to
+existing repos.
+
 ---
 
 ## 10. Enforced gate pipeline
@@ -802,7 +838,9 @@ forge/                              # source repo
 │   │   ├── gitignore.base           # [verbatim] multi-language base .gitignore
 │   │   ├── AGENTS.md.tmpl           # [render]
 │   │   ├── claude/{settings.json, settings.local.json.tmpl, hooks/{guard, secret-scan.sh}}
-│   │   └── codex/hooks.json         # [verbatim]
+│   │   ├── codex/hooks.json         # [verbatim]
+│   │   ├── mise/conf.d/otel.toml    # [verbatim] → .config/mise/conf.d/otel.toml (§9.5)
+│   │   └── otel/{compose.yaml, collector.yaml}  # [verbatim] → .otel/ (§9.5)
 │   ├── seed/skills.json.tmpl        # [embed] default skill list, rendered in memory at init
 │   ├── gitignore/                   # [embed] vendored github/gitignore per language (Go, Python, VisualStudio, Node)
 │   └── golden/<key>/                # [embed] pinned snapshots + .forge-overlay/ per v1 stack
@@ -818,6 +856,7 @@ myproject/
 ├── .codex/hooks.json                   ├── .beads/            [delegate]
 ├── .forge/manifest.json   [render]     ├── .forge-infra-version   [render, legacy fallback]
 ├── mise.toml, lefthook.yml, .github/workflows/ci.yml
+├── .config/mise/conf.d/otel.toml       ├── .otel/{compose.yaml, collector.yaml}
 └── <composed golden tree>  vanilla + overlay, rendered
 ```
 
@@ -868,9 +907,10 @@ flowchart TD
 
 `forge upgrade` propagates managed static infrastructure files from the embedded template into an
 existing forge-scaffolded repository when the on-disk infrastructure version is behind the
-embedded version. `.claude/hooks/guard`, `.claude/hooks/secret-scan.sh`, and
-`.opencode/plugins/forge-hooks.js` are wholly forge-owned: nothing else writes to them, so they are
-overwritten unconditionally (blind byte-copy).
+embedded version. `.claude/hooks/guard`, `.claude/hooks/secret-scan.sh`,
+`.opencode/plugins/forge-hooks.js`, `.config/mise/conf.d/otel.toml`, `.otel/compose.yaml`, and
+`.otel/collector.yaml` (§9.5, ADR-0021) are wholly forge-owned: nothing else writes to them, so
+they are overwritten unconditionally (blind byte-copy).
 
 `.claude/settings.json` and `.codex/hooks.json` are **co-owned**: other tools (bd, notably) append
 their own entries into the same top-level `hooks` object. These two files are never blind-

@@ -51,6 +51,15 @@ exporters **only** when `OTEL_EXPORTER_OTLP_ENDPOINT` (browser: `VITE_…` / Ang
 `environment.otlpEndpoint`) is set, plus a real test that proves a span and a metric flow through
 in-memory exporters. A vetted extra (ADR-0010), refresh-immune like the rest of the overlay. (See ADR-0020, SPEC §9.4.)
 
+### System-wide collector
+The single OpenTelemetry Collector instance, started by any repo's `mise run otel` task, that
+every `forge init` repo on a machine shares. It runs from a fixed directory
+(`${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel`) under the fixed Docker Compose project name
+`forge-otel`, bound to `127.0.0.1` only, with `restart: unless-stopped`. Under `mise`, a repo's
+OTLP endpoint environment always points at it (amending the Telemetry bootstrap's off-by-default
+posture — outside `mise` that posture is unchanged). Wholly forge-owned and part of the managed
+upgrade set. (See ADR-0021, SPEC §9.5.)
+
 ### Gate
 An automated quality check (lint, format, test) defined once as a `mise` task and invoked
 by multiple callers (lefthook locally, GitHub Actions in CI) so the definition never
