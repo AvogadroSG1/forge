@@ -4,11 +4,14 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -53,6 +56,10 @@ type otelTaskHarness struct {
 	recordPath string
 	env        []string
 	mise       string
+	// timeout bounds each `mise run`; stopBy, when non-zero, is a hard
+	// wall-clock limit that leaves the rest of the test deadline for cleanup.
+	timeout time.Duration
+	stopBy  time.Time
 }
 
 // otelTaskResult is the observable outcome of one `mise run <task>`.
@@ -155,10 +162,66 @@ func TestOtelTasksNoConfigRootInRunBodies(t *testing.T) {
 	}
 }
 
+func TestOtelTasksUpForceRecreates(t *testing.T) {
+	h := newOtelTaskHarness(t, "repo")
+
+	result := h.run(t, "otel")
+	if result.exitCode != 0 {
+		t.Fatalf("mise run otel exit = %d, want 0\n%s", result.exitCode, result.output)
+	}
+
+	// A bind-mounted collector.yaml edit does not change the container's
+	// compose config hash, so a plain `up` leaves the running collector on the
+	// old pipeline; `otel` MUST force the collector to be recreated.
+	var ups [][]string
+	for _, argv := range h.stubInvocations(t) {
+		if argv[0] == "docker" && slices.Contains(argv, "compose") && slices.Contains(argv, "up") {
+			ups = append(ups, argv)
+		}
+	}
+	if len(ups) == 0 {
+		t.Fatalf("no `docker compose ... up` invocation recorded in %s\n%s", h.recordPath, result.output)
+	}
+	for _, up := range ups {
+		for _, flag := range []string{"-d", "--wait", "--force-recreate"} {
+			if !slices.Contains(up, flag) {
+				t.Errorf("docker compose up argv = %q, want it to contain %q", up, flag)
+			}
+		}
+	}
+}
+
 // newOtelTaskHarness scaffolds a go-cli-cobra repo at <tempRoot>/<repoRel>,
 // installs recording docker/curl stubs, and builds a minimal isolated env for
 // mise. It skips the test when mise is not installed.
 func newOtelTaskHarness(t *testing.T, repoRel string) *otelTaskHarness {
+	t.Helper()
+
+	h := newOtelRepoHarness(t, repoRel)
+
+	stubDir := filepath.Join(h.root, "stubs")
+	if err := os.MkdirAll(stubDir, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", stubDir, err)
+	}
+	for _, name := range []string{"docker", "curl"} {
+		if err := os.WriteFile(filepath.Join(stubDir, name), []byte(otelStubScript), 0o755); err != nil {
+			t.Fatalf("write stub %s: %v", name, err)
+		}
+	}
+
+	h.env = append(h.env,
+		"PATH="+strings.Join([]string{stubDir, filepath.Dir(h.mise), "/usr/bin", "/bin"}, string(os.PathListSeparator)),
+		"FORGE_OTEL_STUB_RECORD="+h.recordPath,
+	)
+
+	return h
+}
+
+// newOtelRepoHarness scaffolds a go-cli-cobra repo at <tempRoot>/<repoRel>
+// and builds an isolated HOME/XDG/mise env with no PATH; callers add the PATH
+// (stubbed or real tools) they need. It skips the test when mise is not
+// installed.
+func newOtelRepoHarness(t *testing.T, repoRel string) *otelTaskHarness {
 	t.Helper()
 
 	misePath := resolveCommandPath("mise")
@@ -188,16 +251,6 @@ func newOtelTaskHarness(t *testing.T, repoRel string) *otelTaskHarness {
 		t.Fatalf("Write() error = %v", err)
 	}
 
-	stubDir := filepath.Join(root, "stubs")
-	if err := os.MkdirAll(stubDir, 0o755); err != nil {
-		t.Fatalf("mkdir %s: %v", stubDir, err)
-	}
-	for _, name := range []string{"docker", "curl"} {
-		if err := os.WriteFile(filepath.Join(stubDir, name), []byte(otelStubScript), 0o755); err != nil {
-			t.Fatalf("write stub %s: %v", name, err)
-		}
-	}
-
 	home := filepath.Join(root, "home")
 	dataHome := filepath.Join(home, ".local", "share")
 	xdg := map[string]string{
@@ -214,9 +267,7 @@ func newOtelTaskHarness(t *testing.T, repoRel string) *otelTaskHarness {
 
 	recordPath := filepath.Join(root, "stub-argv.log")
 	env := []string{
-		"PATH=" + strings.Join([]string{stubDir, filepath.Dir(misePath), "/usr/bin", "/bin"}, string(os.PathListSeparator)),
 		"HOME=" + home,
-		"FORGE_OTEL_STUB_RECORD=" + recordPath,
 		// Without a ceiling, mise walks above the temp root and loads the
 		// developer's own config as project config.
 		"MISE_CEILING_PATHS=" + root,
@@ -240,6 +291,7 @@ func newOtelTaskHarness(t *testing.T, repoRel string) *otelTaskHarness {
 		recordPath: recordPath,
 		env:        env,
 		mise:       misePath,
+		timeout:    otelTaskTimeout,
 	}
 }
 
@@ -247,7 +299,33 @@ func newOtelTaskHarness(t *testing.T, repoRel string) *otelTaskHarness {
 func (h *otelTaskHarness) run(t *testing.T, task string) otelTaskResult {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), otelTaskTimeout)
+	result, err := h.tryRun(task)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, result.output)
+	}
+
+	return result
+}
+
+// tryRun executes `mise run <task>` like run but reports harness failures
+// (timeout, mise not startable) as an error instead of failing the test.
+// The task is bounded by h.timeout and, when set, by h.stopBy.
+func (h *otelTaskHarness) tryRun(task string) (otelTaskResult, error) {
+	timeout := h.timeout
+	if !h.stopBy.IsZero() {
+		remaining := time.Until(h.stopBy)
+		if remaining <= 0 {
+			return otelTaskResult{task: task}, fmt.Errorf("mise run %s: test time budget exhausted; %w", task, context.DeadlineExceeded)
+		}
+		timeout = min(timeout, remaining)
+	}
+	return h.tryRunWithin(task, timeout)
+}
+
+// tryRunWithin executes `mise run <task>` bounded only by timeout. It never
+// fails the test, so t.Cleanup can use it with its own reserved budget.
+func (h *otelTaskHarness) tryRunWithin(task string, timeout time.Duration) (otelTaskResult, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, h.mise, "run", task)
@@ -255,20 +333,19 @@ func (h *otelTaskHarness) run(t *testing.T, task string) otelTaskResult {
 	cmd.Env = h.env
 	cmd.Stdin = nil
 	output, err := cmd.CombinedOutput()
-	if ctx.Err() != nil {
-		t.Fatalf("mise run %s timed out after %s\n%s", task, otelTaskTimeout, output)
-	}
-
 	result := otelTaskResult{task: task, output: string(output)}
+	if ctx.Err() != nil {
+		return result, fmt.Errorf("mise run %s timed out after %s: %w", task, timeout, ctx.Err())
+	}
 	if err != nil {
-		exitErr, ok := err.(*exec.ExitError)
-		if !ok {
-			t.Fatalf("mise run %s: %v\n%s", task, err, output)
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			return result, fmt.Errorf("mise run %s: %w", task, err)
 		}
 		result.exitCode = exitErr.ExitCode()
 	}
 
-	return result
+	return result, nil
 }
 
 // stubInvocations returns every recorded docker/curl invocation in order.
@@ -278,7 +355,7 @@ func (h *otelTaskHarness) stubInvocations(t *testing.T) [][]string {
 	t.Helper()
 
 	data, err := os.ReadFile(h.recordPath)
-	if os.IsNotExist(err) {
+	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
 	if err != nil {

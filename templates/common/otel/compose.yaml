@@ -1,7 +1,8 @@
 # forge-otel: a single, system-wide OpenTelemetry Collector shared by every
 # repo on this machine. `mise run otel` copies this file (and collector.yaml)
 # to ${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel/ and runs
-# `docker compose -p forge-otel -f <that dir>/compose.yaml up -d --wait`.
+# `docker compose -p forge-otel -f <that dir>/compose.yaml up -d --wait
+# --force-recreate otel-collector`, which restarts the collector on every run.
 # Do not run `docker compose` on this file directly from the repo -- use
 # `mise run otel` / `mise run otel:down` / `mise run otel:status`.
 

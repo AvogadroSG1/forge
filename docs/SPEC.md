@@ -449,13 +449,20 @@ bootstrap somewhere to send data:
     as §9.4 describes.
   - **`[tasks]`** `otel` (alias `otel:up`), `otel:down`, `otel:status`, `otel:logs`. `otel` copies
     `.otel/*` to `${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel/` and runs
-    `docker compose -p forge-otel up -d --wait`, then polls the health endpoint. `otel` runs in the
-    repo root via `dir = "{{config_root}}"` (resolved by `mise`, not a shell) and copies from
-    relative `.otel/` paths; no `run` body interpolates `{{config_root}}` or any other path
-    template. Every `run` body MUST be POSIX `sh` (`set -eu`, no bashisms), since `mise`'s default
+    `docker compose -p forge-otel up -d --wait --force-recreate otel-collector`, then polls the
+    health endpoint. `--force-recreate` is required: `collector.yaml` is bind-mounted, so an edit
+    does not change the Compose config hash and a plain `up` would keep the old pipeline running.
+    Re-running `otel` therefore restarts the shared collector every time; telemetry from every
+    repo pauses briefly while SDKs buffer or retry (accepted trade-off, ADR-0021). `depends_on`
+    still runs the one-shot volume init first. `otel` runs in the repo root via
+    `dir = "{{config_root}}"` (resolved by `mise`, not a shell) and copies from relative `.otel/`
+    paths; no `run` body interpolates `{{config_root}}` or any other path template. Every `run` body MUST be POSIX `sh` (`set -eu`, no bashisms), since `mise`'s default
     inline shell is `sh`, which is `dash` on Debian/Ubuntu. Owning tests:
     `TestOtelTasksRunUnderDash`, `TestOtelTasksPathMetacharactersInert`,
-    `TestOtelTasksNoConfigRootInRunBodies`.
+    `TestOtelTasksNoConfigRootInRunBodies`, `TestOtelTasksUpForceRecreates`. The live Docker
+    lifecycle test `TestOtelLifecycleRecreatesOnConfigChange` (a config edit plus re-run yields a
+    new container that exports through the new pipeline) is gated behind `FORGE_DOCKER_TESTS=1`
+    and skips otherwise.
 - `templates/common/otel/compose.yaml` → `.otel/compose.yaml`: Docker Compose project
   `forge-otel`, image `otel/opentelemetry-collector-contrib` (pinned), `container_name:
   forge-otel-collector`, `restart: unless-stopped`, ports bound to `127.0.0.1` only (`4317` gRPC,

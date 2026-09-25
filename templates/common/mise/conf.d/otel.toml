@@ -41,7 +41,12 @@ data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel"
 mkdir -p "$data_dir"
 cp -f .otel/compose.yaml .otel/collector.yaml "$data_dir/"
 
-docker compose -p forge-otel -f "$data_dir/compose.yaml" up -d --wait
+# collector.yaml is bind-mounted, so editing it does not change the compose
+# config hash and a plain `up` would leave the old pipeline running.
+# --force-recreate restarts the shared collector on every run (telemetry from
+# every repo pauses briefly; SDKs buffer or retry). depends_on still runs the
+# one-shot otel-data-init first.
+docker compose -p forge-otel -f "$data_dir/compose.yaml" up -d --wait --force-recreate otel-collector
 
 echo "otel: waiting for the collector health check..."
 ready=""

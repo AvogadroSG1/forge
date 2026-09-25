@@ -51,12 +51,20 @@ default" to "off by default outside mise"; it does not reopen or reverse that de
 
 **Tasks — `mise run otel` is the run function.** `otel` (alias `otel:up`) checks for Docker,
 copies `.otel/*` to `${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel/`, and runs
-`docker compose -p forge-otel up -d --wait`, then polls the health endpoint. `otel:down`,
-`otel:status`, and `otel:logs` round out the lifecycle. Because the target directory and the
-Compose project name (`forge-otel`) are fixed, running `mise run otel` from *any* forge repo on
-the machine converges on the same one collector — the second repo's copy overwrites the first's
-(identical byte-for-byte across repos on the same forge version; last-writer-wins across differing
-forge versions, see Consequences) and `docker compose up` on an already-running stack is a no-op.
+`docker compose -p forge-otel up -d --wait --force-recreate otel-collector`, then polls the
+health endpoint. `otel:down`, `otel:status`, and `otel:logs` round out the lifecycle. Because the
+target directory and the Compose project name (`forge-otel`) are fixed, running `mise run otel`
+from *any* forge repo on the machine converges on the same one collector — the second repo's copy
+overwrites the first's (identical byte-for-byte across repos on the same forge version;
+last-writer-wins across differing forge versions, see Consequences).
+
+**Re-running `mise run otel` restarts the shared collector every time.** `collector.yaml` is
+bind-mounted into the container, so editing it does not change the Compose config hash; a plain
+`docker compose up` would leave the running collector on the old pipeline and silently ignore the
+edit. `--force-recreate` guarantees the copied config is the one that runs. The accepted
+trade-off: each run briefly pauses telemetry from every repo on the machine while the collector
+is recreated; OTLP SDKs buffer or retry across the gap. `depends_on` still runs the one-shot
+`otel-data-init` step before the collector starts.
 
 **Task bodies are POSIX `sh`, and checkout paths are never shell source.** `mise` runs inline
 `run` bodies with `sh`, which is `dash` on Debian/Ubuntu (including GitHub's `ubuntu-latest`), so
@@ -79,7 +87,7 @@ flowchart LR
     end
     OA -- "mise run otel" --> SD["~/.local/share/forge-otel/<br/>(XDG_DATA_HOME)"]
     OB -- "mise run otel" --> SD
-    SD -- "docker compose -p forge-otel up -d --wait" --> C[("forge-otel-collector<br/>restart: unless-stopped<br/>127.0.0.1:4317/4318/13133")]
+    SD -- "docker compose -p forge-otel up -d --wait --force-recreate" --> C[("forge-otel-collector<br/>restart: unless-stopped<br/>127.0.0.1:4317/4318/13133")]
     EA -. "OTEL_EXPORTER_OTLP_* always set" .-> AppA["Repo A process"]
     EB -. "OTEL_EXPORTER_OTLP_* always set" .-> AppB["Repo B process"]
     AppA -- OTLP/HTTP --> C

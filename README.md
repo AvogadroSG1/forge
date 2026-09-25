@@ -298,6 +298,8 @@ GOCACHE=$PWD/.cache/go-build go test ./test -count=1
 bats test/secret-scan.bats
 # Integration smoke test for generated Go stacks (requires agent-fitness-functions on PATH)
 GOCACHE=$PWD/.cache/go-build go test -tags=integration -timeout 15m -run TestGeneratedGoStacksPassFitnessBaseline ./test/
+# Live Docker lifecycle test for the system-wide OTel collector (requires Docker; skipped unless set)
+FORGE_DOCKER_TESTS=1 GOCACHE=$PWD/.cache/go-build go test ./test/ -run OtelLifecycle -count=1 -timeout 10m
 ```
 
 ### BDD And Review Expectations
