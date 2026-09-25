@@ -26,6 +26,18 @@ nothing else to configure. Other tasks: `mise run otel:status` (is it up?), `mis
 newline-delimited JSON in the `forge-otel-data` Docker volume (`/data/traces.jsonl`,
 `metrics.jsonl`, `logs.jsonl` inside the collector container).
 
+Browser bundles cannot read the environment, so the endpoint is inlined at build time. Vite and
+SvelteKit read `VITE_OTEL_EXPORTER_OTLP_ENDPOINT`. Angular uses `mise run dev` / `mise run build`
+(fullstack: `mise run web-dev` / `mise run web-build`), which pass `OTEL_EXPORTER_OTLP_ENDPOINT`
+to `ng` via `--define`; plain `npm start` / `ng build` stays silent by design. Those Angular tasks
+refuse an endpoint containing `"`, `\` or control characters.
+
+To point at a different collector, set `OTEL_EXPORTER_OTLP_ENDPOINT` (and the per-signal and
+`VITE_` variables you use) under `[env]` in `mise.local.toml`. Under `mise`, `mise.local.toml`
+wins over `.config/mise/conf.d/otel.toml`, which wins over your shell, so an `export` in the
+shell is ignored for tasks `mise` runs.
+
 Outside `mise` (for example a bare `go run`, an IDE run configuration, or a CI job that does not
-shell through `mise`), nothing is exported unless you set `OTEL_EXPORTER_OTLP_ENDPOINT` yourself;
-browser projects use `VITE_OTEL_EXPORTER_OTLP_ENDPOINT` (Angular: `environment.ts`) instead.
+shell through `mise`), nothing is exported unless you set `OTEL_EXPORTER_OTLP_ENDPOINT` yourself
+(Vite and SvelteKit: `VITE_OTEL_EXPORTER_OTLP_ENDPOINT`; Angular exports only through its `mise`
+tasks).

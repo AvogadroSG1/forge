@@ -12,9 +12,13 @@ OTEL_EXPORTER_OTLP_PROTOCOL = "http/protobuf"
 OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = "http://localhost:4318/v1/traces"
 OTEL_EXPORTER_OTLP_METRICS_ENDPOINT = "http://localhost:4318/v1/metrics"
 OTEL_EXPORTER_OTLP_LOGS_ENDPOINT = "http://localhost:4318/v1/logs"
-# Browser stacks (vite-ts, sveltekit) read the VITE_-prefixed variable at
-# build time; Vite inlines it, so it must be a bare base URL (the telemetry
-# bootstrap appends /v1/traces and /v1/metrics itself).
+# Browsers cannot read the env, so browser stacks get the endpoint at build
+# time as a bare base URL (the telemetry bootstrap appends /v1/traces and
+# /v1/metrics itself). Vite stacks (vite-ts, sveltekit) read the VITE_-prefixed
+# variable below. Angular reads neither: its mise dev/build (or web-dev/
+# web-build) tasks inline OTEL_EXPORTER_OTLP_ENDPOINT via `ng --define` (the
+# OTLP define bridge). To point at another collector, set these in
+# mise.local.toml [env]; it wins over this file, which wins over the shell env.
 VITE_OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4318"
 
 [tasks.otel]
@@ -44,8 +48,9 @@ cp -f .otel/compose.yaml .otel/collector.yaml "$data_dir/"
 # collector.yaml is bind-mounted, so editing it does not change the compose
 # config hash and a plain `up` would leave the old pipeline running.
 # --force-recreate restarts the shared collector on every run (telemetry from
-# every repo pauses briefly; SDKs buffer or retry). depends_on still runs the
-# one-shot otel-data-init first.
+# every repo pauses briefly; SDKs typically buffer or retry, but telemetry
+# emitted during the gap MAY be dropped). depends_on still runs the one-shot
+# otel-data-init first.
 docker compose -p forge-otel -f "$data_dir/compose.yaml" up -d --wait --force-recreate otel-collector
 
 echo "otel: waiting for the collector health check..."

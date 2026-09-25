@@ -14,3 +14,40 @@ run = "npm test"
 
 [tasks.ci]
 run = "mise run fmt && mise run lint && mise run test && npm audit --audit-level=high"
+
+# OTLP define bridge: browsers cannot read OTEL_* env vars, so dev/build
+# inline the endpoint mise sets (.config/mise/conf.d/otel.toml, overridable in
+# mise.local.toml) as FORGE_OTLP_ENDPOINT via `ng --define`; see
+# src/environments/environment.ts. esbuild parses the define value as a JS
+# literal, so the guard refuses characters that would need escaping. The
+# control-character set is spelled out byte by byte (0x01-0x1f, 0x7f) because
+# [[:cntrl:]] varies by locale. Bodies stay POSIX sh (dash on Debian/Ubuntu).
+[tasks.dev]
+description = "Serve the app; inlines OTEL_EXPORTER_OTLP_ENDPOINT for the browser OTel exporter"
+run = '''
+set -eu
+endpoint="${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
+ctrl="$(printf '\001\002\003\004\005\006\007\010\011\012\013\014\015\016\017\020\021\022\023\024\025\026\027\030\031\032\033\034\035\036\037\177')"
+case "$endpoint" in
+  *[\"\\]* | *[$ctrl]*)
+    echo "dev: OTEL_EXPORTER_OTLP_ENDPOINT must not contain quotes, backslashes or control characters" >&2
+    exit 1
+    ;;
+esac
+exec npm run start -- --define "FORGE_OTLP_ENDPOINT=\"$endpoint\""
+'''
+
+[tasks.build]
+description = "Build the app; inlines OTEL_EXPORTER_OTLP_ENDPOINT for the browser OTel exporter"
+run = '''
+set -eu
+endpoint="${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
+ctrl="$(printf '\001\002\003\004\005\006\007\010\011\012\013\014\015\016\017\020\021\022\023\024\025\026\027\030\031\032\033\034\035\036\037\177')"
+case "$endpoint" in
+  *[\"\\]* | *[$ctrl]*)
+    echo "build: OTEL_EXPORTER_OTLP_ENDPOINT must not contain quotes, backslashes or control characters" >&2
+    exit 1
+    ;;
+esac
+exec npm run build -- --define "FORGE_OTLP_ENDPOINT=\"$endpoint\""
+'''

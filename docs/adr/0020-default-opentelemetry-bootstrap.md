@@ -35,7 +35,8 @@ Every shipped stack ships a **telemetry bootstrap** as a vetted extra (ADR-0010)
   `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Browser stacks read the build-time equivalent instead:
   `VITE_OTEL_EXPORTER_OTLP_ENDPOINT` for vite-ts and sveltekit, `environment.otlpEndpoint` in
   Angular's `environment.ts`. With no endpoint a generated repo emits **no** exporter errors,
-  retries or console noise.
+  retries or console noise. (Amended by ADR-0021: under `mise`, Angular's endpoint arrives via
+  `ng --define` through the **OTLP define bridge**; plain `npm start` / `ng build` stays silent.)
 - **Traces + metrics.** Logs are deferred to a follow-up issue (slog handler, Python
   `LoggingHandler`, `ILogger` via `OpenTelemetry.Logs`, browser console bridge).
 - **TypeScript uses `@opentelemetry/sdk-trace-web`.** vite-ts, sveltekit and angular are all

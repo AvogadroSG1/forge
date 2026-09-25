@@ -879,7 +879,7 @@ func TestGoldenStacksScaffoldOtelCollectorAssets(t *testing.T) {
 				t.Fatalf("Write() error = %v", err)
 			}
 
-			assertOtelCollectorAssets(t, tempDir)
+			assertOtelCollectorAssets(t, tempDir, vars)
 		})
 	}
 }
@@ -918,7 +918,7 @@ func TestFullstackScaffoldGetsOtelCollectorAssetsExactlyOnce(t *testing.T) {
 						t.Fatalf("Write() error = %v", err)
 					}
 
-					assertOtelCollectorAssets(t, tempDir)
+					assertOtelCollectorAssets(t, tempDir, vars)
 
 					for _, forbidden := range []string{
 						filepath.Join(tempDir, "web", ".config", "mise", "conf.d", "otel.toml"),
@@ -941,7 +941,7 @@ func TestFullstackScaffoldGetsOtelCollectorAssetsExactlyOnce(t *testing.T) {
 // tasks, a compose file pinned to a specific image with a restart policy and
 // loopback-only ports, and a collector config with otlp-fed traces/metrics/
 // logs pipelines.
-func assertOtelCollectorAssets(t *testing.T, tempDir string) {
+func assertOtelCollectorAssets(t *testing.T, tempDir string, vars project.Variables) {
 	t.Helper()
 
 	miseOtelPath := filepath.Join(tempDir, ".config", "mise", "conf.d", "otel.toml")
@@ -956,6 +956,8 @@ func assertOtelCollectorAssets(t *testing.T, tempDir string) {
 		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
 		"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
 		"OTEL_EXPORTER_OTLP_LOGS_ENDPOINT",
+		// Vite stacks (vite-ts, sveltekit) read this at build time. It does
+		// nothing for Angular, which is checked by assertOtelAngularBridge.
 		"VITE_OTEL_EXPORTER_OTLP_ENDPOINT",
 		"[tasks.otel]",
 		`[tasks."otel:down"]`,
@@ -966,6 +968,9 @@ func assertOtelCollectorAssets(t *testing.T, tempDir string) {
 			t.Errorf("%s missing %q:\n%s", miseOtelPath, snippet, miseOtelContent)
 		}
 	}
+	// Angular (standalone or under web/) cannot read the env in the browser;
+	// its mise tasks MUST inline the endpoint via `ng --define`.
+	assertOtelAngularBridge(t, tempDir, vars)
 
 	composePath := filepath.Join(tempDir, ".otel", "compose.yaml")
 	compose, err := os.ReadFile(composePath)

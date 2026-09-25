@@ -31,6 +31,47 @@ run = "npm --prefix web run lint && npm --prefix web run typecheck"
 
 [tasks.web-test]
 run = "npm --prefix web test"
+{{- if eq .Frontend "angular" }}
+
+# OTLP define bridge: browsers cannot read OTEL_* env vars, so web-dev/web-build
+# inline the endpoint mise sets (.config/mise/conf.d/otel.toml, overridable in
+# mise.local.toml) as FORGE_OTLP_ENDPOINT via `ng --define`; see
+# web/src/environments/environment.ts. esbuild parses the define value as a JS
+# literal, so the guard refuses characters that would need escaping. The
+# control-character set is spelled out byte by byte (0x01-0x1f, 0x7f) because
+# [[:cntrl:]] varies by locale. Bodies stay POSIX sh (dash on Debian/Ubuntu).
+# This block is byte-identical across the backend overlays (see
+# TestOtelAngularBackendTaskBlocksIdentical).
+[tasks.web-dev]
+description = "Serve web/; inlines OTEL_EXPORTER_OTLP_ENDPOINT for the browser OTel exporter"
+run = '''
+set -eu
+endpoint="${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
+ctrl="$(printf '\001\002\003\004\005\006\007\010\011\012\013\014\015\016\017\020\021\022\023\024\025\026\027\030\031\032\033\034\035\036\037\177')"
+case "$endpoint" in
+  *[\"\\]* | *[$ctrl]*)
+    echo "web-dev: OTEL_EXPORTER_OTLP_ENDPOINT must not contain quotes, backslashes or control characters" >&2
+    exit 1
+    ;;
+esac
+exec npm --prefix web run start -- --define "FORGE_OTLP_ENDPOINT=\"$endpoint\""
+'''
+
+[tasks.web-build]
+description = "Build web/; inlines OTEL_EXPORTER_OTLP_ENDPOINT for the browser OTel exporter"
+run = '''
+set -eu
+endpoint="${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
+ctrl="$(printf '\001\002\003\004\005\006\007\010\011\012\013\014\015\016\017\020\021\022\023\024\025\026\027\030\031\032\033\034\035\036\037\177')"
+case "$endpoint" in
+  *[\"\\]* | *[$ctrl]*)
+    echo "web-build: OTEL_EXPORTER_OTLP_ENDPOINT must not contain quotes, backslashes or control characters" >&2
+    exit 1
+    ;;
+esac
+exec npm --prefix web run build -- --define "FORGE_OTLP_ENDPOINT=\"$endpoint\""
+'''
+{{- end }}
 
 [tasks.ci]
 run = "mise run fmt && mise run lint && mise run test && pip-audit && mise run web-fmt && mise run web-lint && mise run web-test && npm --prefix web audit --audit-level=high"

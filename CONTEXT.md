@@ -48,8 +48,9 @@ snapshot beneath it but never touches the overlay.
 The observability slice of every shipped stack's overlay: one telemetry module that installs
 OpenTelemetry tracer + meter providers and `service.name` unconditionally, attaches OTLP/HTTP
 exporters **only** when `OTEL_EXPORTER_OTLP_ENDPOINT` (browser: `VITE_…` / Angular
-`environment.otlpEndpoint`) is set, plus a real test that proves a span and a metric flow through
-in-memory exporters. A vetted extra (ADR-0010), refresh-immune like the rest of the overlay. (See ADR-0020, SPEC §9.4.)
+`environment.otlpEndpoint`, fed by the OTLP define bridge) is set, plus a real test that
+proves a span and a metric flow through in-memory exporters. A vetted extra (ADR-0010),
+refresh-immune like the rest of the overlay. (See ADR-0020, SPEC §9.4.)
 
 ### System-wide collector
 The single OpenTelemetry Collector instance, started by any repo's `mise run otel` task, that
@@ -59,6 +60,13 @@ every `forge init` repo on a machine shares. It runs from a fixed directory
 OTLP endpoint environment always points at it (amending the Telemetry bootstrap's off-by-default
 posture — outside `mise` that posture is unchanged). Wholly forge-owned and part of the managed
 upgrade set. (See ADR-0021, SPEC §9.5.)
+
+### OTLP define bridge
+The step in an Angular repo's `mise` dev/build tasks (`web-dev`/`web-build` in a fullstack repo)
+that carries the collector endpoint into the browser bundle at build time, since a browser cannot
+read the environment. An Angular build outside `mise` gets no endpoint and stays silent.
+(See ADR-0020, ADR-0021, SPEC §9.5.)
+_Avoid_: Angular env injection, endpoint shim
 
 ### Gate
 An automated quality check (lint, format, test) defined once as a `mise` task and invoked

@@ -3,7 +3,8 @@
 # container directly; edit this file and re-run `mise run otel` to apply.
 # Re-running `mise run otel` RESTARTS the shared collector every time (it uses
 # `--force-recreate`, since this bind-mounted file does not change the compose
-# config hash). Telemetry from every repo pauses briefly; SDKs buffer or retry.
+# config hash). Telemetry from every repo pauses briefly; SDKs typically buffer
+# or retry, but telemetry emitted during the gap MAY be dropped.
 
 extensions:
   health_check:

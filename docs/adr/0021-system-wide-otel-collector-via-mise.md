@@ -76,6 +76,21 @@ copies from relative `.otel/` paths. No `{{config_root}}` or other path template
 `run` body: `mise` renders templates into the script text before the shell parses it, so a
 checkout path containing `$(...)` or quotes would otherwise execute.
 
+**Angular gets the endpoint through the OTLP define bridge.** A browser bundle cannot read
+`OTEL_EXPORTER_OTLP_ENDPOINT`, and Angular reads no `VITE_` variable. Standalone Angular's
+`mise.toml` therefore gains `dev` and `build` tasks, and each backend's `mise.toml.tmpl` gains
+`web-dev` and `web-build` inside `{{- if eq .Frontend "angular" }}`. Each task runs
+`npm run start|build -- --define "FORGE_OTLP_ENDPOINT=\"$endpoint\""` (with `--prefix web` for
+fullstack), and `environment.ts` reads the global through a `typeof` guard. Plain `npm start` /
+`ng build` passes no define, so the guard yields `''` and ADR-0020's silence holds. `esbuild`
+parses the define value as a JS literal, so the task **rejects** (exit 1, message naming
+`OTEL_EXPORTER_OTLP_ENDPOINT`) any endpoint containing `"`, `\` or a control character (an
+explicit, locale-independent byte set: 0x01–0x1f and 0x7f) instead of escaping it. The three
+backend copies are byte-identical, because `text/template` has no cross-file partials. To point
+at another collector, set `OTEL_EXPORTER_OTLP_ENDPOINT` (and the per-signal and `VITE_`
+variables you use) under `[env]` in `mise.local.toml`: under `mise`, `mise.local.toml` overrides
+`conf.d/otel.toml`, which overrides the shell environment.
+
 ```mermaid
 flowchart LR
     subgraph RepoA["Repo A (any stack)"]
@@ -171,6 +186,13 @@ the zero-setup `docker logs` verification path, and the log bound removes its on
   not just when the config changed. Running `mise run otel` in any repo briefly pauses telemetry
   from all repos on the machine; OTLP SDKs typically buffer or retry across the gap, but
   telemetry emitted during it MAY be dropped.
+- **A shell `export` does not redirect telemetry under `mise`.** `conf.d/otel.toml`'s `[env]`
+  wins over the process environment, so `OTEL_EXPORTER_OTLP_ENDPOINT=… mise run build` still
+  sees `http://localhost:4318`. The supported override is `mise.local.toml` `[env]`, which is
+  documented in the generated README and AGENTS.md.
+- **Angular exports only through its `mise` tasks.** `mise run dev|build` (`web-dev|web-build`
+  fullstack) are the only paths that inline an endpoint; an endpoint with `"`, `\` or control
+  characters fails those tasks rather than being escaped.
 - **Bounded, not zero, disk use.** A long-running collector holds at most about 30 MB of Docker
   logs plus about 600 MB of rotated `.jsonl` files (see "Why `debug` + `file` exporters"). Older
   telemetry is discarded on rotation; this is a local verification path, not retention.

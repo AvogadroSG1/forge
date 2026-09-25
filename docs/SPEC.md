@@ -416,9 +416,10 @@ test, shipped as a vetted extra (ADR-0010, §10.2) with no guideline edit.
 - **Env contract.** Tracer + meter providers, `service.name` and W3C propagation are installed
   unconditionally; `service.name` is `OTEL_SERVICE_NAME`, else the repo slug. OTLP/HTTP exporters
   attach **only** when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (browser stacks:
-  `VITE_OTEL_EXPORTER_OTLP_ENDPOINT`, Angular `environment.otlpEndpoint`). Unset means providers
-  only — no exporter, no retry noise. Signals are traces + metrics; logs are a filed follow-up.
-  Python stacks add a `mise run serve` (`run-cli` on typer) task that runs the app under
+  `VITE_OTEL_EXPORTER_OTLP_ENDPOINT`, Angular `environment.otlpEndpoint`, which reads the
+  build-time `FORGE_OTLP_ENDPOINT` global through a `typeof` guard; see §9.5). Unset means
+  providers only — no exporter, no retry noise. Signals are traces + metrics; logs are a filed
+  follow-up. Python stacks add a `mise run serve` (`run-cli` on typer) task that runs the app under
   `opentelemetry-instrument`, with the same endpoint guard exporting `OTEL_*_EXPORTER=none` when
   no collector is configured.
 - **Non-vacuous test.** The module's test injects an in-memory span exporter and metric reader,
@@ -444,9 +445,13 @@ bootstrap somewhere to send data:
   - **`[env]`**, always set (not endpoint-gated): `OTEL_EXPORTER_OTLP_ENDPOINT`,
     `OTEL_EXPORTER_OTLP_PROTOCOL`, and per-signal
     `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_ENDPOINT`, plus `VITE_OTEL_EXPORTER_OTLP_ENDPOINT`
-    for the browser stacks. This is the amendment: every process `mise` launches now takes §9.4's
-    "endpoint set" branch. The §9.4 in-code gate is unchanged; outside `mise` the environment is
-    unset and a generated repo stays silent exactly as §9.4 describes.
+    for the Vite stacks (vite-ts, sveltekit; Angular uses the OTLP define bridge below). This is
+    the amendment: every process `mise` launches now takes §9.4's "endpoint set" branch. The
+    §9.4 in-code gate is unchanged; outside `mise` the environment is unset and a generated repo
+    stays silent exactly as §9.4 describes. Precedence under `mise` is `mise.local.toml` `[env]`
+    over this file over the shell environment, so a shell `export` is ignored for `mise` tasks;
+    the generated README and AGENTS.md MUST direct users to `mise.local.toml` to point at a
+    different collector.
   - **`[tasks]`** `otel` (alias `otel:up`), `otel:down`, `otel:status`, `otel:logs`. `otel` copies
     `.otel/*` to `${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel/` and runs
     `docker compose -p forge-otel up -d --wait --force-recreate otel-collector`, then polls the
@@ -465,6 +470,23 @@ bootstrap somewhere to send data:
     lifecycle test `TestOtelLifecycleRecreatesOnConfigChange` (a config edit plus re-run yields a
     new container that exports through the new pipeline) is gated behind `FORGE_DOCKER_TESTS=1`
     and skips otherwise.
+- **Angular: the OTLP define bridge.** The golden overlays own these tasks, not `otel.toml`.
+  Standalone Angular's `mise.toml` has `dev` and `build`. Each backend `mise.toml.tmpl`
+  (`csharp-webapi`, `go-api-chi`, `python-fastapi`) has `web-dev` and `web-build` inside a
+  `{{- if eq .Frontend "angular" }}` block, byte-identical across the three and absent for other
+  frontends. Each body is POSIX `sh` starting `set -eu`. It reads `OTEL_EXPORTER_OTLP_ENDPOINT`
+  (unset → `""`) and runs `npm run start|build -- --define "FORGE_OTLP_ENDPOINT=\"<endpoint>\""`
+  (`npm --prefix web …` fullstack), passing the value as one argv entry with shell
+  metacharacters inert. An endpoint containing `"`, `\` or a control character (the explicit,
+  locale-independent set 0x01–0x1f, 0x7f) MUST be rejected before `npm` runs: exit 1 with a
+  stderr message naming `OTEL_EXPORTER_OTLP_ENDPOINT`. `environment.ts` declares
+  `FORGE_OTLP_ENDPOINT` and reads it through a `typeof` guard, so plain `npm start` / `ng build`
+  compiles and stays silent. Owning tests: `TestOtelAngularTasksBridgeEndpointToDefine`,
+  `TestOtelAngularEnvironmentReadsDefineWithTypeofGuard`,
+  `TestOtelAngularBackendTaskBlocksIdentical`, `TestOtelAngularTasksAbsentForOtherFrontends`,
+  `TestOtelAngularTasksRejectUnsafeEndpoint`, `TestOtelAngularTasksPassEndpointAsDefine`. The
+  real-build checks `TestOtelAngularStandaloneBundleInlinesEndpoint` and
+  `TestOtelAngularFullstackBundleInlinesEndpoint` are gated behind `FORGE_SMOKE_NETWORK=1`.
 - `templates/common/otel/compose.yaml` → `.otel/compose.yaml`: Docker Compose project
   `forge-otel`, image `otel/opentelemetry-collector-contrib` (pinned), `container_name:
   forge-otel-collector`, `restart: unless-stopped`, ports bound to `127.0.0.1` only (`4317` gRPC,
