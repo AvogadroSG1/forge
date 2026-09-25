@@ -467,7 +467,13 @@ bootstrap somewhere to send data:
   `forge-otel`, image `otel/opentelemetry-collector-contrib` (pinned), `container_name:
   forge-otel-collector`, `restart: unless-stopped`, ports bound to `127.0.0.1` only (`4317` gRPC,
   `4318` HTTP, `13133` health), a `busybox` one-shot init step that `chown`s the named volume
-  `forge-otel-data` to the collector's non-root uid before it starts.
+  `forge-otel-data` to the collector's non-root uid before it starts. The `otel-collector`
+  service MUST declare `logging: {driver: local, options: {max-size: "10m", max-file: "3"}}`
+  (option values are YAML strings) so the `debug` exporter's stdout is bounded to about 30 MB of
+  Docker logs; together with the file exporters' rotation (`max_megabytes: 50`, `max_backups: 3`,
+  about 200 MB per signal) host disk use is bounded (ADR-0021). Owning tests:
+  `TestOtelComposeCollectorLogsBounded` (parsed template) and
+  `TestOtelComposeConfigResolvesLogging` (`docker compose config` output).
 - `templates/common/otel/collector.yaml` → `.otel/collector.yaml`: `otlp` receiver (grpc + http,
   CORS allowing `http://localhost:*` / `http://127.0.0.1:*` for browser stacks),
   `memory_limiter`/`batch` processors, `debug` + `file/{traces,metrics,logs}` exporters writing

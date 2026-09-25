@@ -35,6 +35,15 @@ services:
       - "127.0.0.1:4317:4317" # OTLP gRPC
       - "127.0.0.1:4318:4318" # OTLP HTTP
       - "127.0.0.1:13133:13133" # health_check extension
+    # The `debug` exporter writes every batch to stdout, and this collector
+    # runs indefinitely (`restart: unless-stopped`). Bound Docker's copy of
+    # that stdout to 3 x 10 MB with the rotating `local` driver so it cannot
+    # grow without limit; `docker logs` / `mise run otel:logs` still work.
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   forge-otel-data:

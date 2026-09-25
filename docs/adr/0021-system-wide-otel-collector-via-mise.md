@@ -120,6 +120,14 @@ newline-delimited JSON files under the `forge-otel-data` volume (via the `file` 
 per signal, `mise run otel:logs` and the `.jsonl` files respectively) are enough to prove signals
 are flowing without taking on a second running service.
 
+Both outputs are bounded on the host, because the collector runs indefinitely under
+`restart: unless-stopped`. The `debug` exporter's stdout is captured by Docker with the `local`
+logging driver at `max-size: "10m"`, `max-file: "3"` — about 30 MB of Docker logs at most. Each
+`file/{traces,metrics,logs}` exporter rotates at `max_megabytes: 50` with `max_backups: 3` — the
+active file plus three backups, about 4 × 50 MB = 200 MB per signal, about 600 MB across the three
+signals. Worst-case host disk use is therefore roughly 630 MB. The `debug` exporter stays: it is
+the zero-setup `docker logs` verification path, and the log bound removes its only cost.
+
 ## Considered Options
 
 - **Grafana LGTM stack or Jaeger as the backend.** Either gives a real UI, but both are a second
@@ -157,6 +165,9 @@ are flowing without taking on a second running service.
   managed infrastructure set (SPEC §19): `.config/mise/conf.d/otel.toml` is wholly forge-owned and
   blind-copied; `.otel/compose.yaml` and `.otel/collector.yaml` likewise. The infrastructure
   version is bumped so existing repos pick the files up on their next `forge upgrade`.
+- **Bounded, not zero, disk use.** A long-running collector holds at most about 30 MB of Docker
+  logs plus about 600 MB of rotated `.jsonl` files (see "Why `debug` + `file` exporters"). Older
+  telemetry is discarded on rotation; this is a local verification path, not retention.
 - **Config is last-writer-wins across repos on differing forge versions.** Because every repo
   copies its own `.otel/*` into the same system directory, the collector actually running at any
   moment reflects whichever repo most recently ran `mise run otel` — on a machine with repos
