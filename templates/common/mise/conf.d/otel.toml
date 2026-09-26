@@ -12,6 +12,20 @@ OTEL_EXPORTER_OTLP_PROTOCOL = "http/protobuf"
 OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = "http://localhost:4318/v1/traces"
 OTEL_EXPORTER_OTLP_METRICS_ENDPOINT = "http://localhost:4318/v1/metrics"
 OTEL_EXPORTER_OTLP_LOGS_ENDPOINT = "http://localhost:4318/v1/logs"
+# A shell or login session (launchctl, systemd) often exports OTEL_* for a
+# vendor agent. SDKs prefer a per-signal protocol over the general one and
+# send OTEL_EXPORTER_OTLP_HEADERS on every export, so pin the per-signal
+# protocols to OTLP/HTTP and unset (`= false`) the header and service-name
+# variables: each repo reports its own slug to the local collector with no
+# vendor credentials. To override any of these, set them in mise.local.toml [env].
+OTEL_EXPORTER_OTLP_TRACES_PROTOCOL = "http/protobuf"
+OTEL_EXPORTER_OTLP_METRICS_PROTOCOL = "http/protobuf"
+OTEL_EXPORTER_OTLP_LOGS_PROTOCOL = "http/protobuf"
+OTEL_EXPORTER_OTLP_HEADERS = false
+OTEL_EXPORTER_OTLP_TRACES_HEADERS = false
+OTEL_EXPORTER_OTLP_METRICS_HEADERS = false
+OTEL_EXPORTER_OTLP_LOGS_HEADERS = false
+OTEL_SERVICE_NAME = false
 # Browsers cannot read the env, so browser stacks get the endpoint at build
 # time as a bare base URL (the telemetry bootstrap appends /v1/traces and
 # /v1/metrics itself). Vite stacks (vite-ts, sveltekit) read the VITE_-prefixed

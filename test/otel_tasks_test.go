@@ -206,6 +206,74 @@ func TestOtelTasksUpForceRecreates(t *testing.T) {
 	}
 }
 
+// otelInheritedVendorEnv mimics a login session (launchctl, systemd) that
+// exports OTEL_* for a vendor agent: gRPC per-signal protocols, a vendor API
+// key in the OTLP headers, and a fixed service name.
+var otelInheritedVendorEnv = []string{
+	"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=grpc",
+	"OTEL_EXPORTER_OTLP_METRICS_PROTOCOL=grpc",
+	"OTEL_EXPORTER_OTLP_LOGS_PROTOCOL=grpc",
+	"OTEL_EXPORTER_OTLP_HEADERS=vendor-api-key=forge-test-secret",
+	"OTEL_EXPORTER_OTLP_TRACES_HEADERS=vendor-api-key=forge-test-secret",
+	"OTEL_EXPORTER_OTLP_METRICS_HEADERS=vendor-api-key=forge-test-secret",
+	"OTEL_EXPORTER_OTLP_LOGS_HEADERS=vendor-api-key=forge-test-secret",
+	"OTEL_SERVICE_NAME=inherited-service",
+}
+
+func TestOtelEnvOverridesInheritedVendorOtlpVars(t *testing.T) {
+	t.Run("conf.d defaults", func(t *testing.T) {
+		h := newOtelRepoHarness(t, "repo")
+		h.env = append(h.env, "PATH="+strings.Join([]string{filepath.Dir(h.mise), "/usr/bin", "/bin"}, string(os.PathListSeparator)))
+		h.env = append(h.env, otelInheritedVendorEnv...)
+
+		env := h.miseExecEnv(t)
+
+		// SDKs prefer a per-signal protocol over the general one, so an
+		// inherited `grpc` would select an exporter the stack never installs.
+		want := map[string]string{
+			"OTEL_EXPORTER_OTLP_ENDPOINT":         "http://localhost:4318",
+			"OTEL_EXPORTER_OTLP_PROTOCOL":         "http/protobuf",
+			"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL":  "http/protobuf",
+			"OTEL_EXPORTER_OTLP_METRICS_PROTOCOL": "http/protobuf",
+			"OTEL_EXPORTER_OTLP_LOGS_PROTOCOL":    "http/protobuf",
+		}
+		for key, value := range want {
+			if got, ok := env[key]; !ok || got != value {
+				t.Errorf("under mise %s = %q (set %t), want %q", key, got, ok, value)
+			}
+		}
+		// Vendor credentials must never reach the local collector, and every
+		// repo must fall back to its own slug instead of the inherited name.
+		for _, key := range []string{
+			"OTEL_EXPORTER_OTLP_HEADERS",
+			"OTEL_EXPORTER_OTLP_TRACES_HEADERS",
+			"OTEL_EXPORTER_OTLP_METRICS_HEADERS",
+			"OTEL_EXPORTER_OTLP_LOGS_HEADERS",
+			"OTEL_SERVICE_NAME",
+		} {
+			if got, ok := env[key]; ok {
+				t.Errorf("under mise %s = %q, want it unset", key, got)
+			}
+		}
+	})
+
+	t.Run("mise.local.toml wins", func(t *testing.T) {
+		h := newOtelRepoHarness(t, "repo")
+		h.env = append(h.env, "PATH="+strings.Join([]string{filepath.Dir(h.mise), "/usr/bin", "/bin"}, string(os.PathListSeparator)))
+		h.env = append(h.env, otelInheritedVendorEnv...)
+		localPath := filepath.Join(h.repoDir, "mise.local.toml")
+		if err := os.WriteFile(localPath, []byte("[env]\nOTEL_SERVICE_NAME = \"local-override\"\n"), 0o644); err != nil {
+			t.Fatalf("write %s: %v", localPath, err)
+		}
+
+		env := h.miseExecEnv(t)
+
+		if got, want := env["OTEL_SERVICE_NAME"], "local-override"; got != want {
+			t.Errorf("under mise OTEL_SERVICE_NAME = %q, want %q from mise.local.toml", got, want)
+		}
+	})
+}
+
 // newOtelTaskHarness scaffolds a go-cli-cobra repo at <tempRoot>/<repoRel>,
 // installs recording docker/curl stubs, and builds a minimal isolated env for
 // mise. It skips the test when mise is not installed.
@@ -361,6 +429,40 @@ func (h *otelTaskHarness) tryRunWithin(task string, timeout time.Duration) (otel
 	}
 
 	return result, nil
+}
+
+// miseExecEnv runs `mise exec -- env` from the repo root and returns the
+// resulting environment, split at the first `=` of each line.
+func (h *otelTaskHarness) miseExecEnv(t *testing.T) map[string]string {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), h.timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, h.mise, "exec", "--", "env")
+	cmd.Dir = h.repoDir
+	cmd.Env = h.env
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
+	if err != nil {
+		exitCode := -1
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			exitCode = exitErr.ExitCode()
+		}
+		t.Fatalf("mise exec -- env: %v (exit %d)\n%s", err, exitCode, stderr.String())
+	}
+
+	env := map[string]string{}
+	for line := range strings.Lines(string(output)) {
+		key, value, ok := strings.Cut(strings.TrimSuffix(line, "\n"), "=")
+		if ok {
+			env[key] = value
+		}
+	}
+
+	return env
 }
 
 // stubInvocations returns every recorded docker/curl invocation in order.

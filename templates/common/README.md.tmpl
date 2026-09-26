@@ -13,9 +13,9 @@ See `AGENTS.md` for contributor workflow.
 ## Observability
 
 OpenTelemetry traces and metrics are wired in from day one. The service name comes from
-`OTEL_SERVICE_NAME` (default: the repository slug); browser bundles cannot read the
-environment, so vite/sveltekit use build-time `VITE_OTEL_SERVICE_NAME` and Angular uses
-`environment.serviceName`.
+`OTEL_SERVICE_NAME` (default: the repository slug; under `mise` an inherited value is ignored —
+set it in `mise.local.toml`); browser bundles cannot read the environment, so vite/sveltekit use
+build-time `VITE_OTEL_SERVICE_NAME` and Angular uses `environment.serviceName`.
 
 Run `mise run otel` to start a local collector (Docker required). It installs a small,
 system-wide Docker Compose stack shared by every project on the machine, so you only need to

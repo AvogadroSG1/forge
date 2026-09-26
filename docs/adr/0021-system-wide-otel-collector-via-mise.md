@@ -1,6 +1,7 @@
 # A system-wide OpenTelemetry Collector, started by `mise run otel`
 
-**Status:** accepted · 2026-09-25
+**Status:** accepted · 2026-09-25 · amended 2026-09-26 (infra v7): inherited vendor OTLP env
+neutralized under `mise`; gRPC `4317` no longer published.
 
 ## Context
 
@@ -39,8 +40,25 @@ OTEL_EXPORTER_OTLP_PROTOCOL      = http/protobuf
 OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  = http://localhost:4318/v1/traces
 OTEL_EXPORTER_OTLP_METRICS_ENDPOINT = http://localhost:4318/v1/metrics
 OTEL_EXPORTER_OTLP_LOGS_ENDPOINT    = http://localhost:4318/v1/logs
+OTEL_EXPORTER_OTLP_TRACES_PROTOCOL  = http/protobuf
+OTEL_EXPORTER_OTLP_METRICS_PROTOCOL = http/protobuf
+OTEL_EXPORTER_OTLP_LOGS_PROTOCOL    = http/protobuf
+OTEL_EXPORTER_OTLP_HEADERS          = false   # unset
+OTEL_EXPORTER_OTLP_TRACES_HEADERS   = false   # unset
+OTEL_EXPORTER_OTLP_METRICS_HEADERS  = false   # unset
+OTEL_EXPORTER_OTLP_LOGS_HEADERS     = false   # unset
+OTEL_SERVICE_NAME                   = false   # unset
 VITE_OTEL_EXPORTER_OTLP_ENDPOINT    = http://localhost:4318
 ```
+
+A shell or login session (launchctl, systemd) often exports `OTEL_*` for a vendor agent — e.g. a
+gRPC per-signal protocol, a vendor API key in `OTEL_EXPORTER_OTLP_HEADERS`, and a fixed
+`OTEL_SERVICE_NAME`. SDKs prefer a per-signal protocol over the general one and send the headers
+on every export, so left alone those values would pick an exporter the stack never installs,
+ship vendor credentials to the local collector, and make every repo report the same service
+name. `[env]` therefore pins the per-signal protocols to OTLP/HTTP and unsets (`= false`) the
+header and service-name variables: each repo reports its own slug to the local collector with no
+vendor credentials. A string value under `[env]` in `mise.local.toml` still overrides any of them.
 
 The ADR-0020 in-code gate (`if OTEL_EXPORTER_OTLP_ENDPOINT is set, attach exporters`) is
 unchanged and still exists — it is what makes this safe. Under `mise`, the branch that used to be
@@ -103,7 +121,7 @@ flowchart LR
     end
     OA -- "mise run otel" --> SD["~/.local/share/forge-otel/<br/>(XDG_DATA_HOME)"]
     OB -- "mise run otel" --> SD
-    SD -- "docker compose -p forge-otel up -d --wait --force-recreate otel-collector" --> C[("forge-otel-collector<br/>restart: unless-stopped<br/>127.0.0.1:4317/4318/13133")]
+    SD -- "docker compose -p forge-otel up -d --wait --force-recreate otel-collector" --> C[("forge-otel-collector<br/>restart: unless-stopped<br/>127.0.0.1:4318/13133")]
     EA -. "OTEL_EXPORTER_OTLP_* always set" .-> AppA["Repo A process"]
     EB -. "OTEL_EXPORTER_OTLP_* always set" .-> AppB["Repo B process"]
     AppA -- OTLP/HTTP --> C
@@ -126,9 +144,11 @@ how the machine is actually used. `unless-stopped` means it survives a Docker da
 reboot without the developer remembering to re-run `mise run otel`.
 
 **Why loopback-only ports.** The collector accepts unauthenticated OTLP from anything that can
-reach it. Binding `4317`/`4318`/`13133` to `127.0.0.1` keeps it reachable only from the same
-machine, matching every other local-dev-only surface in a forge repo — no LAN or container-network
-exposure by default.
+reach it. Binding `4318`/`13133` to `127.0.0.1` keeps it reachable only from the same machine,
+matching every other local-dev-only surface in a forge repo — no LAN or container-network
+exposure by default. No gRPC port is published: every forge stack exports OTLP/HTTP, and Docker
+Desktop binds `127.0.0.1:4317` even while another process holds `*:4317`, silently capturing that
+agent's local traffic.
 
 **Why `debug` + `file` exporters and no UI.** A collector needs somewhere to send signals; forge
 does not ship a UI, so `docker logs forge-otel-collector` (via the `debug` exporter) and
@@ -188,8 +208,10 @@ the zero-setup `docker logs` verification path, and the log bound removes its on
   telemetry emitted during it MAY be dropped.
 - **A shell `export` does not redirect telemetry under `mise`.** `conf.d/otel.toml`'s `[env]`
   wins over the process environment, so `OTEL_EXPORTER_OTLP_ENDPOINT=… mise run build` still
-  sees `http://localhost:4318`. The supported override is `mise.local.toml` `[env]`, which is
-  documented in the generated README and AGENTS.md.
+  sees `http://localhost:4318`. Inherited per-signal protocols are pinned to `http/protobuf`, and
+  inherited OTLP headers (general and per-signal) and `OTEL_SERVICE_NAME` are unset, the same
+  way. The supported override for all of them is `mise.local.toml` `[env]`, which is documented in
+  the generated README and AGENTS.md.
 - **Angular exports only through its `mise` tasks.** `mise run dev|build` (`web-dev|web-build`
   fullstack) are the only paths that inline an endpoint; an endpoint with `"`, `\` or control
   characters fails those tasks rather than being escaped.

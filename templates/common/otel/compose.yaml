@@ -31,8 +31,8 @@ services:
     volumes:
       - ./collector.yaml:/etc/otelcol-contrib/config.yaml:ro
       - forge-otel-data:/data
+    # OTLP/HTTP only: every forge stack exports over 4318, and publishing 4317 would shadow a vendor agent (e.g. Datadog) already listening there.
     ports:
-      - "127.0.0.1:4317:4317" # OTLP gRPC
       - "127.0.0.1:4318:4318" # OTLP HTTP
       - "127.0.0.1:13133:13133" # health_check extension
     # The `debug` exporter writes every batch to stdout, and this collector

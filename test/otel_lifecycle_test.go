@@ -39,7 +39,7 @@ const (
 )
 
 // otelLiveHostPorts are the host ports the shipped compose stack binds.
-var otelLiveHostPorts = []string{"4317", "4318", "13133"}
+var otelLiveHostPorts = []string{"4318", "13133"}
 
 // otelDockerPassthroughEnv are daemon-selection variables that MUST reach
 // docker unchanged; HOME is isolated, so without them docker would fall back
