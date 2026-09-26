@@ -414,7 +414,8 @@ test, shipped as a vetted extra (ADR-0010, §10.2) with no guideline edit.
   TypeScript: `src/lib/telemetry.ts` (vite-ts, sveltekit) / `src/app/telemetry.ts` (angular),
   built on `@opentelemetry/sdk-trace-web` because the three TS stacks are browser bundles.
 - **Env contract.** Tracer + meter providers, `service.name` and W3C propagation are installed
-  unconditionally; `service.name` is `OTEL_SERVICE_NAME`, else the repo slug. OTLP/HTTP exporters
+  unconditionally; `service.name` is `OTEL_SERVICE_NAME`, else the repo slug (under `mise`, §9.5
+  unsets an inherited `OTEL_SERVICE_NAME`; set it in `mise.local.toml`). OTLP/HTTP exporters
   attach **only** when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (browser stacks:
   `VITE_OTEL_EXPORTER_OTLP_ENDPOINT`, Angular `environment.otlpEndpoint`, which reads the
   build-time `FORGE_OTLP_ENDPOINT` global through a `typeof` guard; see §9.5). Unset means
@@ -451,7 +452,13 @@ bootstrap somewhere to send data:
     stays silent exactly as §9.4 describes. Precedence under `mise` is `mise.local.toml` `[env]`
     over this file over the shell environment, so a shell `export` is ignored for `mise` tasks;
     the generated README and AGENTS.md MUST direct users to `mise.local.toml` to point at a
-    different collector.
+    different collector. Because a login session often exports `OTEL_*` for a vendor agent,
+    `[env]` also pins `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_PROTOCOL` to `http/protobuf` and
+    unsets (`= false`) `OTEL_EXPORTER_OTLP_HEADERS`,
+    `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_HEADERS` and `OTEL_SERVICE_NAME`, so no inherited
+    gRPC protocol, vendor credential or service name reaches a `mise` task; a string value in
+    `mise.local.toml` `[env]` still overrides each of them. Owning test:
+    `TestOtelEnvOverridesInheritedVendorOtlpVars`.
   - **`[tasks]`** `otel` (alias `otel:up`), `otel:down`, `otel:status`, `otel:logs`. `otel` copies
     `.otel/*` to `${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel/` and runs
     `docker compose -p forge-otel up -d --wait --force-recreate otel-collector`, then polls the
@@ -489,8 +496,9 @@ bootstrap somewhere to send data:
   `TestOtelAngularFullstackBundleInlinesEndpoint` are gated behind `FORGE_SMOKE_NETWORK=1`.
 - `templates/common/otel/compose.yaml` → `.otel/compose.yaml`: Docker Compose project
   `forge-otel`, image `otel/opentelemetry-collector-contrib` (pinned), `container_name:
-  forge-otel-collector`, `restart: unless-stopped`, ports bound to `127.0.0.1` only (`4317` gRPC,
-  `4318` HTTP, `13133` health), a `busybox` one-shot init step that `chown`s the named volume
+  forge-otel-collector`, `restart: unless-stopped`, ports bound to `127.0.0.1` only (`4318` HTTP
+  and `13133` health; no `4317` gRPC publish, which would shadow another local agent already
+  listening there), a `busybox` one-shot init step that `chown`s the named volume
   `forge-otel-data` to the collector's non-root uid before it starts. The `otel-collector`
   service MUST declare `logging: {driver: local, options: {max-size: "10m", max-file: "3"}}`
   (option values are YAML strings) so the `debug` exporter's stdout is bounded to about 30 MB of
@@ -498,7 +506,7 @@ bootstrap somewhere to send data:
   about 200 MB per signal) host disk use is bounded (ADR-0021). Owning tests:
   `TestOtelComposeCollectorLogsBounded` (parsed template) and
   `TestOtelComposeConfigResolvesLogging` (`docker compose config` output).
-- `templates/common/otel/collector.yaml` → `.otel/collector.yaml`: `otlp` receiver (grpc + http,
+- `templates/common/otel/collector.yaml` → `.otel/collector.yaml`: `otlp` receiver (http only,
   CORS allowing `http://localhost:*` / `http://127.0.0.1:*` for browser stacks),
   `memory_limiter`/`batch` processors, `debug` + `file/{traces,metrics,logs}` exporters writing
   `/data/{traces,metrics,logs}.jsonl` in the volume, `health_check` extension.

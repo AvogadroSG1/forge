@@ -14,7 +14,7 @@ import (
 )
 
 // publishedPortPattern matches a Docker Compose "ports:" list entry, e.g.
-// `- "127.0.0.1:4317:4317" # OTLP gRPC`, capturing the host:container port
+// `- "127.0.0.1:4318:4318" # OTLP HTTP`, capturing the host:container port
 // mapping (group 1) so its host-bind address can be checked.
 var publishedPortPattern = regexp.MustCompile(`(?m)^\s*-\s*"([^"]+)"`)
 
@@ -993,6 +993,9 @@ func assertOtelCollectorAssets(t *testing.T, tempDir string, vars project.Variab
 		portMapping := match[1]
 		if !strings.HasPrefix(portMapping, "127.0.0.1:") {
 			t.Errorf("%s publishes port %q not bound to 127.0.0.1", composePath, portMapping)
+		}
+		if strings.HasSuffix(portMapping, ":4317") {
+			t.Errorf("%s publishes OTLP gRPC port %q; forge stacks export OTLP/HTTP only and a 4317 publish shadows other local agents (ADR-0021)", composePath, portMapping)
 		}
 	}
 
