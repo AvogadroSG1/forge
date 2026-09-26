@@ -193,6 +193,9 @@ Scenario: Remote created but first push fails (gate or network)
 - `forge update` — maintainer-only snapshot refresh (§15).
 - `forge sync-allowlist [--check]` — reconciler (§13).
 - `forge upgrade [--check]` — infrastructure file propagation (§19).
+- `forge completion zsh` — prints a zsh completion script for the `forge` CLI, generated from the
+  same flag definitions the other runners use (ADR-0022). Valid saved as `_forge` in an `fpath`
+  directory ahead of `compinit`, or sourced directly (`source <(forge completion zsh)`).
 
 ```gherkin
 Scenario: Bare invocation defaults to init
