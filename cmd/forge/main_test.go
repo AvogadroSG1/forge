@@ -290,6 +290,18 @@ func TestRunSyncAllowlistFallsBackToOpenCodeJson(t *testing.T) {
 	}
 }
 
+func TestSelectCommandRecognizesCompletion(t *testing.T) {
+	t.Parallel()
+
+	command, remaining := selectCommand([]string{"completion", "zsh"})
+	if command != "completion" {
+		t.Fatalf("command = %q, want completion", command)
+	}
+	if len(remaining) != 1 || remaining[0] != "zsh" {
+		t.Fatalf("remaining args = %#v, want [zsh]", remaining)
+	}
+}
+
 func TestSelectCommandRecognizesUpdate(t *testing.T) {
 	t.Parallel()
 
@@ -311,6 +323,80 @@ func TestRunUpdateRequiresStackFlag(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "missing required flag: --stack") {
 		t.Fatalf("runUpdate() error = %q, want missing stack flag", err)
+	}
+}
+
+func TestRunHelpListsCompletionCommand(t *testing.T) {
+	t.Parallel()
+
+	output, err := captureStdout(t, func() error {
+		return run([]string{"help"}, forge.Assets())
+	})
+	if err != nil {
+		t.Fatalf("run([help]) error = %v", err)
+	}
+	if !strings.Contains(output, "completion      Generate shell completion script") {
+		t.Fatalf("usage output = %q, want completion command listed", output)
+	}
+}
+
+func TestRunDispatchesCompletionCommand(t *testing.T) {
+	t.Parallel()
+
+	output, err := captureStdout(t, func() error {
+		return run([]string{"completion", "zsh"}, forge.Assets())
+	})
+	if err != nil {
+		t.Fatalf("run([completion zsh]) error = %v", err)
+	}
+	if !strings.HasPrefix(output, "#compdef forge\n") {
+		t.Fatalf("run([completion zsh]) output = %q, want #compdef header", output)
+	}
+}
+
+func TestRunDispatchesCompletionUnsupportedShellError(t *testing.T) {
+	t.Parallel()
+
+	err := run([]string{"completion", "fish"}, forge.Assets())
+	if err == nil {
+		t.Fatal("run([completion fish]) error = nil, want unsupported shell error")
+	}
+	if !strings.Contains(err.Error(), `unsupported shell "fish"`) {
+		t.Fatalf("run([completion fish]) error = %q, want unsupported shell", err)
+	}
+}
+
+// TestPrintUsageMatchesCompletionCommandsDescriptions guards against
+// printUsage's "Available Commands" text drifting from the descriptions
+// completion.go embeds in generated scripts: every completionCommands entry
+// except "help" (which printUsage does not list as a command) must appear,
+// name and description together, on one line of the usage output.
+func TestPrintUsageMatchesCompletionCommandsDescriptions(t *testing.T) {
+	t.Parallel()
+
+	output, err := captureStdout(t, func() error {
+		printUsage()
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("printUsage() capture error = %v", err)
+	}
+
+	for _, cmd := range completionCommands {
+		if cmd.Name == "help" {
+			continue
+		}
+
+		found := false
+		for _, line := range strings.Split(output, "\n") {
+			if strings.Contains(line, cmd.Name) && strings.Contains(line, cmd.Description) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("printUsage() output missing a line with both %q and %q:\n%s", cmd.Name, cmd.Description, output)
+		}
 	}
 }
 

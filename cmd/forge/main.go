@@ -53,6 +53,8 @@ func run(args []string, assets fs.FS) error {
 		err = runUpdate(args, assets)
 	case "upgrade":
 		err = runUpgrade(args, assets)
+	case "completion":
+		err = runCompletion(args, os.Stdout)
 	default:
 		printUsage()
 		return fmt.Errorf("unknown command %q", command)
@@ -71,7 +73,7 @@ func selectCommand(args []string) (string, []string) {
 	}
 
 	switch args[0] {
-	case "init", "sync-allowlist", "update", "upgrade":
+	case "init", "sync-allowlist", "update", "upgrade", "completion":
 		return args[0], args[1:]
 	case "help", "--help", "-h":
 		return "help", nil
@@ -91,6 +93,7 @@ Available Commands:
   sync-allowlist  Reconcile managed allowlist block
   update          Refresh a vendored stack snapshot
   upgrade         Propagate infrastructure file updates
+  completion      Generate shell completion script
 
 Flags:
   -h, --help   help for forge
@@ -99,10 +102,13 @@ Use "forge [command] --help" for more information about a command.
 `)
 }
 
-func runInit(args []string, assets fs.FS) error {
+// initFlagSet builds the flag.FlagSet for "forge init". It is shared by
+// runInit and the completion generator, so a flag added here shows up in
+// both places automatically.
+func initFlagSet() (*flag.FlagSet, *prompt.Inputs) {
 	flags := flag.NewFlagSet("forge init", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
-	var inputs prompt.Inputs
+	inputs := &prompt.Inputs{}
 	flags.StringVar(&inputs.ProjectName, "project-name", "", "Project name")
 	flags.StringVar(&inputs.Language, "language", "", "Language")
 	flags.StringVar(&inputs.ProjectType, "project-type", "", "Project type")
@@ -119,9 +125,15 @@ func runInit(args []string, assets fs.FS) error {
 	flags.StringVar(&inputs.ModulePath, "module-path", "", "Module path override")
 	flags.StringVar(&inputs.BdPrefix, "bd-prefix", "", "Beads prefix override")
 	flags.StringVar(&inputs.PythonPackageOverride, "python-package", "", "Python package name override (Python stacks only)")
+	return flags, inputs
+}
+
+func runInit(args []string, assets fs.FS) error {
+	flags, inputsPtr := initFlagSet()
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
+	inputs := *inputsPtr
 
 	var prompter prompt.Prompter
 	inputs.IsTTY = isInteractiveSession()
@@ -151,23 +163,39 @@ func runInit(args []string, assets fs.FS) error {
 	return initializer.Run(context.Background(), cwd, vars)
 }
 
+// syncAllowlistFlags holds the parsed values for "forge sync-allowlist".
+type syncAllowlistFlags struct {
+	CheckOnly       bool
+	IncludePersonal bool
+	SettingsPath    string
+}
+
+// syncAllowlistFlagSet builds the flag.FlagSet for "forge sync-allowlist".
+// cwd anchors the default --path value; the completion generator passes ""
+// since it only needs flag names, not the resolved default.
+func syncAllowlistFlagSet(cwd string) (*flag.FlagSet, *syncAllowlistFlags) {
+	flags := flag.NewFlagSet("forge sync-allowlist", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	parsed := &syncAllowlistFlags{}
+	flags.BoolVar(&parsed.CheckOnly, "check", false, "Only report staleness")
+	flags.BoolVar(&parsed.IncludePersonal, "include-personal", false, "Include personal allowlist rules")
+	flags.StringVar(&parsed.SettingsPath, "path", filepath.Join(cwd, ".claude", "settings.local.json"), "settings.local.json path")
+	return flags, parsed
+}
+
 func runSyncAllowlist(args []string, assets fs.FS) error {
 	cwd, err := currentWorkingDir()
 	if err != nil {
 		return err
 	}
 
-	flags := flag.NewFlagSet("forge sync-allowlist", flag.ContinueOnError)
-	flags.SetOutput(os.Stderr)
-	var checkOnly bool
-	var includePersonal bool
-	var settingsPath string
-	flags.BoolVar(&checkOnly, "check", false, "Only report staleness")
-	flags.BoolVar(&includePersonal, "include-personal", false, "Include personal allowlist rules")
-	flags.StringVar(&settingsPath, "path", filepath.Join(cwd, ".claude", "settings.local.json"), "settings.local.json path")
+	flags, parsed := syncAllowlistFlagSet(cwd)
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
+	checkOnly := parsed.CheckOnly
+	includePersonal := parsed.IncludePersonal
+	settingsPath := parsed.SettingsPath
 
 	data, err := os.ReadFile(settingsPath)
 	if err != nil {
@@ -217,19 +245,35 @@ func runSyncAllowlist(args []string, assets fs.FS) error {
 	return nil
 }
 
-func runUpdate(args []string, assets fs.FS) error {
+// updateFlagSet builds the flag.FlagSet for "forge update".
+func updateFlagSet() (*flag.FlagSet, *string) {
 	flags := flag.NewFlagSet("forge update", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
 	var stack string
 	flags.StringVar(&stack, "stack", "", "Stack key to refresh")
+	return flags, &stack
+}
+
+func runUpdate(args []string, assets fs.FS) error {
+	flags, stackPtr := updateFlagSet()
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
+	stack := *stackPtr
 	if strings.TrimSpace(stack) == "" {
 		return fmt.Errorf("missing required flag: --stack")
 	}
 
 	return updatepkg.Run(context.Background(), assets, stack, delegate.ExecRunner{}, updatepkg.ExecGitRunner{})
+}
+
+// upgradeFlagSet builds the flag.FlagSet for "forge upgrade".
+func upgradeFlagSet() (*flag.FlagSet, *bool) {
+	flags := flag.NewFlagSet("forge upgrade", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	var checkOnly bool
+	flags.BoolVar(&checkOnly, "check", false, "Only report staleness")
+	return flags, &checkOnly
 }
 
 func runUpgrade(args []string, assets fs.FS) error {
@@ -238,13 +282,11 @@ func runUpgrade(args []string, assets fs.FS) error {
 		return err
 	}
 
-	flags := flag.NewFlagSet("forge upgrade", flag.ContinueOnError)
-	flags.SetOutput(os.Stderr)
-	var checkOnly bool
-	flags.BoolVar(&checkOnly, "check", false, "Only report staleness")
+	flags, checkOnlyPtr := upgradeFlagSet()
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
+	checkOnly := *checkOnlyPtr
 
 	status, err := upgradepkg.Run(assets, cwd, checkOnly)
 	if err != nil {
