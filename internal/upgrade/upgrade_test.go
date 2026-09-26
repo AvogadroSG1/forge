@@ -19,6 +19,9 @@ func testAssets() fstest.MapFS {
 		"templates/common/codex/hooks.json":                &fstest.MapFile{Data: []byte(`{"hooks":{}}` + "\n")},
 		"templates/common/opencode.jsonc.tmpl":             &fstest.MapFile{Data: []byte(`{"lsp":{},"permission":{"bash":{"// BEGIN FORGE ALLOW v:2","// END FORGE ALLOW"}}}` + "\n")},
 		"templates/common/opencode/plugins/forge-hooks.js": &fstest.MapFile{Data: []byte(`export const ForgeHooks = async () => {};` + "\n")},
+		"templates/common/mise/conf.d/otel.toml":           &fstest.MapFile{Data: []byte("[env]\nOTEL_EXPORTER_OTLP_ENDPOINT = \"http://localhost:4318\"\n")},
+		"templates/common/otel/compose.yaml":               &fstest.MapFile{Data: []byte("name: forge-otel\n")},
+		"templates/common/otel/collector.yaml":             &fstest.MapFile{Data: []byte("receivers:\n  otlp: {}\n")},
 	}
 }
 
@@ -114,8 +117,8 @@ func TestRunOverwritesManagedFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if len(status.Updated) != 5 {
-		t.Fatalf("Run() updated %d files, want 5", len(status.Updated))
+	if len(status.Updated) != 8 {
+		t.Fatalf("Run() updated %d files, want 8", len(status.Updated))
 	}
 
 	// Verify guard was overwritten
@@ -195,8 +198,8 @@ func TestRunCreatesDirectoriesForMissingFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if len(status.Updated) != 5 {
-		t.Fatalf("Run() updated %d files, want 5", len(status.Updated))
+	if len(status.Updated) != 8 {
+		t.Fatalf("Run() updated %d files, want 8", len(status.Updated))
 	}
 
 	// Verify .codex/hooks.json was created
@@ -455,5 +458,121 @@ func TestRunFixesWrongPermissionsOnExistingHooks(t *testing.T) {
 	}
 	if info.Mode().Perm() != 0o755 {
 		t.Fatalf("guard mode after upgrade = %o, want 755", info.Mode().Perm())
+	}
+}
+
+// TestCheckReportsStaleForLegacyRepoMissingOtelAssets proves that a repo
+// scaffolded before the OTel collector assets existed (no
+// .forge-infra-version at all, so it predates every infra version) is
+// reported stale by --check without any mutation.
+func TestCheckReportsStaleForLegacyRepoMissingOtelAssets(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".claude", "hooks"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".claude", "hooks", "guard"), []byte("old-guard"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, rel := range []string{
+		filepath.Join(".config", "mise", "conf.d", "otel.toml"),
+		filepath.Join(".otel", "compose.yaml"),
+		filepath.Join(".otel", "collector.yaml"),
+	} {
+		if _, err := os.Stat(filepath.Join(dir, rel)); !os.IsNotExist(err) {
+			t.Fatalf("precondition: %s should not exist yet (err = %v)", rel, err)
+		}
+	}
+
+	status, err := Run(testAssets(), dir, true)
+	if err != nil {
+		t.Fatalf("Run(check) error = %v", err)
+	}
+	if !status.Stale {
+		t.Fatal("Run(check) stale = false, want true for a legacy repo missing the OTel collector assets")
+	}
+
+	for _, rel := range []string{
+		filepath.Join(".config", "mise", "conf.d", "otel.toml"),
+		filepath.Join(".otel", "compose.yaml"),
+		filepath.Join(".otel", "collector.yaml"),
+	} {
+		if _, err := os.Stat(filepath.Join(dir, rel)); !os.IsNotExist(err) {
+			t.Fatalf("Run(check) must not mutate: %s exists (err = %v)", rel, err)
+		}
+	}
+}
+
+// TestRunAddsOtelCollectorAssetsToLegacyRepo proves that a stale repo
+// lacking the OTel collector assets entirely (predates their introduction)
+// gains all three, at the nested destinations, with the parent directories
+// created, after a mutating `forge upgrade`.
+func TestRunAddsOtelCollectorAssetsToLegacyRepo(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".claude", "hooks"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".claude", "hooks", "guard"), []byte("old-guard"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	assets := testAssets()
+	status, err := Run(assets, dir, false)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	wantUpdated := map[string]bool{
+		".config/mise/conf.d/otel.toml": false,
+		".otel/compose.yaml":            false,
+		".otel/collector.yaml":          false,
+	}
+	for _, updated := range status.Updated {
+		if _, ok := wantUpdated[updated]; ok {
+			wantUpdated[updated] = true
+		}
+	}
+	for dest, ok := range wantUpdated {
+		if !ok {
+			t.Errorf("Run() did not report %s as updated: %v", dest, status.Updated)
+		}
+	}
+
+	otelToml, err := os.ReadFile(filepath.Join(dir, ".config", "mise", "conf.d", "otel.toml"))
+	if err != nil {
+		t.Fatalf(".config/mise/conf.d/otel.toml not created: %v", err)
+	}
+	if !strings.Contains(string(otelToml), "OTEL_EXPORTER_OTLP_ENDPOINT") {
+		t.Fatalf("otel.toml missing expected content: %q", otelToml)
+	}
+	if info, err := os.Stat(filepath.Join(dir, ".config", "mise", "conf.d", "otel.toml")); err != nil {
+		t.Fatal(err)
+	} else if info.Mode().Perm() != 0o644 {
+		t.Fatalf("otel.toml mode = %o, want 644", info.Mode().Perm())
+	}
+
+	compose, err := os.ReadFile(filepath.Join(dir, ".otel", "compose.yaml"))
+	if err != nil {
+		t.Fatalf(".otel/compose.yaml not created: %v", err)
+	}
+	if !strings.Contains(string(compose), "forge-otel") {
+		t.Fatalf("compose.yaml missing expected content: %q", compose)
+	}
+
+	if _, err := os.ReadFile(filepath.Join(dir, ".otel", "collector.yaml")); err != nil {
+		t.Fatalf(".otel/collector.yaml not created: %v", err)
+	}
+
+	// A repeat run is idempotent: nothing is reported as updated.
+	status2, err := Run(assets, dir, false)
+	if err != nil {
+		t.Fatalf("Run(2) error = %v", err)
+	}
+	if len(status2.Updated) != 0 {
+		t.Fatalf("Run(2) updated %v, want none (idempotent)", status2.Updated)
 	}
 }

@@ -194,6 +194,49 @@ func TestWriterRendersPythonFastAPIPackageDirectory(t *testing.T) {
 	assertFileContains(t, filepath.Join(tempDir, "tests", "test_health.py"), "from cost_investigator.main import app")
 }
 
+func TestWriterScaffoldsOtelMiseAndCollectorAssets(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	vars, err := project.ResolveVariables(project.Input{
+		ProjectName: "Sample App",
+		Language:    "go",
+		ProjectType: "cli",
+		Stack:       "go-cli-cobra",
+		AuthorName:  "Ada Lovelace",
+		AuthorEmail: "ada@example.com",
+		Remote:      project.RemoteNone,
+	})
+	if err != nil {
+		t.Fatalf("ResolveVariables() error = %v", err)
+	}
+
+	writer := Writer{Assets: forge.Assets()}
+	if err := writer.Write(tempDir, vars); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+
+	miseOtelPath := filepath.Join(tempDir, ".config", "mise", "conf.d", "otel.toml")
+	assertFileContains(t, miseOtelPath, "OTEL_EXPORTER_OTLP_ENDPOINT")
+	assertFileContains(t, miseOtelPath, "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
+	assertFileContains(t, miseOtelPath, "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT")
+	assertFileContains(t, miseOtelPath, "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT")
+	assertFileContains(t, miseOtelPath, "VITE_OTEL_EXPORTER_OTLP_ENDPOINT")
+	assertFileContains(t, miseOtelPath, "[tasks.otel]")
+	assertFileContains(t, miseOtelPath, `alias = "otel:up"`)
+	assertFileContains(t, miseOtelPath, `[tasks."otel:down"]`)
+	assertFileContains(t, miseOtelPath, `[tasks."otel:status"]`)
+	assertFileContains(t, miseOtelPath, `[tasks."otel:logs"]`)
+
+	composePath := filepath.Join(tempDir, ".otel", "compose.yaml")
+	assertFileContains(t, composePath, "restart: unless-stopped")
+
+	collectorPath := filepath.Join(tempDir, ".otel", "collector.yaml")
+	if _, err := os.Stat(collectorPath); err != nil {
+		t.Fatalf("expected %q to exist: %v", collectorPath, err)
+	}
+}
+
 func TestWriterRendersCSharpNamespaceIntoProjectFile(t *testing.T) {
 	t.Parallel()
 
@@ -490,6 +533,10 @@ func TestMapOutputPath(t *testing.T) {
 		{input: "codex/hooks.json", want: filepath.Join(".codex", "hooks.json")},
 		{input: "opencode", want: ".opencode"},
 		{input: "opencode/plugins/foo.js", want: filepath.Join(".opencode", "plugins/foo.js")},
+		{input: "mise", want: filepath.Join(".config", "mise")},
+		{input: "mise/conf.d/otel.toml", want: filepath.Join(".config", "mise", "conf.d/otel.toml")},
+		{input: "otel", want: ".otel"},
+		{input: "otel/compose.yaml", want: filepath.Join(".otel", "compose.yaml")},
 		{input: "other/path", want: "other/path"},
 	}
 

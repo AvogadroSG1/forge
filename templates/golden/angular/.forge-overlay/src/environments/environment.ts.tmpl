@@ -1,10 +1,15 @@
-// Environment-owned wiring. The scaffold-time default is overridable per
-// deployment by swapping this file (fileReplacements) — not by editing code.
+// Environment-owned wiring. Under mise, `mise run dev` / `mise run build`
+// inline OTEL_EXPORTER_OTLP_ENDPOINT as FORGE_OTLP_ENDPOINT via `ng --define`
+// (the OTLP define bridge). Plain `npm start` / `ng build` pass no define, so
+// the typeof guard below yields '' and telemetry stays silent by design
+// (ADR-0020).
+declare const FORGE_OTLP_ENDPOINT: string | undefined;
+
 export const environment = {
   apiBaseUrl: '{{.APIBaseURL}}',
   // OTLP/HTTP collector base URL for OpenTelemetry. Empty keeps the providers
   // installed but attaches no exporter, so a repo with no collector stays quiet.
-  otlpEndpoint: '',
+  otlpEndpoint: typeof FORGE_OTLP_ENDPOINT === 'string' ? FORGE_OTLP_ENDPOINT : '',
   // OpenTelemetry `service.name`. Browsers cannot read OTEL_SERVICE_NAME, so it
   // is set here at build time; empty means "use the package default".
   serviceName: '',

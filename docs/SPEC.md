@@ -416,9 +416,10 @@ test, shipped as a vetted extra (ADR-0010, §10.2) with no guideline edit.
 - **Env contract.** Tracer + meter providers, `service.name` and W3C propagation are installed
   unconditionally; `service.name` is `OTEL_SERVICE_NAME`, else the repo slug. OTLP/HTTP exporters
   attach **only** when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (browser stacks:
-  `VITE_OTEL_EXPORTER_OTLP_ENDPOINT`, Angular `environment.otlpEndpoint`). Unset means providers
-  only — no exporter, no retry noise. Signals are traces + metrics; logs are a filed follow-up.
-  Python stacks add a `mise run serve` (`run-cli` on typer) task that runs the app under
+  `VITE_OTEL_EXPORTER_OTLP_ENDPOINT`, Angular `environment.otlpEndpoint`, which reads the
+  build-time `FORGE_OTLP_ENDPOINT` global through a `typeof` guard; see §9.5). Unset means
+  providers only — no exporter, no retry noise. Signals are traces + metrics; logs are a filed
+  follow-up. Python stacks add a `mise run serve` (`run-cli` on typer) task that runs the app under
   `opentelemetry-instrument`, with the same endpoint guard exporting `OTEL_*_EXPORTER=none` when
   no collector is configured.
 - **Non-vacuous test.** The module's test injects an in-memory span exporter and metric reader,
@@ -430,6 +431,84 @@ test, shipped as a vetted extra (ADR-0010, §10.2) with no guideline edit.
   parent dir. Dependencies are pinned in the stack manifests (`go.mod.tmpl`,
   `pyproject.toml.tmpl`, `*.csproj.tmpl`, overlay `package.json.tmpl`), the existing precedent
   for overlay tools. Owning test: `TestGoldenStacksShipTelemetryBootstrap` (§18).
+
+### 9.5 System-wide OTel collector — `mise run otel`
+
+*(Authoritative: ADR-0021. Amends 9.4's exporter default under `mise`.)*
+
+Every stack, common rather than golden, additionally ships three assets that give the §9.4
+bootstrap somewhere to send data:
+
+- `templates/common/mise/conf.d/otel.toml` → `.config/mise/conf.d/otel.toml`. `mise` merges every
+  file under a project's `.config/mise/conf.d/*.toml` on top of its own `mise.toml`, so this one
+  forge-owned file applies to all twelve stacks with no per-stack `mise.toml` edit. It carries:
+  - **`[env]`**, always set (not endpoint-gated): `OTEL_EXPORTER_OTLP_ENDPOINT`,
+    `OTEL_EXPORTER_OTLP_PROTOCOL`, and per-signal
+    `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_ENDPOINT`, plus `VITE_OTEL_EXPORTER_OTLP_ENDPOINT`
+    for the Vite stacks (vite-ts, sveltekit; Angular uses the OTLP define bridge below). This is
+    the amendment: every process `mise` launches now takes §9.4's "endpoint set" branch. The
+    §9.4 in-code gate is unchanged; outside `mise` the environment is unset and a generated repo
+    stays silent exactly as §9.4 describes. Precedence under `mise` is `mise.local.toml` `[env]`
+    over this file over the shell environment, so a shell `export` is ignored for `mise` tasks;
+    the generated README and AGENTS.md MUST direct users to `mise.local.toml` to point at a
+    different collector.
+  - **`[tasks]`** `otel` (alias `otel:up`), `otel:down`, `otel:status`, `otel:logs`. `otel` copies
+    `.otel/*` to `${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel/` and runs
+    `docker compose -p forge-otel up -d --wait --force-recreate otel-collector`, then polls the
+    health endpoint. `--force-recreate` is required: `collector.yaml` is bind-mounted, so an edit
+    does not change the Compose config hash and a plain `up` would keep the old pipeline running.
+    Re-running `otel` therefore restarts the shared collector every time; telemetry from every
+    repo pauses briefly. SDKs typically buffer or retry across the gap, but telemetry emitted
+    during it MAY be dropped (accepted trade-off, ADR-0021). `depends_on` still runs the one-shot
+    volume init first. `otel` runs in the repo root via
+    `dir = "{{config_root}}"` (resolved by `mise`, not a shell) and copies from relative `.otel/`
+    paths; no `run` body interpolates `{{config_root}}` or any other path template. Every `run`
+    body MUST be POSIX `sh` (`set -eu`, no bashisms), since `mise`'s default inline shell is `sh`,
+    which is `dash` on Debian/Ubuntu. Owning tests:
+    `TestOtelTasksRunUnderDash`, `TestOtelTasksPathMetacharactersInert`,
+    `TestOtelTasksNoTemplatesInRunBodies`, `TestOtelTasksUpForceRecreates`. The live Docker
+    lifecycle test `TestOtelLifecycleRecreatesOnConfigChange` (a config edit plus re-run yields a
+    new container that exports through the new pipeline) is gated behind `FORGE_DOCKER_TESTS=1`
+    and skips otherwise.
+- **Angular: the OTLP define bridge.** The golden overlays own these tasks, not `otel.toml`.
+  Standalone Angular's `mise.toml` has `dev` and `build`. Each backend `mise.toml.tmpl`
+  (`csharp-webapi`, `go-api-chi`, `python-fastapi`) has `web-dev` and `web-build` inside a
+  `{{- if eq .Frontend "angular" }}` block, byte-identical across the three and absent for other
+  frontends. Each body is POSIX `sh` starting `set -eu`. It reads `OTEL_EXPORTER_OTLP_ENDPOINT`
+  (unset → `""`) and runs `npm run start|build -- --define "FORGE_OTLP_ENDPOINT=\"<endpoint>\""`
+  (`npm --prefix web …` fullstack), passing the value as one argv entry with shell
+  metacharacters inert. An endpoint containing `"`, `\` or a control character (the explicit,
+  locale-independent set 0x01–0x1f, 0x7f) MUST be rejected before `npm` runs: exit 1 with a
+  stderr message naming `OTEL_EXPORTER_OTLP_ENDPOINT`. `environment.ts` declares
+  `FORGE_OTLP_ENDPOINT` and reads it through a `typeof` guard, so plain `npm start` / `ng build`
+  compiles and stays silent. Owning tests: `TestOtelAngularTasksBridgeEndpointToDefine`,
+  `TestOtelAngularEnvironmentReadsDefineWithTypeofGuard`,
+  `TestOtelAngularBackendTaskBlocksIdentical`, `TestOtelAngularTasksAbsentForOtherFrontends`,
+  `TestOtelAngularTasksRejectUnsafeEndpoint`, `TestOtelAngularTasksPassEndpointAsDefine`. The
+  real-build checks `TestOtelAngularStandaloneBundleInlinesEndpoint` and
+  `TestOtelAngularFullstackBundleInlinesEndpoint` are gated behind `FORGE_SMOKE_NETWORK=1`.
+- `templates/common/otel/compose.yaml` → `.otel/compose.yaml`: Docker Compose project
+  `forge-otel`, image `otel/opentelemetry-collector-contrib` (pinned), `container_name:
+  forge-otel-collector`, `restart: unless-stopped`, ports bound to `127.0.0.1` only (`4317` gRPC,
+  `4318` HTTP, `13133` health), a `busybox` one-shot init step that `chown`s the named volume
+  `forge-otel-data` to the collector's non-root uid before it starts. The `otel-collector`
+  service MUST declare `logging: {driver: local, options: {max-size: "10m", max-file: "3"}}`
+  (option values are YAML strings) so the `debug` exporter's stdout is bounded to about 30 MB of
+  Docker logs; together with the file exporters' rotation (`max_megabytes: 50`, `max_backups: 3`,
+  about 200 MB per signal) host disk use is bounded (ADR-0021). Owning tests:
+  `TestOtelComposeCollectorLogsBounded` (parsed template) and
+  `TestOtelComposeConfigResolvesLogging` (`docker compose config` output).
+- `templates/common/otel/collector.yaml` → `.otel/collector.yaml`: `otlp` receiver (grpc + http,
+  CORS allowing `http://localhost:*` / `http://127.0.0.1:*` for browser stacks),
+  `memory_limiter`/`batch` processors, `debug` + `file/{traces,metrics,logs}` exporters writing
+  `/data/{traces,metrics,logs}.jsonl` in the volume, `health_check` extension.
+
+Because the copy target and Compose project name are fixed, `mise run otel` from any forge repo on
+the machine converges on one shared collector; a second repo's copy overwrites the first's
+(last-writer-wins — identical across repos on the same forge version). No UI ships; `docker logs
+forge-otel-collector` (or `mise run otel:logs`) and the `.jsonl` files are the verification path.
+These three files are part of the managed/upgrade set (§19): `forge upgrade` propagates them to
+existing repos.
 
 ---
 
@@ -802,7 +881,9 @@ forge/                              # source repo
 │   │   ├── gitignore.base           # [verbatim] multi-language base .gitignore
 │   │   ├── AGENTS.md.tmpl           # [render]
 │   │   ├── claude/{settings.json, settings.local.json.tmpl, hooks/{guard, secret-scan.sh}}
-│   │   └── codex/hooks.json         # [verbatim]
+│   │   ├── codex/hooks.json         # [verbatim]
+│   │   ├── mise/conf.d/otel.toml    # [verbatim] → .config/mise/conf.d/otel.toml (§9.5)
+│   │   └── otel/{compose.yaml, collector.yaml}  # [verbatim] → .otel/ (§9.5)
 │   ├── seed/skills.json.tmpl        # [embed] default skill list, rendered in memory at init
 │   ├── gitignore/                   # [embed] vendored github/gitignore per language (Go, Python, VisualStudio, Node)
 │   └── golden/<key>/                # [embed] pinned snapshots + .forge-overlay/ per v1 stack
@@ -818,6 +899,7 @@ myproject/
 ├── .codex/hooks.json                   ├── .beads/            [delegate]
 ├── .forge/manifest.json   [render]     ├── .forge-infra-version   [render, legacy fallback]
 ├── mise.toml, lefthook.yml, .github/workflows/ci.yml
+├── .config/mise/conf.d/otel.toml       ├── .otel/{compose.yaml, collector.yaml}
 └── <composed golden tree>  vanilla + overlay, rendered
 ```
 
@@ -868,9 +950,10 @@ flowchart TD
 
 `forge upgrade` propagates managed static infrastructure files from the embedded template into an
 existing forge-scaffolded repository when the on-disk infrastructure version is behind the
-embedded version. `.claude/hooks/guard`, `.claude/hooks/secret-scan.sh`, and
-`.opencode/plugins/forge-hooks.js` are wholly forge-owned: nothing else writes to them, so they are
-overwritten unconditionally (blind byte-copy).
+embedded version. `.claude/hooks/guard`, `.claude/hooks/secret-scan.sh`,
+`.opencode/plugins/forge-hooks.js`, `.config/mise/conf.d/otel.toml`, `.otel/compose.yaml`, and
+`.otel/collector.yaml` (§9.5, ADR-0021) are wholly forge-owned: nothing else writes to them, so
+they are overwritten unconditionally (blind byte-copy).
 
 `.claude/settings.json` and `.codex/hooks.json` are **co-owned**: other tools (bd, notably) append
 their own entries into the same top-level `hooks` object. These two files are never blind-

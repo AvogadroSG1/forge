@@ -17,6 +17,13 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      # The otel task tests (test/otel_tasks_test.go) run `mise run otel*`
+      # under the runner's dash and skip when mise is absent. Only the mise
+      # binary is needed, so skip `mise install` of the root mise.toml.
+      - uses: jdx/mise-action@v2
+        with:
+          version: 2026.9.12
+          install: false
       - name: go test ./...
         run: |
           GOCACHE=$GITHUB_WORKSPACE/.cache/go-build go test ./... -count=1

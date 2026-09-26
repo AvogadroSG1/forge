@@ -30,7 +30,7 @@ API client points at `--api-base-url` (a third-party API or an existing backend)
 
 Each shipped stack is expected to scaffold a repo that can run `mise install` and `mise run ci` with at least one real passing test.
 
-Every stack's overlay also ships an env-gated OpenTelemetry bootstrap (traces + metrics) with a real test: providers are always installed, and OTLP/HTTP export turns on only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (see ADR-0020).
+Every stack's overlay also ships an env-gated OpenTelemetry bootstrap (traces + metrics) with a real test: providers are always installed, and OTLP/HTTP export turns on only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (see ADR-0020). Every repo also ships a `mise run otel` task that starts a shared, system-wide collector and always points the OTLP endpoints at it under `mise` (see ADR-0021).
 
 ## How It Works
 
@@ -298,6 +298,8 @@ GOCACHE=$PWD/.cache/go-build go test ./test -count=1
 bats test/secret-scan.bats
 # Integration smoke test for generated Go stacks (requires agent-fitness-functions on PATH)
 GOCACHE=$PWD/.cache/go-build go test -tags=integration -timeout 15m -run TestGeneratedGoStacksPassFitnessBaseline ./test/
+# Live Docker lifecycle test for the system-wide OTel collector (requires Docker; skipped unless set)
+FORGE_DOCKER_TESTS=1 GOCACHE=$PWD/.cache/go-build go test ./test/ -run OtelLifecycle -count=1 -timeout 10m
 ```
 
 ### BDD And Review Expectations

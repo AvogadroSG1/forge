@@ -1,81 +1,475 @@
 lockfile_version: '1'
-generated_at: '2026-08-20T02:39:54.007207+00:00'
-apm_version: 0.26.0
+generated_at: '2026-09-25T12:21:37.537147+00:00'
+apm_version: 0.31.0
 dependencies:
-- repo_url: _local/git-pushing
-  name: git-pushing
-  version: 0.0.0
+- repo_url: _local/codebase-design
+  name: codebase-design
+  version: unknown
   package_type: claude_skill
   deployed_files:
+  - .agents/skills/codebase-design
+  - .agents/skills/codebase-design/DEEPENING.md
+  - .agents/skills/codebase-design/DESIGN-IT-TWICE.md
+  - .agents/skills/codebase-design/SKILL.md
+  - .agents/skills/codebase-design/agents/openai.yaml
+  - .claude/skills/codebase-design
+  - .claude/skills/codebase-design/DEEPENING.md
+  - .claude/skills/codebase-design/DESIGN-IT-TWICE.md
+  - .claude/skills/codebase-design/SKILL.md
+  - .claude/skills/codebase-design/agents/openai.yaml
+  deployed_file_hashes:
+    .agents/skills/codebase-design/DEEPENING.md: sha256:125e6b77413ad2bc7cf7a772bc74336d580a50f9e797db2178ed133d62333d06
+    .agents/skills/codebase-design/DESIGN-IT-TWICE.md: sha256:09f9948ea7636a4d3704c5ab909762e876c0b39849eefb14d2e03a398cc9c7e7
+    .agents/skills/codebase-design/SKILL.md: sha256:a8d50abac5a4018f60e1d911d4b6f4e36454ca14d6c390c0695a578c7de65dad
+    .agents/skills/codebase-design/agents/openai.yaml: sha256:edebc9e4fcfe102114012575eaa9600b9b5fd08c311664f389c36e7bc717740f
+    .claude/skills/codebase-design/DEEPENING.md: sha256:125e6b77413ad2bc7cf7a772bc74336d580a50f9e797db2178ed133d62333d06
+    .claude/skills/codebase-design/DESIGN-IT-TWICE.md: sha256:09f9948ea7636a4d3704c5ab909762e876c0b39849eefb14d2e03a398cc9c7e7
+    .claude/skills/codebase-design/SKILL.md: sha256:a8d50abac5a4018f60e1d911d4b6f4e36454ca14d6c390c0695a578c7de65dad
+    .claude/skills/codebase-design/agents/openai.yaml: sha256:edebc9e4fcfe102114012575eaa9600b9b5fd08c311664f389c36e7bc717740f
+  source: local
+  local_path: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
+- repo_url: _local/diagnosing-bugs
+  name: diagnosing-bugs
+  version: unknown
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/diagnosing-bugs
+  - .agents/skills/diagnosing-bugs/SKILL.md
+  - .agents/skills/diagnosing-bugs/agents/openai.yaml
+  - .agents/skills/diagnosing-bugs/scripts/hitl-loop.template.sh
+  - .claude/skills/diagnosing-bugs
+  - .claude/skills/diagnosing-bugs/SKILL.md
+  - .claude/skills/diagnosing-bugs/agents/openai.yaml
+  - .claude/skills/diagnosing-bugs/scripts/hitl-loop.template.sh
+  deployed_file_hashes:
+    .agents/skills/diagnosing-bugs/SKILL.md: sha256:573142d28dc5a4d931dd4a6faa3e615e731f8e9cc65d2dd4468045a2efd6148c
+    .agents/skills/diagnosing-bugs/agents/openai.yaml: sha256:3e430dbe4334a87597488c060cb3dc3786bb00c9182877d6f5ec41f62490e90b
+    .agents/skills/diagnosing-bugs/scripts/hitl-loop.template.sh: sha256:18ae07e1cc49b32c71767e241a6e8de4be74ef21d5e3b7e39034d9c7335f2d80
+    .claude/skills/diagnosing-bugs/SKILL.md: sha256:573142d28dc5a4d931dd4a6faa3e615e731f8e9cc65d2dd4468045a2efd6148c
+    .claude/skills/diagnosing-bugs/agents/openai.yaml: sha256:3e430dbe4334a87597488c060cb3dc3786bb00c9182877d6f5ec41f62490e90b
+    .claude/skills/diagnosing-bugs/scripts/hitl-loop.template.sh: sha256:18ae07e1cc49b32c71767e241a6e8de4be74ef21d5e3b7e39034d9c7335f2d80
+  source: local
+  local_path: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/diagnosing-bugs
+- repo_url: _local/domain-modeling
+  name: domain-modeling
+  version: unknown
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/domain-modeling
+  - .agents/skills/domain-modeling/ADR-FORMAT.md
+  - .agents/skills/domain-modeling/CONTEXT-FORMAT.md
+  - .agents/skills/domain-modeling/SKILL.md
+  - .agents/skills/domain-modeling/agents/openai.yaml
+  - .claude/skills/domain-modeling
+  - .claude/skills/domain-modeling/ADR-FORMAT.md
+  - .claude/skills/domain-modeling/CONTEXT-FORMAT.md
+  - .claude/skills/domain-modeling/SKILL.md
+  - .claude/skills/domain-modeling/agents/openai.yaml
+  deployed_file_hashes:
+    .agents/skills/domain-modeling/ADR-FORMAT.md: sha256:f1f36cd3f8d3b6474ddd5855da4e233bfc4ae1a1c5024909ccf11871819a41b2
+    .agents/skills/domain-modeling/CONTEXT-FORMAT.md: sha256:b8cc318f2a4285b530e908b6bc43901c3c5cd11100362636bbc4216639bef597
+    .agents/skills/domain-modeling/SKILL.md: sha256:9617041db9b0f6606ecf974e2061c83596b05059b5bb20ddb884c60f147c70e9
+    .agents/skills/domain-modeling/agents/openai.yaml: sha256:f6bf2aa996c6e6f53fdd0708e18a0d16a56aed8322cca59fedbe3c0d2c75f06b
+    .claude/skills/domain-modeling/ADR-FORMAT.md: sha256:f1f36cd3f8d3b6474ddd5855da4e233bfc4ae1a1c5024909ccf11871819a41b2
+    .claude/skills/domain-modeling/CONTEXT-FORMAT.md: sha256:b8cc318f2a4285b530e908b6bc43901c3c5cd11100362636bbc4216639bef597
+    .claude/skills/domain-modeling/SKILL.md: sha256:9617041db9b0f6606ecf974e2061c83596b05059b5bb20ddb884c60f147c70e9
+    .claude/skills/domain-modeling/agents/openai.yaml: sha256:f6bf2aa996c6e6f53fdd0708e18a0d16a56aed8322cca59fedbe3c0d2c75f06b
+  source: local
+  local_path: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+- repo_url: _local/git-pushing
+  name: git-pushing
+  version: unknown
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/git-pushing
+  - .agents/skills/git-pushing/.opencode/commands/telemetry-inspect.md
+  - .agents/skills/git-pushing/.opencode/commands/telemetry-report.md
+  - .agents/skills/git-pushing/SKILL.md
+  - .agents/skills/git-pushing/scripts/smart_commit.sh
+  - .agents/skills/git-pushing/skillrun.yaml
   - .claude/skills/git-pushing
-  - .claude/skills/git-pushing/.DS_Store
   - .claude/skills/git-pushing/.opencode/commands/telemetry-inspect.md
   - .claude/skills/git-pushing/.opencode/commands/telemetry-report.md
   - .claude/skills/git-pushing/SKILL.md
   - .claude/skills/git-pushing/scripts/smart_commit.sh
   - .claude/skills/git-pushing/skillrun.yaml
-  - .codex/skills/git-pushing
-  - .codex/skills/git-pushing/.DS_Store
-  - .codex/skills/git-pushing/.opencode/commands/telemetry-inspect.md
-  - .codex/skills/git-pushing/.opencode/commands/telemetry-report.md
-  - .codex/skills/git-pushing/SKILL.md
-  - .codex/skills/git-pushing/scripts/smart_commit.sh
-  - .codex/skills/git-pushing/skillrun.yaml
-  - .opencode/skills/git-pushing
-  - .opencode/skills/git-pushing/.DS_Store
-  - .opencode/skills/git-pushing/.opencode/commands/telemetry-inspect.md
-  - .opencode/skills/git-pushing/.opencode/commands/telemetry-report.md
-  - .opencode/skills/git-pushing/SKILL.md
-  - .opencode/skills/git-pushing/scripts/smart_commit.sh
-  - .opencode/skills/git-pushing/skillrun.yaml
   deployed_file_hashes:
-    .claude/skills/git-pushing/.DS_Store: sha256:5cb90aa486e315769c62b592c2621a06b3a8e333a131bc1893a25f4308a50b42
+    .agents/skills/git-pushing/.opencode/commands/telemetry-inspect.md: sha256:bf451c37be6f6ca9d0c329f27ec5763881ad0f2c5126ac9a7dab6683446520e3
+    .agents/skills/git-pushing/.opencode/commands/telemetry-report.md: sha256:73455707008886b8e16d6138841b8edbe5e32e5d02a1e451609343f762b936cd
+    .agents/skills/git-pushing/SKILL.md: sha256:bcbc15bbd772b276b185b6a4dbd727bfd588d5bcebe62f4603f9262a2d15564e
+    .agents/skills/git-pushing/scripts/smart_commit.sh: sha256:4e62a45a4839de3cedf3f8a0dcc3205140bc73f7147e68d218c63eb1e48c2308
+    .agents/skills/git-pushing/skillrun.yaml: sha256:77a84c08391e689358f811025e393b980a92979d3774a57064caee6e9b2d7bd5
     .claude/skills/git-pushing/.opencode/commands/telemetry-inspect.md: sha256:bf451c37be6f6ca9d0c329f27ec5763881ad0f2c5126ac9a7dab6683446520e3
     .claude/skills/git-pushing/.opencode/commands/telemetry-report.md: sha256:73455707008886b8e16d6138841b8edbe5e32e5d02a1e451609343f762b936cd
     .claude/skills/git-pushing/SKILL.md: sha256:bcbc15bbd772b276b185b6a4dbd727bfd588d5bcebe62f4603f9262a2d15564e
     .claude/skills/git-pushing/scripts/smart_commit.sh: sha256:4e62a45a4839de3cedf3f8a0dcc3205140bc73f7147e68d218c63eb1e48c2308
     .claude/skills/git-pushing/skillrun.yaml: sha256:77a84c08391e689358f811025e393b980a92979d3774a57064caee6e9b2d7bd5
-    .codex/skills/git-pushing/.DS_Store: sha256:5cb90aa486e315769c62b592c2621a06b3a8e333a131bc1893a25f4308a50b42
-    .codex/skills/git-pushing/.opencode/commands/telemetry-inspect.md: sha256:bf451c37be6f6ca9d0c329f27ec5763881ad0f2c5126ac9a7dab6683446520e3
-    .codex/skills/git-pushing/.opencode/commands/telemetry-report.md: sha256:73455707008886b8e16d6138841b8edbe5e32e5d02a1e451609343f762b936cd
-    .codex/skills/git-pushing/SKILL.md: sha256:bcbc15bbd772b276b185b6a4dbd727bfd588d5bcebe62f4603f9262a2d15564e
-    .codex/skills/git-pushing/scripts/smart_commit.sh: sha256:4e62a45a4839de3cedf3f8a0dcc3205140bc73f7147e68d218c63eb1e48c2308
-    .codex/skills/git-pushing/skillrun.yaml: sha256:77a84c08391e689358f811025e393b980a92979d3774a57064caee6e9b2d7bd5
-    .opencode/skills/git-pushing/.DS_Store: sha256:5cb90aa486e315769c62b592c2621a06b3a8e333a131bc1893a25f4308a50b42
-    .opencode/skills/git-pushing/.opencode/commands/telemetry-inspect.md: sha256:bf451c37be6f6ca9d0c329f27ec5763881ad0f2c5126ac9a7dab6683446520e3
-    .opencode/skills/git-pushing/.opencode/commands/telemetry-report.md: sha256:73455707008886b8e16d6138841b8edbe5e32e5d02a1e451609343f762b936cd
-    .opencode/skills/git-pushing/SKILL.md: sha256:bcbc15bbd772b276b185b6a4dbd727bfd588d5bcebe62f4603f9262a2d15564e
-    .opencode/skills/git-pushing/scripts/smart_commit.sh: sha256:4e62a45a4839de3cedf3f8a0dcc3205140bc73f7147e68d218c63eb1e48c2308
-    .opencode/skills/git-pushing/skillrun.yaml: sha256:77a84c08391e689358f811025e393b980a92979d3774a57064caee6e9b2d7bd5
   source: local
-  local_path: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
+  local_path: /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
+- repo_url: _local/grill-with-docs
+  name: grill-with-docs
+  version: unknown
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/grill-with-docs
+  - .agents/skills/grill-with-docs/SKILL.md
+  - .agents/skills/grill-with-docs/agents/openai.yaml
+  - .claude/skills/grill-with-docs
+  - .claude/skills/grill-with-docs/SKILL.md
+  - .claude/skills/grill-with-docs/agents/openai.yaml
+  deployed_file_hashes:
+    .agents/skills/grill-with-docs/SKILL.md: sha256:7de372c13488f1ee96cc11cd8907b56b6809cc93eef776eeddd37de6b6cbe3fe
+    .agents/skills/grill-with-docs/agents/openai.yaml: sha256:94cd0ab161fb468a836349f5ed482ba58ce8e709a05c57ce533d739dbd35cca9
+    .claude/skills/grill-with-docs/SKILL.md: sha256:7de372c13488f1ee96cc11cd8907b56b6809cc93eef776eeddd37de6b6cbe3fe
+    .claude/skills/grill-with-docs/agents/openai.yaml: sha256:94cd0ab161fb468a836349f5ed482ba58ce8e709a05c57ce533d739dbd35cca9
+  source: local
+  local_path: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/grill-with-docs
+- repo_url: _local/handoff
+  name: handoff
+  version: unknown
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/handoff
+  - .agents/skills/handoff/SKILL.md
+  - .agents/skills/handoff/agents/openai.yaml
+  - .claude/skills/handoff
+  - .claude/skills/handoff/SKILL.md
+  - .claude/skills/handoff/agents/openai.yaml
+  deployed_file_hashes:
+    .agents/skills/handoff/SKILL.md: sha256:7c62de979fdc7ac32fb5ddb2146156c917f80ee070d30fadc9d40343c4b6ed25
+    .agents/skills/handoff/agents/openai.yaml: sha256:5c479fd562c691851690e8b18c8501045bef0943c10743d636b2fae26add1d28
+    .claude/skills/handoff/SKILL.md: sha256:7c62de979fdc7ac32fb5ddb2146156c917f80ee070d30fadc9d40343c4b6ed25
+    .claude/skills/handoff/agents/openai.yaml: sha256:5c479fd562c691851690e8b18c8501045bef0943c10743d636b2fae26add1d28
+  source: local
+  local_path: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/handoff
+- repo_url: _local/implement
+  name: implement
+  version: unknown
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/implement
+  - .agents/skills/implement/SKILL.md
+  - .agents/skills/implement/agents/openai.yaml
+  - .claude/skills/implement
+  - .claude/skills/implement/SKILL.md
+  - .claude/skills/implement/agents/openai.yaml
+  deployed_file_hashes:
+    .agents/skills/implement/SKILL.md: sha256:6d3fd9e83b8f36e5213854779db49b256a457a7ebb4a503e53fa7dcff696adc3
+    .agents/skills/implement/agents/openai.yaml: sha256:8970a8596ade0c28ab427f41a4ea242d6bdf6186c59ebf55e1238dbecaab79dc
+    .claude/skills/implement/SKILL.md: sha256:6d3fd9e83b8f36e5213854779db49b256a457a7ebb4a503e53fa7dcff696adc3
+    .claude/skills/implement/agents/openai.yaml: sha256:8970a8596ade0c28ab427f41a4ea242d6bdf6186c59ebf55e1238dbecaab79dc
+  source: local
+  local_path: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/implement
+- repo_url: _local/improve-codebase-architecture
+  name: improve-codebase-architecture
+  version: unknown
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/improve-codebase-architecture
+  - .agents/skills/improve-codebase-architecture/HTML-REPORT.md
+  - .agents/skills/improve-codebase-architecture/SKILL.md
+  - .agents/skills/improve-codebase-architecture/agents/openai.yaml
+  - .claude/skills/improve-codebase-architecture
+  - .claude/skills/improve-codebase-architecture/HTML-REPORT.md
+  - .claude/skills/improve-codebase-architecture/SKILL.md
+  - .claude/skills/improve-codebase-architecture/agents/openai.yaml
+  deployed_file_hashes:
+    .agents/skills/improve-codebase-architecture/HTML-REPORT.md: sha256:0b0936104158abeef7246ff6cbabefa4dc055f17589f2833f2d93001421910a1
+    .agents/skills/improve-codebase-architecture/SKILL.md: sha256:387f38d21367761c94d4b4dcea9e9d7d3e31f896c4decebf4984483e42125cfc
+    .agents/skills/improve-codebase-architecture/agents/openai.yaml: sha256:c8cb20f68ebf0edb4e497bc11ae5fcaa196004e661cd189015b04f4109ced7f1
+    .claude/skills/improve-codebase-architecture/HTML-REPORT.md: sha256:0b0936104158abeef7246ff6cbabefa4dc055f17589f2833f2d93001421910a1
+    .claude/skills/improve-codebase-architecture/SKILL.md: sha256:387f38d21367761c94d4b4dcea9e9d7d3e31f896c4decebf4984483e42125cfc
+    .claude/skills/improve-codebase-architecture/agents/openai.yaml: sha256:c8cb20f68ebf0edb4e497bc11ae5fcaa196004e661cd189015b04f4109ced7f1
+  source: local
+  local_path: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/improve-codebase-architecture
+- repo_url: _local/resolving-merge-conflicts
+  name: resolving-merge-conflicts
+  version: unknown
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/resolving-merge-conflicts
+  - .agents/skills/resolving-merge-conflicts/SKILL.md
+  - .agents/skills/resolving-merge-conflicts/agents/openai.yaml
+  - .claude/skills/resolving-merge-conflicts
+  - .claude/skills/resolving-merge-conflicts/SKILL.md
+  - .claude/skills/resolving-merge-conflicts/agents/openai.yaml
+  deployed_file_hashes:
+    .agents/skills/resolving-merge-conflicts/SKILL.md: sha256:c7c9ba81362a786aac05d2223123bf1bd2f8a99c3243a72882ede9c68bedfb24
+    .agents/skills/resolving-merge-conflicts/agents/openai.yaml: sha256:a1f4f96838f2ed6282eb28abbbf99029cb8fadce552baf53da90a025b8bffddf
+    .claude/skills/resolving-merge-conflicts/SKILL.md: sha256:c7c9ba81362a786aac05d2223123bf1bd2f8a99c3243a72882ede9c68bedfb24
+    .claude/skills/resolving-merge-conflicts/agents/openai.yaml: sha256:a1f4f96838f2ed6282eb28abbbf99029cb8fadce552baf53da90a025b8bffddf
+  source: local
+  local_path: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/resolving-merge-conflicts
+- repo_url: _local/tdd
+  name: tdd
+  version: unknown
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/tdd
+  - .agents/skills/tdd/SKILL.md
+  - .agents/skills/tdd/agents/openai.yaml
+  - .agents/skills/tdd/mocking.md
+  - .agents/skills/tdd/tests.md
+  - .claude/skills/tdd
+  - .claude/skills/tdd/SKILL.md
+  - .claude/skills/tdd/agents/openai.yaml
+  - .claude/skills/tdd/mocking.md
+  - .claude/skills/tdd/tests.md
+  deployed_file_hashes:
+    .agents/skills/tdd/SKILL.md: sha256:6875cbca6b7d17be635dc9b457cc6363125f85cef26f443991b77c7d9eb430d2
+    .agents/skills/tdd/agents/openai.yaml: sha256:ea6f01cf1b8c06a4b0f5b649d74b1b8ce8685e72af1b38d70d877693e092af0b
+    .agents/skills/tdd/mocking.md: sha256:3ceb807fdf4a47d6a93d4d9a891e5ba6d362a6247bd08adc451feebfc17361ef
+    .agents/skills/tdd/tests.md: sha256:859f9e592c188fda4fc7277dd180e4ce9c7a2e13f6efe1f6f29eccc9d28c106a
+    .claude/skills/tdd/SKILL.md: sha256:6875cbca6b7d17be635dc9b457cc6363125f85cef26f443991b77c7d9eb430d2
+    .claude/skills/tdd/agents/openai.yaml: sha256:ea6f01cf1b8c06a4b0f5b649d74b1b8ce8685e72af1b38d70d877693e092af0b
+    .claude/skills/tdd/mocking.md: sha256:3ceb807fdf4a47d6a93d4d9a891e5ba6d362a6247bd08adc451feebfc17361ef
+    .claude/skills/tdd/tests.md: sha256:859f9e592c188fda4fc7277dd180e4ce9c7a2e13f6efe1f6f29eccc9d28c106a
+  source: local
+  local_path: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+- repo_url: _local/to-spec
+  name: to-spec
+  version: unknown
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/to-spec
+  - .agents/skills/to-spec/SKILL.md
+  - .agents/skills/to-spec/agents/openai.yaml
+  - .claude/skills/to-spec
+  - .claude/skills/to-spec/SKILL.md
+  - .claude/skills/to-spec/agents/openai.yaml
+  deployed_file_hashes:
+    .agents/skills/to-spec/SKILL.md: sha256:69ae8bd0ee33d4d350e50eed68f8c958c4b95ffa502ad90e7757e95e7e21419d
+    .agents/skills/to-spec/agents/openai.yaml: sha256:1c5b4d1e3d8e52287ef19cc2742fdbbfae1914ac75d33af3e4c8174f08cc55bb
+    .claude/skills/to-spec/SKILL.md: sha256:69ae8bd0ee33d4d350e50eed68f8c958c4b95ffa502ad90e7757e95e7e21419d
+    .claude/skills/to-spec/agents/openai.yaml: sha256:1c5b4d1e3d8e52287ef19cc2742fdbbfae1914ac75d33af3e4c8174f08cc55bb
+  source: local
+  local_path: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-spec
+- repo_url: _local/to-tickets
+  name: to-tickets
+  version: unknown
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/to-tickets
+  - .agents/skills/to-tickets/SKILL.md
+  - .agents/skills/to-tickets/agents/openai.yaml
+  - .claude/skills/to-tickets
+  - .claude/skills/to-tickets/SKILL.md
+  - .claude/skills/to-tickets/agents/openai.yaml
+  deployed_file_hashes:
+    .agents/skills/to-tickets/SKILL.md: sha256:7d211a9262a741b62c70e06dafb507732f5927cca6839391a4fd9f47ace98984
+    .agents/skills/to-tickets/agents/openai.yaml: sha256:21bc6215fffcd7614e9f772bb1760e87cc5fc7dcc707e7d282bc9414267a6090
+    .claude/skills/to-tickets/SKILL.md: sha256:7d211a9262a741b62c70e06dafb507732f5927cca6839391a4fd9f47ace98984
+    .claude/skills/to-tickets/agents/openai.yaml: sha256:21bc6215fffcd7614e9f772bb1760e87cc5fc7dcc707e7d282bc9414267a6090
+  source: local
+  local_path: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-tickets
+- repo_url: _local/triage
+  name: triage
+  version: unknown
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/triage
+  - .agents/skills/triage/AGENT-BRIEF.md
+  - .agents/skills/triage/OUT-OF-SCOPE.md
+  - .agents/skills/triage/SKILL.md
+  - .agents/skills/triage/agents/openai.yaml
+  - .claude/skills/triage
+  - .claude/skills/triage/AGENT-BRIEF.md
+  - .claude/skills/triage/OUT-OF-SCOPE.md
+  - .claude/skills/triage/SKILL.md
+  - .claude/skills/triage/agents/openai.yaml
+  deployed_file_hashes:
+    .agents/skills/triage/AGENT-BRIEF.md: sha256:5b78d347cc53f6bcf7b875106005ccf5315055fa4cf75eb28d41e96ee426d27b
+    .agents/skills/triage/OUT-OF-SCOPE.md: sha256:2526f998fd7ca5e956d3f6f234bcc2431a5971ee769f1148ddc60b92f04d5914
+    .agents/skills/triage/SKILL.md: sha256:e52a18163b7b76431393d89c414426b202cacc812f49f95d540d33f2a058dde1
+    .agents/skills/triage/agents/openai.yaml: sha256:2e683717720cf456d165d0bb1a68bb600d0b6a8ccb61841c172e50d26f95351c
+    .claude/skills/triage/AGENT-BRIEF.md: sha256:5b78d347cc53f6bcf7b875106005ccf5315055fa4cf75eb28d41e96ee426d27b
+    .claude/skills/triage/OUT-OF-SCOPE.md: sha256:2526f998fd7ca5e956d3f6f234bcc2431a5971ee769f1148ddc60b92f04d5914
+    .claude/skills/triage/SKILL.md: sha256:e52a18163b7b76431393d89c414426b202cacc812f49f95d540d33f2a058dde1
+    .claude/skills/triage/agents/openai.yaml: sha256:2e683717720cf456d165d0bb1a68bb600d0b6a8ccb61841c172e50d26f95351c
+  source: local
+  local_path: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+- repo_url: _local/writing-skills
+  name: writing-skills
+  version: unknown
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/writing-skills
+  - .agents/skills/writing-skills/SKILL.md
+  - .agents/skills/writing-skills/anthropic-best-practices.md
+  - .agents/skills/writing-skills/examples/CLAUDE_MD_TESTING.md
+  - .agents/skills/writing-skills/graphviz-conventions.dot
+  - .agents/skills/writing-skills/persuasion-principles.md
+  - .agents/skills/writing-skills/render-graphs.js
+  - .agents/skills/writing-skills/testing-skills-with-subagents.md
+  - .claude/skills/writing-skills
+  - .claude/skills/writing-skills/SKILL.md
+  - .claude/skills/writing-skills/anthropic-best-practices.md
+  - .claude/skills/writing-skills/examples/CLAUDE_MD_TESTING.md
+  - .claude/skills/writing-skills/graphviz-conventions.dot
+  - .claude/skills/writing-skills/persuasion-principles.md
+  - .claude/skills/writing-skills/render-graphs.js
+  - .claude/skills/writing-skills/testing-skills-with-subagents.md
+  deployed_file_hashes:
+    .agents/skills/writing-skills/SKILL.md: sha256:6ffe287552c1ca9c050e1226408282535611365264fa05a6da81ddc70729a37e
+    .agents/skills/writing-skills/anthropic-best-practices.md: sha256:3e8b909316d7ff2084f04947e85d4fd1691c9ceb02105542139fe2e3a0e26c26
+    .agents/skills/writing-skills/examples/CLAUDE_MD_TESTING.md: sha256:0b379a3415e185d3c434b3ad283d8aa132f3022c2a4f210f168865b5986bcef0
+    .agents/skills/writing-skills/graphviz-conventions.dot: sha256:e2890a593c91370e384b42f2f67b1a6232c9e69dddea7891a0c1c46d7b20b694
+    .agents/skills/writing-skills/persuasion-principles.md: sha256:c3c84f572a51dd8b6d4fc6e5cbdc2bc3b9e07ba381a45bdabfce7ad2894dd828
+    .agents/skills/writing-skills/render-graphs.js: sha256:ccda971a87bb185f8febf81c56b556a20d026fa980c17b35fa3e8824fbb37852
+    .agents/skills/writing-skills/testing-skills-with-subagents.md: sha256:c711346852c911b24a84aa161e0cff06a4cd7f4e2fa9e9c0a266cead5afcbade
+    .claude/skills/writing-skills/SKILL.md: sha256:6ffe287552c1ca9c050e1226408282535611365264fa05a6da81ddc70729a37e
+    .claude/skills/writing-skills/anthropic-best-practices.md: sha256:3e8b909316d7ff2084f04947e85d4fd1691c9ceb02105542139fe2e3a0e26c26
+    .claude/skills/writing-skills/examples/CLAUDE_MD_TESTING.md: sha256:0b379a3415e185d3c434b3ad283d8aa132f3022c2a4f210f168865b5986bcef0
+    .claude/skills/writing-skills/graphviz-conventions.dot: sha256:e2890a593c91370e384b42f2f67b1a6232c9e69dddea7891a0c1c46d7b20b694
+    .claude/skills/writing-skills/persuasion-principles.md: sha256:c3c84f572a51dd8b6d4fc6e5cbdc2bc3b9e07ba381a45bdabfce7ad2894dd828
+    .claude/skills/writing-skills/render-graphs.js: sha256:ccda971a87bb185f8febf81c56b556a20d026fa980c17b35fa3e8824fbb37852
+    .claude/skills/writing-skills/testing-skills-with-subagents.md: sha256:c711346852c911b24a84aa161e0cff06a4cd7f4e2fa9e9c0a266cead5afcbade
+  source: local
+  local_path: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
 deployments:
+- kind: project-relative
+  target: claude
+  value: .claude/skills/codebase-design
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/codebase-design/DEEPENING.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
+  content_hash: sha256:125e6b77413ad2bc7cf7a772bc74336d580a50f9e797db2178ed133d62333d06
+- kind: project-relative
+  target: claude
+  value: .claude/skills/codebase-design/DESIGN-IT-TWICE.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
+  content_hash: sha256:09f9948ea7636a4d3704c5ab909762e876c0b39849eefb14d2e03a398cc9c7e7
+- kind: project-relative
+  target: claude
+  value: .claude/skills/codebase-design/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
+  content_hash: sha256:a8d50abac5a4018f60e1d911d4b6f4e36454ca14d6c390c0695a578c7de65dad
+- kind: project-relative
+  target: claude
+  value: .claude/skills/codebase-design/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
+  content_hash: sha256:edebc9e4fcfe102114012575eaa9600b9b5fd08c311664f389c36e7bc717740f
+- kind: project-relative
+  target: claude
+  value: .claude/skills/diagnosing-bugs
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/diagnosing-bugs
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/diagnosing-bugs
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/diagnosing-bugs/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/diagnosing-bugs
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/diagnosing-bugs
+  content_hash: sha256:573142d28dc5a4d931dd4a6faa3e615e731f8e9cc65d2dd4468045a2efd6148c
+- kind: project-relative
+  target: claude
+  value: .claude/skills/diagnosing-bugs/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/diagnosing-bugs
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/diagnosing-bugs
+  content_hash: sha256:3e430dbe4334a87597488c060cb3dc3786bb00c9182877d6f5ec41f62490e90b
+- kind: project-relative
+  target: claude
+  value: .claude/skills/diagnosing-bugs/scripts/hitl-loop.template.sh
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/diagnosing-bugs
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/diagnosing-bugs
+  content_hash: sha256:18ae07e1cc49b32c71767e241a6e8de4be74ef21d5e3b7e39034d9c7335f2d80
+- kind: project-relative
+  target: claude
+  value: .claude/skills/domain-modeling
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/domain-modeling/ADR-FORMAT.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+  content_hash: sha256:f1f36cd3f8d3b6474ddd5855da4e233bfc4ae1a1c5024909ccf11871819a41b2
+- kind: project-relative
+  target: claude
+  value: .claude/skills/domain-modeling/CONTEXT-FORMAT.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+  content_hash: sha256:b8cc318f2a4285b530e908b6bc43901c3c5cd11100362636bbc4216639bef597
+- kind: project-relative
+  target: claude
+  value: .claude/skills/domain-modeling/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+  content_hash: sha256:9617041db9b0f6606ecf974e2061c83596b05059b5bb20ddb884c60f147c70e9
+- kind: project-relative
+  target: claude
+  value: .claude/skills/domain-modeling/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+  content_hash: sha256:f6bf2aa996c6e6f53fdd0708e18a0d16a56aed8322cca59fedbe3c0d2c75f06b
 - kind: project-relative
   target: claude
   value: .claude/skills/git-pushing
   runtime: null
   scope: project
   owners:
-  - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  active_owner: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
+  - /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
   content_hash: null
-- kind: project-relative
-  target: claude
-  value: .claude/skills/git-pushing/.DS_Store
-  runtime: null
-  scope: project
-  owners:
-  - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  active_owner: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  content_hash: sha256:5cb90aa486e315769c62b592c2621a06b3a8e333a131bc1893a25f4308a50b42
 - kind: project-relative
   target: claude
   value: .claude/skills/git-pushing/.opencode/commands/telemetry-inspect.md
   runtime: null
   scope: project
   owners:
-  - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  active_owner: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
+  - /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
   content_hash: sha256:bf451c37be6f6ca9d0c329f27ec5763881ad0f2c5126ac9a7dab6683446520e3
 - kind: project-relative
   target: claude
@@ -83,8 +477,8 @@ deployments:
   runtime: null
   scope: project
   owners:
-  - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  active_owner: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
+  - /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
   content_hash: sha256:73455707008886b8e16d6138841b8edbe5e32e5d02a1e451609343f762b936cd
 - kind: project-relative
   target: claude
@@ -92,8 +486,8 @@ deployments:
   runtime: null
   scope: project
   owners:
-  - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  active_owner: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
+  - /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
   content_hash: sha256:bcbc15bbd772b276b185b6a4dbd727bfd588d5bcebe62f4603f9262a2d15564e
 - kind: project-relative
   target: claude
@@ -101,8 +495,8 @@ deployments:
   runtime: null
   scope: project
   owners:
-  - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  active_owner: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
+  - /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
   content_hash: sha256:4e62a45a4839de3cedf3f8a0dcc3205140bc73f7147e68d218c63eb1e48c2308
 - kind: project-relative
   target: claude
@@ -110,132 +504,906 @@ deployments:
   runtime: null
   scope: project
   owners:
-  - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  active_owner: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
+  - /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
   content_hash: sha256:77a84c08391e689358f811025e393b980a92979d3774a57064caee6e9b2d7bd5
 - kind: project-relative
-  target: codex
-  value: .codex/skills/git-pushing
+  target: claude
+  value: .claude/skills/grill-with-docs
   runtime: null
   scope: project
   owners:
-  - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  active_owner: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/grill-with-docs
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/grill-with-docs
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/grill-with-docs/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/grill-with-docs
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/grill-with-docs
+  content_hash: sha256:7de372c13488f1ee96cc11cd8907b56b6809cc93eef776eeddd37de6b6cbe3fe
+- kind: project-relative
+  target: claude
+  value: .claude/skills/grill-with-docs/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/grill-with-docs
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/grill-with-docs
+  content_hash: sha256:94cd0ab161fb468a836349f5ed482ba58ce8e709a05c57ce533d739dbd35cca9
+- kind: project-relative
+  target: claude
+  value: .claude/skills/handoff
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/handoff
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/handoff
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/handoff/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/handoff
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/handoff
+  content_hash: sha256:7c62de979fdc7ac32fb5ddb2146156c917f80ee070d30fadc9d40343c4b6ed25
+- kind: project-relative
+  target: claude
+  value: .claude/skills/handoff/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/handoff
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/handoff
+  content_hash: sha256:5c479fd562c691851690e8b18c8501045bef0943c10743d636b2fae26add1d28
+- kind: project-relative
+  target: claude
+  value: .claude/skills/implement
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/implement
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/implement
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/implement/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/implement
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/implement
+  content_hash: sha256:6d3fd9e83b8f36e5213854779db49b256a457a7ebb4a503e53fa7dcff696adc3
+- kind: project-relative
+  target: claude
+  value: .claude/skills/implement/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/implement
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/implement
+  content_hash: sha256:8970a8596ade0c28ab427f41a4ea242d6bdf6186c59ebf55e1238dbecaab79dc
+- kind: project-relative
+  target: claude
+  value: .claude/skills/improve-codebase-architecture
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/improve-codebase-architecture
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/improve-codebase-architecture
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/improve-codebase-architecture/HTML-REPORT.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/improve-codebase-architecture
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/improve-codebase-architecture
+  content_hash: sha256:0b0936104158abeef7246ff6cbabefa4dc055f17589f2833f2d93001421910a1
+- kind: project-relative
+  target: claude
+  value: .claude/skills/improve-codebase-architecture/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/improve-codebase-architecture
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/improve-codebase-architecture
+  content_hash: sha256:387f38d21367761c94d4b4dcea9e9d7d3e31f896c4decebf4984483e42125cfc
+- kind: project-relative
+  target: claude
+  value: .claude/skills/improve-codebase-architecture/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/improve-codebase-architecture
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/improve-codebase-architecture
+  content_hash: sha256:c8cb20f68ebf0edb4e497bc11ae5fcaa196004e661cd189015b04f4109ced7f1
+- kind: project-relative
+  target: claude
+  value: .claude/skills/resolving-merge-conflicts
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/resolving-merge-conflicts
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/resolving-merge-conflicts
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/resolving-merge-conflicts/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/resolving-merge-conflicts
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/resolving-merge-conflicts
+  content_hash: sha256:c7c9ba81362a786aac05d2223123bf1bd2f8a99c3243a72882ede9c68bedfb24
+- kind: project-relative
+  target: claude
+  value: .claude/skills/resolving-merge-conflicts/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/resolving-merge-conflicts
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/resolving-merge-conflicts
+  content_hash: sha256:a1f4f96838f2ed6282eb28abbbf99029cb8fadce552baf53da90a025b8bffddf
+- kind: project-relative
+  target: claude
+  value: .claude/skills/tdd
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/tdd/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+  content_hash: sha256:6875cbca6b7d17be635dc9b457cc6363125f85cef26f443991b77c7d9eb430d2
+- kind: project-relative
+  target: claude
+  value: .claude/skills/tdd/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+  content_hash: sha256:ea6f01cf1b8c06a4b0f5b649d74b1b8ce8685e72af1b38d70d877693e092af0b
+- kind: project-relative
+  target: claude
+  value: .claude/skills/tdd/mocking.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+  content_hash: sha256:3ceb807fdf4a47d6a93d4d9a891e5ba6d362a6247bd08adc451feebfc17361ef
+- kind: project-relative
+  target: claude
+  value: .claude/skills/tdd/tests.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+  content_hash: sha256:859f9e592c188fda4fc7277dd180e4ce9c7a2e13f6efe1f6f29eccc9d28c106a
+- kind: project-relative
+  target: claude
+  value: .claude/skills/to-spec
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-spec
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-spec
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/to-spec/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-spec
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-spec
+  content_hash: sha256:69ae8bd0ee33d4d350e50eed68f8c958c4b95ffa502ad90e7757e95e7e21419d
+- kind: project-relative
+  target: claude
+  value: .claude/skills/to-spec/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-spec
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-spec
+  content_hash: sha256:1c5b4d1e3d8e52287ef19cc2742fdbbfae1914ac75d33af3e4c8174f08cc55bb
+- kind: project-relative
+  target: claude
+  value: .claude/skills/to-tickets
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-tickets
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-tickets
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/to-tickets/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-tickets
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-tickets
+  content_hash: sha256:7d211a9262a741b62c70e06dafb507732f5927cca6839391a4fd9f47ace98984
+- kind: project-relative
+  target: claude
+  value: .claude/skills/to-tickets/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-tickets
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-tickets
+  content_hash: sha256:21bc6215fffcd7614e9f772bb1760e87cc5fc7dcc707e7d282bc9414267a6090
+- kind: project-relative
+  target: claude
+  value: .claude/skills/triage
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/triage/AGENT-BRIEF.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+  content_hash: sha256:5b78d347cc53f6bcf7b875106005ccf5315055fa4cf75eb28d41e96ee426d27b
+- kind: project-relative
+  target: claude
+  value: .claude/skills/triage/OUT-OF-SCOPE.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+  content_hash: sha256:2526f998fd7ca5e956d3f6f234bcc2431a5971ee769f1148ddc60b92f04d5914
+- kind: project-relative
+  target: claude
+  value: .claude/skills/triage/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+  content_hash: sha256:e52a18163b7b76431393d89c414426b202cacc812f49f95d540d33f2a058dde1
+- kind: project-relative
+  target: claude
+  value: .claude/skills/triage/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+  content_hash: sha256:2e683717720cf456d165d0bb1a68bb600d0b6a8ccb61841c172e50d26f95351c
+- kind: project-relative
+  target: claude
+  value: .claude/skills/writing-skills
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/writing-skills/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  content_hash: sha256:6ffe287552c1ca9c050e1226408282535611365264fa05a6da81ddc70729a37e
+- kind: project-relative
+  target: claude
+  value: .claude/skills/writing-skills/anthropic-best-practices.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  content_hash: sha256:3e8b909316d7ff2084f04947e85d4fd1691c9ceb02105542139fe2e3a0e26c26
+- kind: project-relative
+  target: claude
+  value: .claude/skills/writing-skills/examples/CLAUDE_MD_TESTING.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  content_hash: sha256:0b379a3415e185d3c434b3ad283d8aa132f3022c2a4f210f168865b5986bcef0
+- kind: project-relative
+  target: claude
+  value: .claude/skills/writing-skills/graphviz-conventions.dot
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  content_hash: sha256:e2890a593c91370e384b42f2f67b1a6232c9e69dddea7891a0c1c46d7b20b694
+- kind: project-relative
+  target: claude
+  value: .claude/skills/writing-skills/persuasion-principles.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  content_hash: sha256:c3c84f572a51dd8b6d4fc6e5cbdc2bc3b9e07ba381a45bdabfce7ad2894dd828
+- kind: project-relative
+  target: claude
+  value: .claude/skills/writing-skills/render-graphs.js
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  content_hash: sha256:ccda971a87bb185f8febf81c56b556a20d026fa980c17b35fa3e8824fbb37852
+- kind: project-relative
+  target: claude
+  value: .claude/skills/writing-skills/testing-skills-with-subagents.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  content_hash: sha256:c711346852c911b24a84aa161e0cff06a4cd7f4e2fa9e9c0a266cead5afcbade
+- kind: project-relative
+  target: codex
+  value: .agents/skills/codebase-design
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
   content_hash: null
 - kind: project-relative
   target: codex
-  value: .codex/skills/git-pushing/.DS_Store
+  value: .agents/skills/codebase-design/DEEPENING.md
   runtime: null
   scope: project
   owners:
-  - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  active_owner: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  content_hash: sha256:5cb90aa486e315769c62b592c2621a06b3a8e333a131bc1893a25f4308a50b42
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
+  content_hash: sha256:125e6b77413ad2bc7cf7a772bc74336d580a50f9e797db2178ed133d62333d06
 - kind: project-relative
   target: codex
-  value: .codex/skills/git-pushing/.opencode/commands/telemetry-inspect.md
+  value: .agents/skills/codebase-design/DESIGN-IT-TWICE.md
   runtime: null
   scope: project
   owners:
-  - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  active_owner: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  content_hash: sha256:bf451c37be6f6ca9d0c329f27ec5763881ad0f2c5126ac9a7dab6683446520e3
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
+  content_hash: sha256:09f9948ea7636a4d3704c5ab909762e876c0b39849eefb14d2e03a398cc9c7e7
 - kind: project-relative
   target: codex
-  value: .codex/skills/git-pushing/.opencode/commands/telemetry-report.md
+  value: .agents/skills/codebase-design/SKILL.md
   runtime: null
   scope: project
   owners:
-  - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  active_owner: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  content_hash: sha256:73455707008886b8e16d6138841b8edbe5e32e5d02a1e451609343f762b936cd
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
+  content_hash: sha256:a8d50abac5a4018f60e1d911d4b6f4e36454ca14d6c390c0695a578c7de65dad
 - kind: project-relative
   target: codex
-  value: .codex/skills/git-pushing/SKILL.md
+  value: .agents/skills/codebase-design/agents/openai.yaml
   runtime: null
   scope: project
   owners:
-  - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  active_owner: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  content_hash: sha256:bcbc15bbd772b276b185b6a4dbd727bfd588d5bcebe62f4603f9262a2d15564e
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
+  content_hash: sha256:edebc9e4fcfe102114012575eaa9600b9b5fd08c311664f389c36e7bc717740f
 - kind: project-relative
   target: codex
-  value: .codex/skills/git-pushing/scripts/smart_commit.sh
+  value: .agents/skills/diagnosing-bugs
   runtime: null
   scope: project
   owners:
-  - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  active_owner: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  content_hash: sha256:4e62a45a4839de3cedf3f8a0dcc3205140bc73f7147e68d218c63eb1e48c2308
-- kind: project-relative
-  target: codex
-  value: .codex/skills/git-pushing/skillrun.yaml
-  runtime: null
-  scope: project
-  owners:
-  - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  active_owner: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  content_hash: sha256:77a84c08391e689358f811025e393b980a92979d3774a57064caee6e9b2d7bd5
-- kind: project-relative
-  target: opencode
-  value: .opencode/skills/git-pushing
-  runtime: null
-  scope: project
-  owners:
-  - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  active_owner: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/diagnosing-bugs
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/diagnosing-bugs
   content_hash: null
 - kind: project-relative
-  target: opencode
-  value: .opencode/skills/git-pushing/.DS_Store
+  target: codex
+  value: .agents/skills/diagnosing-bugs/SKILL.md
   runtime: null
   scope: project
   owners:
-  - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  active_owner: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  content_hash: sha256:5cb90aa486e315769c62b592c2621a06b3a8e333a131bc1893a25f4308a50b42
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/diagnosing-bugs
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/diagnosing-bugs
+  content_hash: sha256:573142d28dc5a4d931dd4a6faa3e615e731f8e9cc65d2dd4468045a2efd6148c
 - kind: project-relative
-  target: opencode
-  value: .opencode/skills/git-pushing/.opencode/commands/telemetry-inspect.md
+  target: codex
+  value: .agents/skills/diagnosing-bugs/agents/openai.yaml
   runtime: null
   scope: project
   owners:
-  - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  active_owner: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/diagnosing-bugs
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/diagnosing-bugs
+  content_hash: sha256:3e430dbe4334a87597488c060cb3dc3786bb00c9182877d6f5ec41f62490e90b
+- kind: project-relative
+  target: codex
+  value: .agents/skills/diagnosing-bugs/scripts/hitl-loop.template.sh
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/diagnosing-bugs
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/diagnosing-bugs
+  content_hash: sha256:18ae07e1cc49b32c71767e241a6e8de4be74ef21d5e3b7e39034d9c7335f2d80
+- kind: project-relative
+  target: codex
+  value: .agents/skills/domain-modeling
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+  content_hash: null
+- kind: project-relative
+  target: codex
+  value: .agents/skills/domain-modeling/ADR-FORMAT.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+  content_hash: sha256:f1f36cd3f8d3b6474ddd5855da4e233bfc4ae1a1c5024909ccf11871819a41b2
+- kind: project-relative
+  target: codex
+  value: .agents/skills/domain-modeling/CONTEXT-FORMAT.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+  content_hash: sha256:b8cc318f2a4285b530e908b6bc43901c3c5cd11100362636bbc4216639bef597
+- kind: project-relative
+  target: codex
+  value: .agents/skills/domain-modeling/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+  content_hash: sha256:9617041db9b0f6606ecf974e2061c83596b05059b5bb20ddb884c60f147c70e9
+- kind: project-relative
+  target: codex
+  value: .agents/skills/domain-modeling/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+  content_hash: sha256:f6bf2aa996c6e6f53fdd0708e18a0d16a56aed8322cca59fedbe3c0d2c75f06b
+- kind: project-relative
+  target: codex
+  value: .agents/skills/git-pushing
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
+  content_hash: null
+- kind: project-relative
+  target: codex
+  value: .agents/skills/git-pushing/.opencode/commands/telemetry-inspect.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
   content_hash: sha256:bf451c37be6f6ca9d0c329f27ec5763881ad0f2c5126ac9a7dab6683446520e3
 - kind: project-relative
-  target: opencode
-  value: .opencode/skills/git-pushing/.opencode/commands/telemetry-report.md
+  target: codex
+  value: .agents/skills/git-pushing/.opencode/commands/telemetry-report.md
   runtime: null
   scope: project
   owners:
-  - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  active_owner: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
+  - /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
   content_hash: sha256:73455707008886b8e16d6138841b8edbe5e32e5d02a1e451609343f762b936cd
 - kind: project-relative
-  target: opencode
-  value: .opencode/skills/git-pushing/SKILL.md
+  target: codex
+  value: .agents/skills/git-pushing/SKILL.md
   runtime: null
   scope: project
   owners:
-  - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  active_owner: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
+  - /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
   content_hash: sha256:bcbc15bbd772b276b185b6a4dbd727bfd588d5bcebe62f4603f9262a2d15564e
 - kind: project-relative
-  target: opencode
-  value: .opencode/skills/git-pushing/scripts/smart_commit.sh
+  target: codex
+  value: .agents/skills/git-pushing/scripts/smart_commit.sh
   runtime: null
   scope: project
   owners:
-  - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  active_owner: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
+  - /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
   content_hash: sha256:4e62a45a4839de3cedf3f8a0dcc3205140bc73f7147e68d218c63eb1e48c2308
 - kind: project-relative
-  target: opencode
-  value: .opencode/skills/git-pushing/skillrun.yaml
+  target: codex
+  value: .agents/skills/git-pushing/skillrun.yaml
   runtime: null
   scope: project
   owners:
-  - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-  active_owner: /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
+  - /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
   content_hash: sha256:77a84c08391e689358f811025e393b980a92979d3774a57064caee6e9b2d7bd5
+- kind: project-relative
+  target: codex
+  value: .agents/skills/grill-with-docs
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/grill-with-docs
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/grill-with-docs
+  content_hash: null
+- kind: project-relative
+  target: codex
+  value: .agents/skills/grill-with-docs/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/grill-with-docs
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/grill-with-docs
+  content_hash: sha256:7de372c13488f1ee96cc11cd8907b56b6809cc93eef776eeddd37de6b6cbe3fe
+- kind: project-relative
+  target: codex
+  value: .agents/skills/grill-with-docs/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/grill-with-docs
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/grill-with-docs
+  content_hash: sha256:94cd0ab161fb468a836349f5ed482ba58ce8e709a05c57ce533d739dbd35cca9
+- kind: project-relative
+  target: codex
+  value: .agents/skills/handoff
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/handoff
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/handoff
+  content_hash: null
+- kind: project-relative
+  target: codex
+  value: .agents/skills/handoff/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/handoff
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/handoff
+  content_hash: sha256:7c62de979fdc7ac32fb5ddb2146156c917f80ee070d30fadc9d40343c4b6ed25
+- kind: project-relative
+  target: codex
+  value: .agents/skills/handoff/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/handoff
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/handoff
+  content_hash: sha256:5c479fd562c691851690e8b18c8501045bef0943c10743d636b2fae26add1d28
+- kind: project-relative
+  target: codex
+  value: .agents/skills/implement
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/implement
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/implement
+  content_hash: null
+- kind: project-relative
+  target: codex
+  value: .agents/skills/implement/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/implement
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/implement
+  content_hash: sha256:6d3fd9e83b8f36e5213854779db49b256a457a7ebb4a503e53fa7dcff696adc3
+- kind: project-relative
+  target: codex
+  value: .agents/skills/implement/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/implement
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/implement
+  content_hash: sha256:8970a8596ade0c28ab427f41a4ea242d6bdf6186c59ebf55e1238dbecaab79dc
+- kind: project-relative
+  target: codex
+  value: .agents/skills/improve-codebase-architecture
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/improve-codebase-architecture
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/improve-codebase-architecture
+  content_hash: null
+- kind: project-relative
+  target: codex
+  value: .agents/skills/improve-codebase-architecture/HTML-REPORT.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/improve-codebase-architecture
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/improve-codebase-architecture
+  content_hash: sha256:0b0936104158abeef7246ff6cbabefa4dc055f17589f2833f2d93001421910a1
+- kind: project-relative
+  target: codex
+  value: .agents/skills/improve-codebase-architecture/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/improve-codebase-architecture
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/improve-codebase-architecture
+  content_hash: sha256:387f38d21367761c94d4b4dcea9e9d7d3e31f896c4decebf4984483e42125cfc
+- kind: project-relative
+  target: codex
+  value: .agents/skills/improve-codebase-architecture/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/improve-codebase-architecture
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/improve-codebase-architecture
+  content_hash: sha256:c8cb20f68ebf0edb4e497bc11ae5fcaa196004e661cd189015b04f4109ced7f1
+- kind: project-relative
+  target: codex
+  value: .agents/skills/resolving-merge-conflicts
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/resolving-merge-conflicts
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/resolving-merge-conflicts
+  content_hash: null
+- kind: project-relative
+  target: codex
+  value: .agents/skills/resolving-merge-conflicts/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/resolving-merge-conflicts
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/resolving-merge-conflicts
+  content_hash: sha256:c7c9ba81362a786aac05d2223123bf1bd2f8a99c3243a72882ede9c68bedfb24
+- kind: project-relative
+  target: codex
+  value: .agents/skills/resolving-merge-conflicts/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/resolving-merge-conflicts
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/resolving-merge-conflicts
+  content_hash: sha256:a1f4f96838f2ed6282eb28abbbf99029cb8fadce552baf53da90a025b8bffddf
+- kind: project-relative
+  target: codex
+  value: .agents/skills/tdd
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+  content_hash: null
+- kind: project-relative
+  target: codex
+  value: .agents/skills/tdd/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+  content_hash: sha256:6875cbca6b7d17be635dc9b457cc6363125f85cef26f443991b77c7d9eb430d2
+- kind: project-relative
+  target: codex
+  value: .agents/skills/tdd/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+  content_hash: sha256:ea6f01cf1b8c06a4b0f5b649d74b1b8ce8685e72af1b38d70d877693e092af0b
+- kind: project-relative
+  target: codex
+  value: .agents/skills/tdd/mocking.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+  content_hash: sha256:3ceb807fdf4a47d6a93d4d9a891e5ba6d362a6247bd08adc451feebfc17361ef
+- kind: project-relative
+  target: codex
+  value: .agents/skills/tdd/tests.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+  content_hash: sha256:859f9e592c188fda4fc7277dd180e4ce9c7a2e13f6efe1f6f29eccc9d28c106a
+- kind: project-relative
+  target: codex
+  value: .agents/skills/to-spec
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-spec
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-spec
+  content_hash: null
+- kind: project-relative
+  target: codex
+  value: .agents/skills/to-spec/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-spec
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-spec
+  content_hash: sha256:69ae8bd0ee33d4d350e50eed68f8c958c4b95ffa502ad90e7757e95e7e21419d
+- kind: project-relative
+  target: codex
+  value: .agents/skills/to-spec/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-spec
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-spec
+  content_hash: sha256:1c5b4d1e3d8e52287ef19cc2742fdbbfae1914ac75d33af3e4c8174f08cc55bb
+- kind: project-relative
+  target: codex
+  value: .agents/skills/to-tickets
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-tickets
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-tickets
+  content_hash: null
+- kind: project-relative
+  target: codex
+  value: .agents/skills/to-tickets/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-tickets
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-tickets
+  content_hash: sha256:7d211a9262a741b62c70e06dafb507732f5927cca6839391a4fd9f47ace98984
+- kind: project-relative
+  target: codex
+  value: .agents/skills/to-tickets/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-tickets
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-tickets
+  content_hash: sha256:21bc6215fffcd7614e9f772bb1760e87cc5fc7dcc707e7d282bc9414267a6090
+- kind: project-relative
+  target: codex
+  value: .agents/skills/triage
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+  content_hash: null
+- kind: project-relative
+  target: codex
+  value: .agents/skills/triage/AGENT-BRIEF.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+  content_hash: sha256:5b78d347cc53f6bcf7b875106005ccf5315055fa4cf75eb28d41e96ee426d27b
+- kind: project-relative
+  target: codex
+  value: .agents/skills/triage/OUT-OF-SCOPE.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+  content_hash: sha256:2526f998fd7ca5e956d3f6f234bcc2431a5971ee769f1148ddc60b92f04d5914
+- kind: project-relative
+  target: codex
+  value: .agents/skills/triage/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+  content_hash: sha256:e52a18163b7b76431393d89c414426b202cacc812f49f95d540d33f2a058dde1
+- kind: project-relative
+  target: codex
+  value: .agents/skills/triage/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+  content_hash: sha256:2e683717720cf456d165d0bb1a68bb600d0b6a8ccb61841c172e50d26f95351c
+- kind: project-relative
+  target: codex
+  value: .agents/skills/writing-skills
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  content_hash: null
+- kind: project-relative
+  target: codex
+  value: .agents/skills/writing-skills/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  content_hash: sha256:6ffe287552c1ca9c050e1226408282535611365264fa05a6da81ddc70729a37e
+- kind: project-relative
+  target: codex
+  value: .agents/skills/writing-skills/anthropic-best-practices.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  content_hash: sha256:3e8b909316d7ff2084f04947e85d4fd1691c9ceb02105542139fe2e3a0e26c26
+- kind: project-relative
+  target: codex
+  value: .agents/skills/writing-skills/examples/CLAUDE_MD_TESTING.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  content_hash: sha256:0b379a3415e185d3c434b3ad283d8aa132f3022c2a4f210f168865b5986bcef0
+- kind: project-relative
+  target: codex
+  value: .agents/skills/writing-skills/graphviz-conventions.dot
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  content_hash: sha256:e2890a593c91370e384b42f2f67b1a6232c9e69dddea7891a0c1c46d7b20b694
+- kind: project-relative
+  target: codex
+  value: .agents/skills/writing-skills/persuasion-principles.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  content_hash: sha256:c3c84f572a51dd8b6d4fc6e5cbdc2bc3b9e07ba381a45bdabfce7ad2894dd828
+- kind: project-relative
+  target: codex
+  value: .agents/skills/writing-skills/render-graphs.js
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  content_hash: sha256:ccda971a87bb185f8febf81c56b556a20d026fa980c17b35fa3e8824fbb37852
+- kind: project-relative
+  target: codex
+  value: .agents/skills/writing-skills/testing-skills-with-subagents.md
+  runtime: null
+  scope: project
+  owners:
+  - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  active_owner: /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+  content_hash: sha256:c711346852c911b24a84aa161e0cff06a4cd7f4e2fa9e9c0a266cead5afcbade

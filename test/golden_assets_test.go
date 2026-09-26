@@ -3,9 +3,20 @@ package test
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
+
+	"forge"
+	"forge/internal/catalog"
+	"forge/internal/project"
+	"forge/internal/scaffold"
 )
+
+// publishedPortPattern matches a Docker Compose "ports:" list entry, e.g.
+// `- "127.0.0.1:4317:4317" # OTLP gRPC`, capturing the host:container port
+// mapping (group 1) so its host-bind address can be checked.
+var publishedPortPattern = regexp.MustCompile(`(?m)^\s*-\s*"([^"]+)"`)
 
 func TestSourcesYAMLDefinesTheV1GoldenRecipes(t *testing.T) {
 	repoRoot := repoRoot(t)
@@ -838,6 +849,170 @@ func TestGoldenStacksShipTelemetryBootstrap(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestGoldenStacksScaffoldOtelCollectorAssets proves that scaffolding any v1
+// stack produces the system-wide OTel collector assets (mise conf.d env +
+// tasks, and the .otel/ Docker Compose stack), and that the assets carry the
+// invariants a working, safe-by-default collector depends on.
+func TestGoldenStacksScaffoldOtelCollectorAssets(t *testing.T) {
+	writer := scaffold.Writer{Assets: forge.Assets()}
+
+	for _, stack := range catalog.V1Stacks() {
+		t.Run(stack.Key, func(t *testing.T) {
+			tempDir := t.TempDir()
+			vars, err := project.ResolveVariables(project.Input{
+				ProjectName: "Otel Check " + stack.Key,
+				Language:    stack.Language,
+				ProjectType: stack.ProjectType,
+				Stack:       stack.Key,
+				AuthorName:  "CI Bot",
+				AuthorEmail: "ci@example.com",
+				Remote:      project.RemoteNone,
+			})
+			if err != nil {
+				t.Fatalf("ResolveVariables() error = %v", err)
+			}
+
+			if err := writer.Write(tempDir, vars); err != nil {
+				t.Fatalf("Write() error = %v", err)
+			}
+
+			assertOtelCollectorAssets(t, tempDir, vars)
+		})
+	}
+}
+
+// TestFullstackScaffoldGetsOtelCollectorAssetsExactlyOnce proves that a
+// fullstack repo (an api-backend stack hosting a frontend fragment under
+// web/) still ships exactly one copy of the OTel collector assets at the
+// repo root, never duplicated under web/.
+func TestFullstackScaffoldGetsOtelCollectorAssetsExactlyOnce(t *testing.T) {
+	writer := scaffold.Writer{Assets: forge.Assets()}
+
+	for _, stack := range catalog.V1Stacks() {
+		if !stack.FullstackBackend {
+			continue
+		}
+
+		t.Run(stack.Key, func(t *testing.T) {
+			for _, frontend := range catalog.FrontendStacks() {
+				t.Run(frontend.Key, func(t *testing.T) {
+					tempDir := t.TempDir()
+					vars, err := project.ResolveVariables(project.Input{
+						ProjectName: "Fullstack Otel " + stack.Key,
+						Language:    stack.Language,
+						ProjectType: "fullstack",
+						Stack:       stack.Key,
+						Frontend:    frontend.Key,
+						AuthorName:  "CI Bot",
+						AuthorEmail: "ci@example.com",
+						Remote:      project.RemoteNone,
+					})
+					if err != nil {
+						t.Fatalf("ResolveVariables() error = %v", err)
+					}
+
+					if err := writer.Write(tempDir, vars); err != nil {
+						t.Fatalf("Write() error = %v", err)
+					}
+
+					assertOtelCollectorAssets(t, tempDir, vars)
+
+					for _, forbidden := range []string{
+						filepath.Join(tempDir, "web", ".config", "mise", "conf.d", "otel.toml"),
+						filepath.Join(tempDir, "web", ".otel", "compose.yaml"),
+						filepath.Join(tempDir, "web", ".otel", "collector.yaml"),
+					} {
+						if _, err := os.Stat(forbidden); !os.IsNotExist(err) {
+							t.Fatalf("otel asset duplicated under web/: %s (stat err = %v)", forbidden, err)
+						}
+					}
+				})
+			}
+		})
+	}
+}
+
+// assertOtelCollectorAssets checks that a scaffolded repo at tempDir ships
+// the three OTel collector assets and that they carry the invariants a
+// working, safe-by-default system-wide collector depends on: the mise env +
+// tasks, a compose file pinned to a specific image with a restart policy and
+// loopback-only ports, and a collector config with otlp-fed traces/metrics/
+// logs pipelines.
+func assertOtelCollectorAssets(t *testing.T, tempDir string, vars project.Variables) {
+	t.Helper()
+
+	miseOtelPath := filepath.Join(tempDir, ".config", "mise", "conf.d", "otel.toml")
+	miseOtel, err := os.ReadFile(miseOtelPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", miseOtelPath, err)
+	}
+	miseOtelContent := string(miseOtel)
+	for _, snippet := range []string{
+		"OTEL_EXPORTER_OTLP_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_PROTOCOL",
+		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_LOGS_ENDPOINT",
+		// Vite stacks (vite-ts, sveltekit) read this at build time. It does
+		// nothing for Angular, which is checked by assertOtelAngularBridge.
+		"VITE_OTEL_EXPORTER_OTLP_ENDPOINT",
+		"[tasks.otel]",
+		`[tasks."otel:down"]`,
+		`[tasks."otel:status"]`,
+		`[tasks."otel:logs"]`,
+	} {
+		if !strings.Contains(miseOtelContent, snippet) {
+			t.Errorf("%s missing %q:\n%s", miseOtelPath, snippet, miseOtelContent)
+		}
+	}
+	// Angular (standalone or under web/) cannot read the env in the browser;
+	// its mise tasks MUST inline the endpoint via `ng --define`.
+	assertOtelAngularBridge(t, tempDir, vars)
+
+	composePath := filepath.Join(tempDir, ".otel", "compose.yaml")
+	compose, err := os.ReadFile(composePath)
+	if err != nil {
+		t.Fatalf("read %s: %v", composePath, err)
+	}
+	composeContent := string(compose)
+
+	if !strings.Contains(composeContent, "otel/opentelemetry-collector-contrib:") {
+		t.Errorf("%s does not pin otel/opentelemetry-collector-contrib:\n%s", composePath, composeContent)
+	}
+	if strings.Contains(composeContent, "otel/opentelemetry-collector-contrib:latest") {
+		t.Errorf("%s pins otel/opentelemetry-collector-contrib to :latest, want a fixed version", composePath)
+	}
+	if !strings.Contains(composeContent, "restart: unless-stopped") {
+		t.Errorf("%s missing %q:\n%s", composePath, "restart: unless-stopped", composeContent)
+	}
+
+	for _, match := range publishedPortPattern.FindAllStringSubmatch(composeContent, -1) {
+		portMapping := match[1]
+		if !strings.HasPrefix(portMapping, "127.0.0.1:") {
+			t.Errorf("%s publishes port %q not bound to 127.0.0.1", composePath, portMapping)
+		}
+	}
+
+	collectorPath := filepath.Join(tempDir, ".otel", "collector.yaml")
+	collector, err := os.ReadFile(collectorPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", collectorPath, err)
+	}
+	collectorContent := string(collector)
+
+	if !strings.Contains(collectorContent, "otlp:") {
+		t.Errorf("%s missing otlp receiver:\n%s", collectorPath, collectorContent)
+	}
+	for _, pipeline := range []string{"traces:", "metrics:", "logs:"} {
+		if !strings.Contains(collectorContent, pipeline) {
+			t.Errorf("%s missing %q pipeline:\n%s", collectorPath, pipeline, collectorContent)
+		}
+	}
+	if !strings.Contains(collectorContent, "receivers: [otlp]") {
+		t.Errorf("%s pipelines do not receive from otlp:\n%s", collectorPath, collectorContent)
 	}
 }
 

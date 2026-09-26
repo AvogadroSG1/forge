@@ -1,35 +1,21 @@
 name: forge
 version: 0.1.0
 targets:
-    - claude
-    - codex
+  - claude
+  - codex
 dependencies:
-    apm:
-        - /Users/poconnor/peter_code/ai_support/skills/superpowers/writing-skills
-        - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mattpocock/diagnosing-bugs
-        - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mattpocock/improve-codebase-architecture
-        - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mattpocock/triage
-        - /Users/poconnor/peter_code/ai_support/skills/superpowers/finishing-a-development-branch
-        - /Users/poconnor/peter_code/ai_support/skills/superpowers/requesting-code-review
-        - /Users/poconnor/peter_code/ai_support/skills/workflow/git-pushing
-        - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mattpocock/domain-modeling
-        - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mattpocock/to-tickets
-        - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mattpocock/to-spec
-        - /Users/poconnor/peter_code/ai_support/skills/superpowers/subagent-driven-development
-        - /Users/poconnor/peter_code/ai_support/skills/superpowers/using-git-worktrees
-        - /Users/poconnor/peter_code/ai_support/skills/superpowers/verification-before-completion
-        - /Users/poconnor/peter_code/ai_support/skills/superpowers/brainstorming
-        - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mattpocock/codebase-design
-        - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mattpocock/grill-with-docs
-        - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mattpocock/implement
-        - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mattpocock/prototype
-        - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mattpocock/tdd
-        - /Users/poconnor/peter_code/ai_support/skills/superpowers/dispatching-parallel-agents
-        - /Users/poconnor/peter_code/ai_support/skills/superpowers/receiving-code-review
-        - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mattpocock/handoff
-        - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mattpocock/resolving-merge-conflicts
-        - /Users/poconnor/peter_code/ai_support/skills/superpowers/executing-plans
-        - /Users/poconnor/peter_code/ai_support/skills/superpowers/systematic-debugging
-        - /Users/poconnor/peter_code/ai_support/skills/superpowers/test-driven-development
-        - /Users/poconnor/peter_code/ai_support/skills/superpowers/using-superpowers
-        - /Users/poconnor/peter_code/ai_support/skills/superpowers/writing-plans
+  apm:
+    - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/writing-skills
+    - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/diagnosing-bugs
+    - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/improve-codebase-architecture
+    - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/triage
+    - /Users/poconnor/peter_code/ai_support/skills/DevOps/git/git-pushing
+    - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/domain-modeling
+    - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-tickets
+    - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/to-spec
+    - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/codebase-design
+    - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/grill-with-docs
+    - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/implement
+    - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/tdd
+    - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/handoff
+    - /Users/poconnor/peter_code/ai_support/skills/ai-workflow/mpocock/resolving-merge-conflicts

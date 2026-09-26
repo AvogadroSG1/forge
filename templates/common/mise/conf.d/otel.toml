@@ -1,0 +1,128 @@
+# forge-managed: OpenTelemetry env + tasks for the system-wide collector.
+# mise merges every file under .config/mise/conf.d/ with this repo's own
+# mise.toml, so these apply on top of whatever the stack defines. See .otel/
+# for the collector's Docker Compose stack, started with `mise run otel`.
+# Task bodies MUST stay POSIX sh (`set -eu`, no bashisms): mise's default
+# inline shell is `sh`, which is dash on Debian/Ubuntu.
+# Do not hand-edit; a future `forge upgrade` may overwrite this file.
+
+[env]
+OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4318"
+OTEL_EXPORTER_OTLP_PROTOCOL = "http/protobuf"
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = "http://localhost:4318/v1/traces"
+OTEL_EXPORTER_OTLP_METRICS_ENDPOINT = "http://localhost:4318/v1/metrics"
+OTEL_EXPORTER_OTLP_LOGS_ENDPOINT = "http://localhost:4318/v1/logs"
+# Browsers cannot read the env, so browser stacks get the endpoint at build
+# time as a bare base URL (the telemetry bootstrap appends /v1/traces and
+# /v1/metrics itself). Vite stacks (vite-ts, sveltekit) read the VITE_-prefixed
+# variable below. Angular reads neither: its mise dev/build (or web-dev/
+# web-build) tasks inline OTEL_EXPORTER_OTLP_ENDPOINT via `ng --define` (the
+# OTLP define bridge). To point at another collector, set these in
+# mise.local.toml [env]; it wins over this file, which wins over the shell env.
+VITE_OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4318"
+
+[tasks.otel]
+description = "Start the system-wide forge OpenTelemetry collector (Docker)"
+alias = "otel:up"
+# mise resolves `dir` itself (never through a shell), so the checkout path is
+# data, not shell source; the run body then copies from relative .otel/ paths.
+dir = "{{config_root}}"
+run = '''
+set -eu
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "otel: docker is required but was not found on PATH" >&2
+  echo "otel: install Docker (https://docs.docker.com/get-docker/) and re-run 'mise run otel'" >&2
+  exit 1
+fi
+
+if ! docker compose version >/dev/null 2>&1; then
+  echo "otel: 'docker compose' (the Compose v2 plugin) is required but is not available" >&2
+  exit 1
+fi
+
+data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel"
+mkdir -p "$data_dir"
+cp -f .otel/compose.yaml .otel/collector.yaml "$data_dir/"
+
+# collector.yaml is bind-mounted, so editing it does not change the compose
+# config hash and a plain `up` would leave the old pipeline running.
+# --force-recreate restarts the shared collector on every run (telemetry from
+# every repo pauses briefly; SDKs typically buffer or retry, but telemetry
+# emitted during the gap MAY be dropped). depends_on still runs the one-shot
+# otel-data-init first.
+docker compose -p forge-otel -f "$data_dir/compose.yaml" up -d --wait --force-recreate otel-collector
+
+echo "otel: waiting for the collector health check..."
+ready=""
+for _ in $(seq 1 30); do
+  if curl -fsS -o /dev/null "http://127.0.0.1:13133" 2>/dev/null; then
+    ready="1"
+    break
+  fi
+  sleep 1
+done
+
+if [ -z "$ready" ]; then
+  echo "otel: collector did not report healthy within 30s; check 'mise run otel:logs'" >&2
+  exit 1
+fi
+
+cat <<'EOF'
+otel: collector is up.
+  traces:  http://localhost:4318/v1/traces
+  metrics: http://localhost:4318/v1/metrics
+  logs:    http://localhost:4318/v1/logs
+  health:  http://127.0.0.1:13133
+
+Tail collector output with: mise run otel:logs
+EOF
+'''
+
+[tasks."otel:down"]
+description = "Stop the system-wide forge OpenTelemetry collector"
+run = '''
+set -eu
+
+data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel"
+if [ ! -f "$data_dir/compose.yaml" ]; then
+  echo "otel: no collector found at $data_dir (run 'mise run otel' first)" >&2
+  exit 0
+fi
+
+docker compose -p forge-otel -f "$data_dir/compose.yaml" down
+'''
+
+[tasks."otel:status"]
+description = "Show the system-wide forge OpenTelemetry collector's status"
+run = '''
+set -eu
+
+data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel"
+if [ ! -f "$data_dir/compose.yaml" ]; then
+  echo "otel: no collector found at $data_dir (run 'mise run otel' first)"
+  exit 0
+fi
+
+docker compose -p forge-otel -f "$data_dir/compose.yaml" ps
+echo
+if curl -fsS -o /dev/null "http://127.0.0.1:13133" 2>/dev/null; then
+  echo "otel: health check OK (http://127.0.0.1:13133)"
+else
+  echo "otel: health check FAILED (http://127.0.0.1:13133)"
+fi
+'''
+
+[tasks."otel:logs"]
+description = "Tail the system-wide forge OpenTelemetry collector's logs"
+run = '''
+set -eu
+
+data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel"
+if [ ! -f "$data_dir/compose.yaml" ]; then
+  echo "otel: no collector found at $data_dir (run 'mise run otel' first)" >&2
+  exit 1
+fi
+
+docker compose -p forge-otel -f "$data_dir/compose.yaml" logs -f
+'''

@@ -44,6 +44,9 @@ func wireAssets() fstest.MapFS {
 		"templates/common/codex/hooks.json":                &fstest.MapFile{Data: []byte(settings)},
 		"templates/common/opencode.jsonc.tmpl":             &fstest.MapFile{Data: []byte("{\n{{- if eq .Language \"go\" }}\n  \"lsp\": {\"gopls\": {}}\n{{- end }}\n}\n")},
 		"templates/common/opencode/plugins/forge-hooks.js": &fstest.MapFile{Data: []byte(`export const ForgeHooks = async () => {};` + "\n")},
+		"templates/common/mise/conf.d/otel.toml":           &fstest.MapFile{Data: []byte("[env]\nOTEL_EXPORTER_OTLP_ENDPOINT = \"http://localhost:4318\"\n")},
+		"templates/common/otel/compose.yaml":               &fstest.MapFile{Data: []byte("name: forge-otel\n")},
+		"templates/common/otel/collector.yaml":             &fstest.MapFile{Data: []byte("receivers:\n  otlp: {}\n")},
 	}
 }
 
