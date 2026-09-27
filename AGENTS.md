@@ -5,7 +5,7 @@ This file is the project-specific guide for working on the `forge` generator its
 ## WHAT
 
 - `forge` is a Go `1.24.x` CLI that scaffolds AI-native repositories from embedded assets.
-- `cmd/forge/main.go` owns the command surface: `init`, `sync-allowlist`, `update`, and `upgrade`.
+- `cmd/forge/main.go` owns the command surface: `init`, `sync-allowlist`, `update`, `upgrade`, and `completion`.
 - `internal/init/` orchestrates project creation; `internal/scaffold/` writes and composes assets; `internal/allowlist/` owns the managed block reconciler; `internal/update/` owns maintainer refresh; `internal/upgrade/` owns infrastructure file propagation.
 - `templates/common/` holds assets that every generated repo receives.
 - `templates/golden/<stack>/` holds the shipped v1 stack snapshots and overlays.
@@ -39,6 +39,8 @@ This file is the project-specific guide for working on the `forge` generator its
 bd ready
 bd show <id>
 bd update <id> --claim
+mise run test
+mise run build
 GOCACHE=$PWD/.cache/go-build go test ./... -count=1
 go build ./cmd/forge
 ```

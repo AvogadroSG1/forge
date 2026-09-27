@@ -327,7 +327,7 @@ func TestRunUpdateRequiresStackFlag(t *testing.T) {
 }
 
 func TestRunHelpListsCompletionCommand(t *testing.T) {
-	t.Parallel()
+	// Not parallel: captureStdout swaps the process-wide os.Stdout.
 
 	output, err := captureStdout(t, func() error {
 		return run([]string{"help"}, forge.Assets())
@@ -341,7 +341,7 @@ func TestRunHelpListsCompletionCommand(t *testing.T) {
 }
 
 func TestRunDispatchesCompletionCommand(t *testing.T) {
-	t.Parallel()
+	// Not parallel: captureStdout swaps the process-wide os.Stdout.
 
 	output, err := captureStdout(t, func() error {
 		return run([]string{"completion", "zsh"}, forge.Assets())
@@ -372,7 +372,7 @@ func TestRunDispatchesCompletionUnsupportedShellError(t *testing.T) {
 // except "help" (which printUsage does not list as a command) must appear,
 // name and description together, on one line of the usage output.
 func TestPrintUsageMatchesCompletionCommandsDescriptions(t *testing.T) {
-	t.Parallel()
+	// Not parallel: captureStdout swaps the process-wide os.Stdout.
 
 	output, err := captureStdout(t, func() error {
 		printUsage()

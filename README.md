@@ -71,15 +71,24 @@ To run `forge init` end to end, you also need:
 
 ### Install The CLI
 
+`mise run` is the primary contributor task interface. `make` is kept in parallel as an equivalent
+for `build`, `test`, `install`, `uninstall`, and `clean` (see ADR-0022); `run` and shell completion
+(`install:completions`/`uninstall:completions`) are mise-only — without `mise`, use
+`forge completion zsh` directly instead.
+
 For the normal local developer install path:
 
 ```bash
+mise run install
+# equivalent:
 make install
 ```
 
 Override the destination directory when you do not want to write to `$HOME/.local/bin`:
 
 ```bash
+BINDIR=/custom/bin mise run install
+# equivalent:
 make install BINDIR=/custom/bin
 ```
 
@@ -95,24 +104,33 @@ make help
 For a repo-local binary without installing it:
 
 ```bash
+mise run build
+# equivalent:
 make build
 ```
 
 Run the test target through the same command surface:
 
 ```bash
+mise run test
+# equivalent:
 make test
 ```
 
 Remove the repo-local build output:
 
 ```bash
+mise run clean
+# equivalent:
 make clean
 ```
 
 Remove the installed binary from the selected install directory:
 
 ```bash
+mise run uninstall
+BINDIR=/custom/bin mise run uninstall
+# equivalent:
 make uninstall
 make uninstall BINDIR=/custom/bin
 ```
@@ -120,7 +138,42 @@ make uninstall BINDIR=/custom/bin
 For one-off runs during development without writing `bin/forge`:
 
 ```bash
+mise run run -- <forge args>
+# equivalent:
 go run ./cmd/forge
+```
+
+### Shell Completion (zsh)
+
+`forge completion zsh` prints a zsh completion script for the `forge` CLI, generated from the
+same flag definitions the `init`/`sync-allowlist`/`update`/`upgrade` runners use — no flag is
+hand-maintained in two places.
+
+Install it as an autoloaded function (recommended for a persistent shell setup):
+
+```bash
+mise run install:completions
+```
+
+This writes `_forge` into `$FORGE_ZSH_COMPLETIONS_DIR` (default
+`${XDG_DATA_HOME:-$HOME/.local/share}/zsh/site-functions`). Make sure that directory is on your
+`fpath` before `compinit` runs, e.g. in `~/.zshrc`:
+
+```bash
+fpath=(${XDG_DATA_HOME:-$HOME/.local/share}/zsh/site-functions $fpath)
+autoload -Uz compinit && compinit
+```
+
+To remove it:
+
+```bash
+mise run uninstall:completions
+```
+
+Or, without installing anything, source it directly in the current shell session:
+
+```bash
+source <(forge completion zsh)
 ```
 
 ### Quickstart
@@ -283,10 +336,18 @@ If work is not already tracked, create an issue before editing.
 Workflow commands:
 
 ```bash
+mise run build
+mise run test
+mise run clean
+GOCACHE=$PWD/.cache/go-build go test ./... -count=1
+```
+
+Equivalent `make` targets remain available:
+
+```bash
 make build
 make test
 make clean
-GOCACHE=$PWD/.cache/go-build go test ./... -count=1
 ```
 
 Focused checks that are often useful while iterating:
