@@ -1,8 +1,8 @@
-# forge-otel: a single, system-wide OpenTelemetry Collector shared by every
-# repo on this machine. `mise run otel` copies this file (and collector.yaml)
-# to ${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel/ and runs
+# forge-otel: one system-wide OpenTelemetry Collector and Aspire Dashboard
+# shared by every repo on this machine. `mise run otel` copies this file (and
+# collector.yaml) to ${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel/ and runs
 # `docker compose -p forge-otel -f <that dir>/compose.yaml up -d --wait
-# --force-recreate otel-collector`, which restarts the collector on every run.
+# --force-recreate otel-collector`, which restarts only the collector on every run.
 # Do not run `docker compose` on this file directly from the repo -- use
 # `mise run otel` / `mise run otel:down` / `mise run otel:status`.
 
@@ -20,6 +20,20 @@ services:
     volumes:
       - forge-otel-data:/data
 
+  otel-dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:13.5.2
+    container_name: forge-otel-dashboard
+    restart: unless-stopped
+    environment:
+      DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
+    ports:
+      - "127.0.0.1:18888:18888" # Aspire Dashboard UI
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.161.0
     container_name: forge-otel-collector
@@ -28,6 +42,8 @@ services:
     depends_on:
       otel-data-init:
         condition: service_completed_successfully
+      otel-dashboard:
+        condition: service_started
     volumes:
       - ./collector.yaml:/etc/otelcol-contrib/config.yaml:ro
       - forge-otel-data:/data

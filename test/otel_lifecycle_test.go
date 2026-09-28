@@ -16,20 +16,25 @@ import (
 	"time"
 )
 
-// These names mirror templates/common/otel/compose.yaml: compose project
-// `forge-otel`, a fixed container_name, and the named volume prefixed with
-// the project name.
+// These names mirror templates/common/otel/compose.yaml: compose project,
+// fixed container names, and the named volume prefixed with the project name.
 const (
 	otelCollectorContainer = "forge-otel-collector"
+	otelDashboardContainer = "forge-otel-dashboard"
 	otelDataVolume         = "forge-otel_forge-otel-data"
 	otelNetwork            = "forge-otel_default"
 	otelVolumeReaderImage  = "busybox:1.36"
 	otelTracesURL          = "http://127.0.0.1:4318/v1/traces"
+	otelMetricsURL         = "http://127.0.0.1:4318/v1/metrics"
+	otelLogsURL            = "http://127.0.0.1:4318/v1/logs"
+	otelDashboardURL       = "http://127.0.0.1:18888"
 	otelChangedTracesPath  = "/data/traces-changed.jsonl"
 	otelShippedTracesPath  = "/data/traces.jsonl"
+	otelShippedMetricsPath = "/data/metrics.jsonl"
+	otelShippedLogsPath    = "/data/logs.jsonl"
 	otelComposeLabel       = "label=com.docker.compose.project=forge-otel"
 	otelLiveTaskTimeout    = 2 * time.Minute
-	otelTraceFlushTimeout  = 30 * time.Second
+	otelSignalFlushTimeout = 30 * time.Second
 	otelDockerCmdTimeout   = 30 * time.Second
 	// otelCleanupReserve is held back from the go test deadline so
 	// t.Cleanup can still tear the stack down: if `go test -timeout` fires
@@ -39,7 +44,7 @@ const (
 )
 
 // otelLiveHostPorts are the host ports the shipped compose stack binds.
-var otelLiveHostPorts = []string{"4318", "13133"}
+var otelLiveHostPorts = []string{"4318", "13133", "18888"}
 
 // otelDockerPassthroughEnv are daemon-selection variables that MUST reach
 // docker unchanged; HOME is isolated, so without them docker would fall back
@@ -52,20 +57,35 @@ var otelDockerPassthroughEnv = []string{
 	"DOCKER_API_VERSION",
 }
 
-func TestOtelLifecycleRecreatesOnConfigChange(t *testing.T) {
+func TestOtelLifecycleStartsViewerAndRecreatesCollectorOnConfigChange(t *testing.T) {
 	requireOtelDockerLifecycle(t)
 	h := newOtelLiveHarness(t)
 
 	t.Cleanup(func() { h.teardownCollector(t) })
 
-	// Given the collector is running with the shipped config.
+	// Given the Collector and viewer are running with the shipped config.
 	if result := h.run(t, "otel"); result.exitCode != 0 {
 		t.Fatalf("precondition: first mise run otel exit = %d, want 0\n%s", result.exitCode, result.output)
 	}
-	firstMarker := postOtelTrace(t, "first")
-	if !h.waitForVolumeFileContains(t, otelShippedTracesPath, firstMarker) {
-		t.Fatalf("precondition: trace %q never reached %s with the shipped config; the pipeline itself is broken\n%s", firstMarker, otelShippedTracesPath, h.collectorLogs(t))
+	assertOtelViewerReachable(t)
+
+	firstTraceMarker := postOtelTrace(t, "first")
+	firstMetricMarker := postOtelMetric(t, "first")
+	firstLogMarker := postOtelLog(t, "first")
+	for _, signal := range []struct {
+		path   string
+		marker string
+	}{
+		{path: otelShippedTracesPath, marker: firstTraceMarker},
+		{path: otelShippedMetricsPath, marker: firstMetricMarker},
+		{path: otelShippedLogsPath, marker: firstLogMarker},
+	} {
+		if !h.waitForVolumeFileContains(t, signal.path, signal.marker) {
+			t.Fatalf("precondition: signal %q never reached %s with the shipped config; the pipeline itself is broken\n%s", signal.marker, signal.path, h.collectorLogs(t))
+		}
 	}
+	firstCollectorID := h.containerID(t, otelCollectorContainer)
+	firstDashboardID := h.containerID(t, otelDashboardContainer)
 
 	// And I change the traces file exporter path in .otel/collector.yaml.
 	configPath := filepath.Join(h.repoDir, ".otel", "collector.yaml")
@@ -81,22 +101,25 @@ func TestOtelLifecycleRecreatesOnConfigChange(t *testing.T) {
 	if err := os.WriteFile(configPath, changed, 0o644); err != nil {
 		t.Fatalf("write %s: %v", configPath, err)
 	}
-	beforeID := h.collectorContainerID(t)
 
 	// When I run "mise run otel".
 	if result := h.run(t, "otel"); result.exitCode != 0 {
 		t.Fatalf("second mise run otel exit = %d, want 0\n%s", result.exitCode, result.output)
 	}
 
-	// Then the collector container has been recreated.
-	if afterID := h.collectorContainerID(t); afterID == beforeID {
-		t.Errorf("collector container ID = %s after config change and rerun, want a recreated container (ID unchanged)", afterID)
+	// Then only the Collector container is recreated.
+	if afterID := h.containerID(t, otelCollectorContainer); afterID == firstCollectorID {
+		t.Errorf("Collector container ID = %s after config change and rerun, want a recreated container (ID unchanged)", afterID)
 	}
+	if afterID := h.containerID(t, otelDashboardContainer); afterID != firstDashboardID {
+		t.Errorf("dashboard container ID = %s after Collector config change and rerun, want unchanged %s", afterID, firstDashboardID)
+	}
+	assertOtelViewerReachable(t)
 
 	// And a newly sent trace is written to the changed path.
 	secondMarker := postOtelTrace(t, "second")
 	if !h.waitForVolumeFileContains(t, otelChangedTracesPath, secondMarker) {
-		t.Errorf("trace %q not written to %s within %s; the collector is still running the old pipeline\n%s", secondMarker, otelChangedTracesPath, otelTraceFlushTimeout, h.collectorLogs(t))
+		t.Errorf("trace %q not written to %s within %s; the Collector is still running the old pipeline\n%s", secondMarker, otelChangedTracesPath, otelSignalFlushTimeout, h.collectorLogs(t))
 	}
 }
 
@@ -117,8 +140,10 @@ func requireOtelDockerLifecycle(t *testing.T) {
 	if out, err := otelHostDocker("info", "--format", "{{.ServerVersion}}"); err != nil {
 		t.Skipf("docker daemon not reachable (docker info: %v); skipping live otel lifecycle test\n%s", err, out)
 	}
-	if out, err := otelHostDocker("container", "inspect", otelCollectorContainer); err == nil {
-		t.Skipf("container %s already exists; refusing to clobber a real forge collector\n%.200s", otelCollectorContainer, out)
+	for _, container := range []string{otelCollectorContainer, otelDashboardContainer} {
+		if out, err := otelHostDocker("container", "inspect", container); err == nil {
+			t.Skipf("container %s already exists; refusing to clobber a real forge OTel stack\n%.200s", container, out)
+		}
 	}
 	out, err := otelHostDocker("ps", "-aq", "--filter", otelComposeLabel)
 	if err != nil {
@@ -209,12 +234,12 @@ func (h *otelTaskHarness) docker(args ...string) (string, error) {
 	return string(out), err
 }
 
-func (h *otelTaskHarness) collectorContainerID(t *testing.T) string {
+func (h *otelTaskHarness) containerID(t *testing.T, container string) string {
 	t.Helper()
 
-	out, err := h.docker("inspect", "-f", "{{.Id}}", otelCollectorContainer)
+	out, err := h.docker("inspect", "-f", "{{.Id}}", container)
 	if err != nil {
-		t.Fatalf("docker inspect %s: %v\n%s", otelCollectorContainer, err, out)
+		t.Fatalf("docker inspect %s: %v\n%s", container, err, out)
 	}
 	return strings.TrimSpace(out)
 }
@@ -229,14 +254,33 @@ func (h *otelTaskHarness) collectorLogs(t *testing.T) string {
 	return "collector logs (tail):\n" + out
 }
 
-// waitForVolumeFileContains polls a file inside the collector's data volume
-// until it contains marker or otelTraceFlushTimeout elapses. The contrib
+func assertOtelViewerReachable(t *testing.T) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, otelDashboardURL, nil)
+	if err != nil {
+		t.Fatalf("build dashboard request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET %s: %v", otelDashboardURL, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		t.Fatalf("GET %s status = %d, want 2xx", otelDashboardURL, resp.StatusCode)
+	}
+}
+
+// waitForVolumeFileContains polls a file inside the Collector's data volume
+// until it contains marker or otelSignalFlushTimeout elapses. The contrib
 // image is distroless, so the file is read through a throwaway busybox
 // container mounting the volume read-only.
 func (h *otelTaskHarness) waitForVolumeFileContains(t *testing.T, path, marker string) bool {
 	t.Helper()
 
-	deadline := time.Now().Add(otelTraceFlushTimeout)
+	deadline := time.Now().Add(otelSignalFlushTimeout)
 	for {
 		out, err := h.docker("run", "--rm", "-v", otelDataVolume+":/data:ro", otelVolumeReaderImage, "cat", path)
 		if err == nil && strings.Contains(out, marker) {
@@ -250,9 +294,9 @@ func (h *otelTaskHarness) waitForVolumeFileContains(t *testing.T, path, marker s
 	}
 }
 
-// teardownCollector stops the stack and removes everything the test
-// created. It never fails fatally so every step runs even after a failure,
-// and it bounds itself by the cleanup reserve rather than h.stopBy.
+// teardownCollector stops the stack and removes everything the test created.
+// It never fails fatally so every step runs even after a failure, and it
+// bounds itself by the cleanup reserve rather than h.stopBy.
 func (h *otelTaskHarness) teardownCollector(t *testing.T) {
 	t.Helper()
 
@@ -264,8 +308,8 @@ func (h *otelTaskHarness) teardownCollector(t *testing.T) {
 	if err != nil || result.exitCode != 0 {
 		t.Errorf("cleanup: mise run otel:down exit = %d, err = %v\n%s", result.exitCode, err, result.output)
 	}
-	// Fallback for a failed or partial `down`: remove every container of
-	// the compose project (collector and otel-data-init). The gate
+	// Fallback for a failed or partial `down`: remove every container of the
+	// compose project (Collector, dashboard, and otel-data-init). The gate
 	// guaranteed none of them pre-existed, so all of them are ours.
 	out, err := h.docker("ps", "-aq", "--filter", otelComposeLabel)
 	if err != nil {
@@ -295,24 +339,52 @@ func postOtelTrace(t *testing.T, label string) string {
 	now := time.Now().UnixNano()
 	body := fmt.Sprintf(`{"resourceSpans":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"forge-otel-lifecycle-test"}}]},"scopeSpans":[{"scope":{"name":"forge-test"},"spans":[{"traceId":%q,"spanId":%q,"name":%q,"kind":1,"startTimeUnixNano":"%d","endTimeUnixNano":"%d"}]}]}]}`,
 		traceID, otelRandomHex(t, 8), marker, now-int64(time.Millisecond), now)
+	postOtelJSON(t, otelTracesURL, body)
+	return marker
+}
+
+// postOtelMetric sends one OTLP/HTTP JSON gauge whose name is a unique marker.
+func postOtelMetric(t *testing.T, label string) string {
+	t.Helper()
+
+	marker := "forge_otel_lifecycle_metric_" + label + "_" + otelRandomHex(t, 6)
+	now := time.Now().UnixNano()
+	body := fmt.Sprintf(`{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"forge-otel-lifecycle-test"}}]},"scopeMetrics":[{"scope":{"name":"forge-test"},"metrics":[{"name":%q,"gauge":{"dataPoints":[{"timeUnixNano":"%d","asDouble":1}]}}]}]}]}`,
+		marker, now)
+	postOtelJSON(t, otelMetricsURL, body)
+	return marker
+}
+
+// postOtelLog sends one OTLP/HTTP JSON log record whose body is a unique marker.
+func postOtelLog(t *testing.T, label string) string {
+	t.Helper()
+
+	marker := "forge-otel-lifecycle-log-" + label + "-" + otelRandomHex(t, 6)
+	now := time.Now().UnixNano()
+	body := fmt.Sprintf(`{"resourceLogs":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"forge-otel-lifecycle-test"}}]},"scopeLogs":[{"scope":{"name":"forge-test"},"logRecords":[{"timeUnixNano":"%d","severityNumber":9,"severityText":"INFO","body":{"stringValue":%q}}]}]}]}`,
+		now, marker)
+	postOtelJSON(t, otelLogsURL, body)
+	return marker
+}
+
+func postOtelJSON(t *testing.T, url, body string) {
+	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, otelTracesURL, strings.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
 	if err != nil {
 		t.Fatalf("build OTLP request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		t.Fatalf("POST %s: %v", otelTracesURL, err)
+		t.Fatalf("POST %s: %v", url, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("POST %s status = %d, want %d", otelTracesURL, resp.StatusCode, http.StatusOK)
+		t.Fatalf("POST %s status = %d, want %d", url, resp.StatusCode, http.StatusOK)
 	}
-
-	return marker
 }
 
 func otelRandomHex(t *testing.T, n int) string {

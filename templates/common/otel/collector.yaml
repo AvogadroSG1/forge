@@ -30,6 +30,9 @@ processors:
 exporters:
   debug:
     verbosity: basic
+  otlphttp/aspire:
+    endpoint: http://otel-dashboard:18890
+    compression: none
   file/traces:
     path: /data/traces.jsonl
     rotation:
@@ -52,12 +55,12 @@ service:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [debug, file/traces]
+      exporters: [debug, file/traces, otlphttp/aspire]
     metrics:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [debug, file/metrics]
+      exporters: [debug, file/metrics, otlphttp/aspire]
     logs:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [debug, file/logs]
+      exporters: [debug, file/logs, otlphttp/aspire]

@@ -54,12 +54,21 @@ refresh-immune like the rest of the overlay. (See ADR-0020, SPEC §9.4.)
 
 ### System-wide collector
 The single OpenTelemetry Collector instance, started by any repo's `mise run otel` task, that
-every `forge init` repo on a machine shares. It runs from a fixed directory
+every `forge init` repo on a machine shares. It is the stable OTLP/HTTP ingress and browser CORS
+point, retains bounded debug output and rotated JSONL files, and forwards every received signal
+to the Telemetry viewer. It runs from a fixed directory
 (`${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel`) under the fixed Docker Compose project name
 `forge-otel`, bound to `127.0.0.1` only, with `restart: unless-stopped`. Under `mise`, a repo's
 OTLP endpoint environment always points at it (amending the Telemetry bootstrap's off-by-default
 posture — outside `mise` that posture is unchanged). Wholly forge-owned and part of the managed
-upgrade set. (See ADR-0021, SPEC §9.5.)
+upgrade set. (See ADR-0021, ADR-0022, SPEC §9.5.)
+
+### Telemetry viewer
+The Aspire Dashboard visual inspection surface behind the System-wide collector. It shows
+received traces, metrics, and structured logs at `http://127.0.0.1:18888` without becoming a
+second application ingress: only the Collector sends to Aspire's Compose-internal OTLP/HTTP
+endpoint. Viewer data is short-lived and memory-only, unlike the Collector's bounded JSONL
+evidence, and resets when the dashboard container restarts. (See ADR-0022, SPEC §9.5.)
 
 ### OTLP define bridge
 The step in an Angular repo's `mise` dev/build tasks (`web-dev`/`web-build` in a fullstack repo)

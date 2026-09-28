@@ -17,14 +17,18 @@ OpenTelemetry traces and metrics are wired in from day one. The service name com
 set it in `mise.local.toml`); browser bundles cannot read the environment, so vite/sveltekit use
 build-time `VITE_OTEL_SERVICE_NAME` and Angular uses `environment.serviceName`.
 
-Run `mise run otel` to start a local collector (Docker required). It installs a small,
-system-wide Docker Compose stack shared by every project on the machine, so you only need to
-start it once and every project you work on reuses the same collector. `mise` then sets
-`OTEL_EXPORTER_OTLP_ENDPOINT` and the per-signal endpoint variables for you automatically —
-nothing else to configure. Other tasks: `mise run otel:status` (is it up?), `mise run otel:logs`
-(tail what the collector received), `mise run otel:down` (stop it). Collected data also lands as
-newline-delimited JSON in the `forge-otel-data` Docker volume (`/data/traces.jsonl`,
-`metrics.jsonl`, `logs.jsonl` inside the collector container).
+Run `mise run otel` to start the shared system-wide Collector + Aspire Dashboard stack (Docker
+required). `mise` then sets `OTEL_EXPORTER_OTLP_ENDPOINT` and the per-signal endpoint variables
+automatically. Open `http://127.0.0.1:18888` and use Aspire's Traces, Metrics, and Structured Logs
+pages to inspect received telemetry. Viewer data is memory-only and resets when the dashboard
+container restarts.
+
+Use `mise run otel:status` to check Collector health and viewer reachability separately,
+`mise run otel:logs` to tail the raw Collector output, and `mise run otel:down` to stop the whole
+stack. Retained raw data also lands as newline-delimited JSON in the `forge-otel-data` Docker
+volume (`/data/traces.jsonl`, `metrics.jsonl`, and `logs.jsonl`). The Structured Logs page contains
+only logs an application exports over OTLP; its presence does not mean every stack has an
+application log bridge.
 
 Browser bundles cannot read the environment, so the endpoint is inlined at build time. Vite and
 SvelteKit read `VITE_OTEL_EXPORTER_OTLP_ENDPOINT`. Angular uses `mise run dev` / `mise run build`

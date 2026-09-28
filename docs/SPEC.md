@@ -436,90 +436,105 @@ test, shipped as a vetted extra (ADR-0010, §10.2) with no guideline edit.
   `pyproject.toml.tmpl`, `*.csproj.tmpl`, overlay `package.json.tmpl`), the existing precedent
   for overlay tools. Owning test: `TestGoldenStacksShipTelemetryBootstrap` (§18).
 
-### 9.5 System-wide OTel collector — `mise run otel`
+### 9.5 System-wide OTel Collector + Aspire viewer — `mise run otel`
 
-*(Authoritative: ADR-0021. Amends 9.4's exporter default under `mise`.)*
+*(Authoritative: ADR-0021, amended by ADR-0022. Amends 9.4's exporter default under `mise`.)*
 
 Every stack, common rather than golden, additionally ships three assets that give the §9.4
-bootstrap somewhere to send data:
+bootstrap somewhere to send data and a local visual inspection surface:
 
 - `templates/common/mise/conf.d/otel.toml` → `.config/mise/conf.d/otel.toml`. `mise` merges every
   file under a project's `.config/mise/conf.d/*.toml` on top of its own `mise.toml`, so this one
   forge-owned file applies to all twelve stacks with no per-stack `mise.toml` edit. It carries:
   - **`[env]`**, always set (not endpoint-gated): `OTEL_EXPORTER_OTLP_ENDPOINT`,
     `OTEL_EXPORTER_OTLP_PROTOCOL`, and per-signal
-    `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_ENDPOINT`, plus `VITE_OTEL_EXPORTER_OTLP_ENDPOINT`
-    for the Vite stacks (vite-ts, sveltekit; Angular uses the OTLP define bridge below). This is
-    the amendment: every process `mise` launches now takes §9.4's "endpoint set" branch. The
-    §9.4 in-code gate is unchanged; outside `mise` the environment is unset and a generated repo
-    stays silent exactly as §9.4 describes. Precedence under `mise` is `mise.local.toml` `[env]`
-    over this file over the shell environment, so a shell `export` is ignored for `mise` tasks;
-    the generated README and AGENTS.md MUST direct users to `mise.local.toml` to point at a
-    different collector. Because a login session often exports `OTEL_*` for a vendor agent,
-    `[env]` also pins `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_PROTOCOL` to `http/protobuf` and
-    unsets (`= false`) `OTEL_EXPORTER_OTLP_HEADERS`,
-    `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_HEADERS` and `OTEL_SERVICE_NAME`, so no inherited
-    gRPC protocol, vendor credential or service name reaches a `mise` task; a string value in
-    `mise.local.toml` `[env]` still overrides each of them. Owning test:
-    `TestOtelEnvOverridesInheritedVendorOtlpVars`.
+    `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_ENDPOINT`, plus
+    `VITE_OTEL_EXPORTER_OTLP_ENDPOINT` for Vite stacks. This is the amendment: every process
+    `mise` launches takes §9.4's “endpoint set” branch. Outside `mise` the environment is unset and
+    a generated repo stays silent exactly as §9.4 describes. Precedence under `mise` is
+    `mise.local.toml` `[env]` over this file over the shell environment, so a shell `export` is
+    ignored for `mise` tasks. Generated README and AGENTS instructions direct users to
+    `mise.local.toml` to point at a different Collector. `[env]` also pins
+    `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_PROTOCOL` to `http/protobuf` and unsets (`= false`)
+    inherited OTLP headers and `OTEL_SERVICE_NAME`, preventing vendor protocol, credential, and
+    service-name leakage into the local stack. A string value in `mise.local.toml` still overrides
+    each setting. Owning test: `TestOtelEnvOverridesInheritedVendorOtlpVars`.
   - **`[tasks]`** `otel` (alias `otel:up`), `otel:down`, `otel:status`, `otel:logs`. `otel` copies
     `.otel/*` to `${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel/` and runs
-    `docker compose -p forge-otel up -d --wait --force-recreate otel-collector`, then polls the
-    health endpoint. `--force-recreate` is required: `collector.yaml` is bind-mounted, so an edit
-    does not change the Compose config hash and a plain `up` would keep the old pipeline running.
-    Re-running `otel` therefore restarts the shared collector every time; telemetry from every
-    repo pauses briefly. SDKs typically buffer or retry across the gap, but telemetry emitted
-    during it MAY be dropped (accepted trade-off, ADR-0021). `depends_on` still runs the one-shot
-    volume init first. `otel` runs in the repo root via
-    `dir = "{{config_root}}"` (resolved by `mise`, not a shell) and copies from relative `.otel/`
-    paths; no `run` body interpolates `{{config_root}}` or any other path template. Every `run`
-    body MUST be POSIX `sh` (`set -eu`, no bashisms), since `mise`'s default inline shell is `sh`,
-    which is `dash` on Debian/Ubuntu. Owning tests:
-    `TestOtelTasksRunUnderDash`, `TestOtelTasksPathMetacharactersInert`,
-    `TestOtelTasksNoTemplatesInRunBodies`, `TestOtelTasksUpForceRecreates`. The live Docker
-    lifecycle test `TestOtelLifecycleRecreatesOnConfigChange` (a config edit plus re-run yields a
-    new container that exports through the new pipeline) is gated behind `FORGE_DOCKER_TESTS=1`
-    and skips otherwise.
+    `docker compose -p forge-otel up -d --wait --force-recreate otel-collector`. The target stays
+    exactly `otel-collector`: Compose starts its `otel-data-init` and `otel-dashboard`
+    dependencies, while `--force-recreate` refreshes only the Collector whose configuration is
+    bind-mounted. Re-running `otel` therefore pauses Collector ingestion briefly but preserves an
+    unchanged dashboard container and its in-memory telemetry.
+  - `otel` uses one bounded readiness loop for Collector health at
+    `http://127.0.0.1:13133` and dashboard frontend reachability at
+    `http://127.0.0.1:18888`; timeout output names `mise run otel:logs`. Successful output reports
+    the three OTLP signal URLs, Collector health URL, and exact viewer URL
+    `http://127.0.0.1:18888`. `otel:status` reports the two surfaces separately.
+    `otel:logs` requests Compose logs for `otel-collector` only, preserving the raw received-data
+    path without dashboard process logs. `otel:down` stops the complete Compose project.
+  - `otel` runs in the repo root via `dir = "{{config_root}}"` (resolved by `mise`, not a shell)
+    and copies from relative `.otel/` paths. Every `run` body is POSIX `sh` (`set -eu`, no
+    bashisms) and contains no path template. Owning tests:
+    `TestOtelTasksUpChecksCollectorAndViewer`, `TestOtelTasksStatusReportsCollectorAndViewer`,
+    `TestOtelTasksLogsTargetsCollector`, `TestOtelTasksRunUnderDash`,
+    `TestOtelTasksPathMetacharactersInert`, `TestOtelTasksNoTemplatesInRunBodies`, and
+    `TestOtelTasksUpForceRecreates`.
 - **Angular: the OTLP define bridge.** The golden overlays own these tasks, not `otel.toml`.
   Standalone Angular's `mise.toml` has `dev` and `build`. Each backend `mise.toml.tmpl`
   (`csharp-webapi`, `go-api-chi`, `python-fastapi`) has `web-dev` and `web-build` inside a
   `{{- if eq .Frontend "angular" }}` block, byte-identical across the three and absent for other
-  frontends. Each body is POSIX `sh` starting `set -eu`. It reads `OTEL_EXPORTER_OTLP_ENDPOINT`
-  (unset → `""`) and runs `npm run start|build -- --define "FORGE_OTLP_ENDPOINT=\"<endpoint>\""`
-  (`npm --prefix web …` fullstack), passing the value as one argv entry with shell
-  metacharacters inert. An endpoint containing `"`, `\` or a control character (the explicit,
-  locale-independent set 0x01–0x1f, 0x7f) MUST be rejected before `npm` runs: exit 1 with a
-  stderr message naming `OTEL_EXPORTER_OTLP_ENDPOINT`. `environment.ts` declares
-  `FORGE_OTLP_ENDPOINT` and reads it through a `typeof` guard, so plain `npm start` / `ng build`
-  compiles and stays silent. Owning tests: `TestOtelAngularTasksBridgeEndpointToDefine`,
-  `TestOtelAngularEnvironmentReadsDefineWithTypeofGuard`,
+  frontends. Each body is POSIX `sh` starting `set -eu`. It reads
+  `OTEL_EXPORTER_OTLP_ENDPOINT` (unset → `""`) and runs
+  `npm run start|build -- --define "FORGE_OTLP_ENDPOINT=\"<endpoint>\""` (`npm --prefix web …`
+  fullstack), passing the value as one argv entry with shell metacharacters inert. An endpoint
+  containing `"`, `\` or a control character (0x01–0x1f, 0x7f) fails before `npm` runs.
+  `environment.ts` declares `FORGE_OTLP_ENDPOINT` and reads it through a `typeof` guard, so plain
+  `npm start` / `ng build` compiles and stays silent. Owning tests:
+  `TestOtelAngularTasksBridgeEndpointToDefine`, `TestOtelAngularEnvironmentReadsDefineWithTypeofGuard`,
   `TestOtelAngularBackendTaskBlocksIdentical`, `TestOtelAngularTasksAbsentForOtherFrontends`,
-  `TestOtelAngularTasksRejectUnsafeEndpoint`, `TestOtelAngularTasksPassEndpointAsDefine`. The
-  real-build checks `TestOtelAngularStandaloneBundleInlinesEndpoint` and
-  `TestOtelAngularFullstackBundleInlinesEndpoint` are gated behind `FORGE_SMOKE_NETWORK=1`.
-- `templates/common/otel/compose.yaml` → `.otel/compose.yaml`: Docker Compose project
-  `forge-otel`, image `otel/opentelemetry-collector-contrib` (pinned), `container_name:
-  forge-otel-collector`, `restart: unless-stopped`, ports bound to `127.0.0.1` only (`4318` HTTP
-  and `13133` health; no `4317` gRPC publish, which would shadow another local agent already
-  listening there), a `busybox` one-shot init step that `chown`s the named volume
-  `forge-otel-data` to the collector's non-root uid before it starts. The `otel-collector`
-  service MUST declare `logging: {driver: local, options: {max-size: "10m", max-file: "3"}}`
-  (option values are YAML strings) so the `debug` exporter's stdout is bounded to about 30 MB of
-  Docker logs; together with the file exporters' rotation (`max_megabytes: 50`, `max_backups: 3`,
-  about 200 MB per signal) host disk use is bounded (ADR-0021). Owning tests:
-  `TestOtelComposeCollectorLogsBounded` (parsed template) and
-  `TestOtelComposeConfigResolvesLogging` (`docker compose config` output).
-- `templates/common/otel/collector.yaml` → `.otel/collector.yaml`: `otlp` receiver (http only,
-  CORS allowing `http://localhost:*` / `http://127.0.0.1:*` for browser stacks),
-  `memory_limiter`/`batch` processors, `debug` + `file/{traces,metrics,logs}` exporters writing
-  `/data/{traces,metrics,logs}.jsonl` in the volume, `health_check` extension.
+  `TestOtelAngularTasksRejectUnsafeEndpoint`, and `TestOtelAngularTasksPassEndpointAsDefine`.
+  Real-build checks are gated behind `FORGE_SMOKE_NETWORK=1`.
+- `templates/common/otel/compose.yaml` → `.otel/compose.yaml`: fixed Compose project
+  `forge-otel` with:
+  - Collector service `otel-collector`, image `otel/opentelemetry-collector-contrib:0.161.0`,
+    container `forge-otel-collector`, `restart: unless-stopped`, and loopback-only host mappings
+    `4318` (OTLP/HTTP) and `13133` (health). Port `4317` is not published. The unchanged
+    `otel-data-init` one-shot service owns the named `forge-otel-data` volume for Collector uid
+    10001.
+  - Viewer service `otel-dashboard`, image
+    `mcr.microsoft.com/dotnet/aspire-dashboard:13.5.2`, container
+    `forge-otel-dashboard`, and `restart: unless-stopped`. Anonymous access is enabled by
+    `DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"` and bounded by the sole loopback host
+    mapping `127.0.0.1:18888:18888`. Aspire's OTLP/gRPC `18889` and OTLP/HTTP `18890` ports are
+    not published. No viewer volume is mounted: its telemetry is memory-only and resets with the
+    dashboard container.
+  - `otel-collector.depends_on` includes `otel-data-init: service_completed_successfully` and
+    `otel-dashboard: service_started`. Both long-lived services use
+    `logging: {driver: local, options: {max-size: "10m", max-file: "3"}}` with string option
+    values. Owning tests `TestOtelComposeRuntimeContract` and
+    `TestOtelComposeConfigResolvesRuntimeContract` assert both raw YAML and resolved
+    `docker compose config`; generated-output coverage is
+    `TestGoldenStacksScaffoldOtelStackAssets`,
+    `TestFullstackScaffoldGetsOtelStackAssetsExactlyOnce`, and
+    `TestWriterScaffoldsOtelStackAssets`.
+- `templates/common/otel/collector.yaml` → `.otel/collector.yaml`: unchanged OTLP/HTTP receiver,
+  browser CORS rules, memory limiter, batch processor, health extension, `debug`, and bounded
+  `file/{traces,metrics,logs}` exporters. It additionally defines `otlphttp/aspire` with exact
+  endpoint `http://otel-dashboard:18890` and `compression: none`; Aspire's standalone OTLP/HTTP
+  receiver does not decode the Collector exporter's default gzip payload. Traces, metrics, and
+  logs pipelines all append that exporter without removing their existing outputs. File rotation
+  remains `max_megabytes: 50`, `max_backups: 3` per signal.
 
 Because the copy target and Compose project name are fixed, `mise run otel` from any forge repo on
-the machine converges on one shared collector; a second repo's copy overwrites the first's
-(last-writer-wins — identical across repos on the same forge version). No UI ships; `docker logs
-forge-otel-collector` (or `mise run otel:logs`) and the `.jsonl` files are the verification path.
-These three files are part of the managed/upgrade set (§19): `forge upgrade` propagates them to
-existing repos.
+the machine converges on one shared Collector and viewer (last-writer-wins across forge versions).
+The Collector remains the stable application ingress and retained raw evidence path; Aspire is
+only the visual, short-lived development surface. The Logs page contains only OTLP logs an
+application exports and does not broaden §9.4's application logging support. Live owning test
+`TestOtelLifecycleStartsViewerAndRecreatesCollectorOnConfigChange` proves all three signal files,
+viewer HTTP reachability, Collector recreation, dashboard-container stability, and the changed
+trace exporter path. These three assets are wholly owned members of the managed upgrade set
+(§19).
 
 ---
 

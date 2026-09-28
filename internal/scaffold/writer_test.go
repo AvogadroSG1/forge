@@ -194,7 +194,7 @@ func TestWriterRendersPythonFastAPIPackageDirectory(t *testing.T) {
 	assertFileContains(t, filepath.Join(tempDir, "tests", "test_health.py"), "from cost_investigator.main import app")
 }
 
-func TestWriterScaffoldsOtelMiseAndCollectorAssets(t *testing.T) {
+func TestWriterScaffoldsOtelStackAssets(t *testing.T) {
 	t.Parallel()
 
 	tempDir := t.TempDir()
@@ -230,11 +230,25 @@ func TestWriterScaffoldsOtelMiseAndCollectorAssets(t *testing.T) {
 
 	composePath := filepath.Join(tempDir, ".otel", "compose.yaml")
 	assertFileContains(t, composePath, "restart: unless-stopped")
+	assertFileContains(t, composePath, "image: mcr.microsoft.com/dotnet/aspire-dashboard:13.5.2")
+	assertFileContains(t, composePath, "container_name: forge-otel-dashboard")
+	assertFileContains(t, composePath, `DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"`)
+	assertFileContains(t, composePath, `"127.0.0.1:18888:18888"`)
+	assertFileContains(t, composePath, "condition: service_started")
+	compose := readFile(t, composePath)
+	for _, forbidden := range []string{"127.0.0.1:18889:", "127.0.0.1:18890:"} {
+		if strings.Contains(compose, forbidden) {
+			t.Errorf("%s publishes Aspire OTLP port via %q", composePath, forbidden)
+		}
+	}
 
 	collectorPath := filepath.Join(tempDir, ".otel", "collector.yaml")
-	if _, err := os.Stat(collectorPath); err != nil {
-		t.Fatalf("expected %q to exist: %v", collectorPath, err)
-	}
+	assertFileContains(t, collectorPath, "otlphttp/aspire:")
+	assertFileContains(t, collectorPath, "endpoint: http://otel-dashboard:18890")
+	assertFileContains(t, collectorPath, "compression: none")
+	assertFileContains(t, collectorPath, "exporters: [debug, file/traces, otlphttp/aspire]")
+	assertFileContains(t, collectorPath, "exporters: [debug, file/metrics, otlphttp/aspire]")
+	assertFileContains(t, collectorPath, "exporters: [debug, file/logs, otlphttp/aspire]")
 }
 
 func TestWriterRendersCSharpNamespaceIntoProjectFile(t *testing.T) {
@@ -551,4 +565,3 @@ func TestMapOutputPath(t *testing.T) {
 		})
 	}
 }
-

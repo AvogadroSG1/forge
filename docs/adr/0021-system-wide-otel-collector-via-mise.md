@@ -1,7 +1,8 @@
 # A system-wide OpenTelemetry Collector, started by `mise run otel`
 
 **Status:** accepted · 2026-09-25 · amended 2026-09-26 (infra v7): inherited vendor OTLP env
-neutralized under `mise`; gRPC `4317` no longer published.
+neutralized under `mise`; gRPC `4317` no longer published · amended by ADR-0022 only for the prior
+“no UI” decision.
 
 ## Context
 
@@ -155,6 +156,10 @@ does not ship a UI, so `docker logs forge-otel-collector` (via the `debug` expor
 newline-delimited JSON files under the `forge-otel-data` volume (via the `file` exporter, one file
 per signal, `mise run otel:logs` and the `.jsonl` files respectively) are enough to prove signals
 are flowing without taking on a second running service.
+
+ADR-0022 amends only this no-UI decision by adding an Aspire Dashboard behind the Collector. The
+Collector rationale, bounded outputs, and historical considered-options record in this ADR remain
+authoritative.
 
 Both outputs are bounded on the host, because the collector runs indefinitely under
 `restart: unless-stopped`. The `debug` exporter's stdout is captured by Docker with the `local`

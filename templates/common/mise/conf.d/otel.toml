@@ -1,7 +1,7 @@
-# forge-managed: OpenTelemetry env + tasks for the system-wide collector.
+# forge-managed: OpenTelemetry env + tasks for the system-wide OTel stack.
 # mise merges every file under .config/mise/conf.d/ with this repo's own
 # mise.toml, so these apply on top of whatever the stack defines. See .otel/
-# for the collector's Docker Compose stack, started with `mise run otel`.
+# for the Collector + Aspire Dashboard stack, started with `mise run otel`.
 # Task bodies MUST stay POSIX sh (`set -eu`, no bashisms): mise's default
 # inline shell is `sh`, which is dash on Debian/Ubuntu.
 # Do not hand-edit; a future `forge upgrade` may overwrite this file.
@@ -36,7 +36,7 @@ OTEL_SERVICE_NAME = false
 VITE_OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4318"
 
 [tasks.otel]
-description = "Start the system-wide forge OpenTelemetry collector (Docker)"
+description = "Start the system-wide forge OpenTelemetry stack (Docker)"
 alias = "otel:up"
 # mise resolves `dir` itself (never through a shell), so the checkout path is
 # data, not shell source; the run body then copies from relative .otel/ paths.
@@ -63,14 +63,14 @@ cp -f .otel/compose.yaml .otel/collector.yaml "$data_dir/"
 # config hash and a plain `up` would leave the old pipeline running.
 # --force-recreate restarts the shared collector on every run (telemetry from
 # every repo pauses briefly; SDKs typically buffer or retry, but telemetry
-# emitted during the gap MAY be dropped). depends_on still runs the one-shot
-# otel-data-init first.
+# emitted during the gap MAY be dropped). depends_on starts the one-shot
+# otel-data-init and the Aspire Dashboard without force-recreating the viewer.
 docker compose -p forge-otel -f "$data_dir/compose.yaml" up -d --wait --force-recreate otel-collector
 
-echo "otel: waiting for the collector health check..."
+echo "otel: waiting for Collector health and the dashboard UI..."
 ready=""
 for _ in $(seq 1 30); do
-  if curl -fsS -o /dev/null "http://127.0.0.1:13133" 2>/dev/null; then
+  if curl -fsS -o /dev/null "http://127.0.0.1:13133" 2>/dev/null && curl -fsS -o /dev/null "http://127.0.0.1:18888" 2>/dev/null; then
     ready="1"
     break
   fi
@@ -78,29 +78,30 @@ for _ in $(seq 1 30); do
 done
 
 if [ -z "$ready" ]; then
-  echo "otel: collector did not report healthy within 30s; check 'mise run otel:logs'" >&2
+  echo "otel: Collector or dashboard did not become ready within 30s; check 'mise run otel:logs'" >&2
   exit 1
 fi
 
 cat <<'EOF'
-otel: collector is up.
+otel: system-wide OTel stack is up.
   traces:  http://localhost:4318/v1/traces
   metrics: http://localhost:4318/v1/metrics
   logs:    http://localhost:4318/v1/logs
   health:  http://127.0.0.1:13133
+  viewer:  http://127.0.0.1:18888
 
-Tail collector output with: mise run otel:logs
+Tail raw Collector output with: mise run otel:logs
 EOF
 '''
 
 [tasks."otel:down"]
-description = "Stop the system-wide forge OpenTelemetry collector"
+description = "Stop the system-wide forge OpenTelemetry stack"
 run = '''
 set -eu
 
 data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel"
 if [ ! -f "$data_dir/compose.yaml" ]; then
-  echo "otel: no collector found at $data_dir (run 'mise run otel' first)" >&2
+  echo "otel: no OTel stack found at $data_dir (run 'mise run otel' first)" >&2
   exit 0
 fi
 
@@ -108,22 +109,27 @@ docker compose -p forge-otel -f "$data_dir/compose.yaml" down
 '''
 
 [tasks."otel:status"]
-description = "Show the system-wide forge OpenTelemetry collector's status"
+description = "Show the system-wide forge OpenTelemetry stack's status"
 run = '''
 set -eu
 
 data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel"
 if [ ! -f "$data_dir/compose.yaml" ]; then
-  echo "otel: no collector found at $data_dir (run 'mise run otel' first)"
+  echo "otel: no OTel stack found at $data_dir (run 'mise run otel' first)"
   exit 0
 fi
 
 docker compose -p forge-otel -f "$data_dir/compose.yaml" ps
 echo
 if curl -fsS -o /dev/null "http://127.0.0.1:13133" 2>/dev/null; then
-  echo "otel: health check OK (http://127.0.0.1:13133)"
+  echo "otel: Collector health OK (http://127.0.0.1:13133)"
 else
-  echo "otel: health check FAILED (http://127.0.0.1:13133)"
+  echo "otel: Collector health FAILED (http://127.0.0.1:13133)"
+fi
+if curl -fsS -o /dev/null "http://127.0.0.1:18888" 2>/dev/null; then
+  echo "otel: dashboard UI OK (http://127.0.0.1:18888)"
+else
+  echo "otel: dashboard UI FAILED (http://127.0.0.1:18888)"
 fi
 '''
 
@@ -134,9 +140,9 @@ set -eu
 
 data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/forge-otel"
 if [ ! -f "$data_dir/compose.yaml" ]; then
-  echo "otel: no collector found at $data_dir (run 'mise run otel' first)" >&2
+  echo "otel: no OTel stack found at $data_dir (run 'mise run otel' first)" >&2
   exit 1
 fi
 
-docker compose -p forge-otel -f "$data_dir/compose.yaml" logs -f
+docker compose -p forge-otel -f "$data_dir/compose.yaml" logs -f otel-collector
 '''

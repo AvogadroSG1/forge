@@ -100,6 +100,73 @@ func TestOtelTasksRunUnderDash(t *testing.T) {
 	}
 }
 
+func TestOtelTasksUpChecksCollectorAndViewer(t *testing.T) {
+	h := newOtelTaskHarness(t, "repo")
+
+	result := h.run(t, "otel")
+	if result.exitCode != 0 {
+		t.Fatalf("mise run otel exit = %d, want 0\n%s", result.exitCode, result.output)
+	}
+	if !strings.Contains(result.output, "  viewer:  http://127.0.0.1:18888") {
+		t.Errorf("mise run otel output missing viewer URL:\n%s", result.output)
+	}
+	assertRecordedCurlURLs(t, h, []string{
+		"http://127.0.0.1:13133",
+		"http://127.0.0.1:18888",
+	})
+}
+
+func TestOtelTasksStatusReportsCollectorAndViewer(t *testing.T) {
+	h := newOtelTaskHarness(t, "repo")
+	if result := h.run(t, "otel"); result.exitCode != 0 {
+		t.Fatalf("mise run otel exit = %d, want 0\n%s", result.exitCode, result.output)
+	}
+	resetOtelStubRecord(t, h)
+
+	result := h.run(t, "otel:status")
+	if result.exitCode != 0 {
+		t.Fatalf("mise run otel:status exit = %d, want 0\n%s", result.exitCode, result.output)
+	}
+	for _, want := range []string{
+		"otel: Collector health OK (http://127.0.0.1:13133)",
+		"otel: dashboard UI OK (http://127.0.0.1:18888)",
+	} {
+		if !strings.Contains(result.output, want) {
+			t.Errorf("mise run otel:status output missing %q:\n%s", want, result.output)
+		}
+	}
+	assertRecordedCurlURLs(t, h, []string{
+		"http://127.0.0.1:13133",
+		"http://127.0.0.1:18888",
+	})
+}
+
+func TestOtelTasksLogsTargetsCollector(t *testing.T) {
+	h := newOtelTaskHarness(t, "repo")
+	if result := h.run(t, "otel"); result.exitCode != 0 {
+		t.Fatalf("mise run otel exit = %d, want 0\n%s", result.exitCode, result.output)
+	}
+	resetOtelStubRecord(t, h)
+
+	result := h.run(t, "otel:logs")
+	if result.exitCode != 0 {
+		t.Fatalf("mise run otel:logs exit = %d, want 0\n%s", result.exitCode, result.output)
+	}
+	var logs [][]string
+	for _, argv := range h.stubInvocations(t) {
+		if argv[0] == "docker" && slices.Contains(argv, "compose") && slices.Contains(argv, "logs") {
+			logs = append(logs, argv)
+		}
+	}
+	if len(logs) != 1 {
+		t.Fatalf("docker compose logs invocations = %q, want exactly one", logs)
+	}
+	logArgs := logs[0][slices.Index(logs[0], "logs")+1:]
+	if want := []string{"-f", "otel-collector"}; !slices.Equal(logArgs, want) {
+		t.Errorf("docker compose logs argv after `logs` = %q, want %q", logArgs, want)
+	}
+}
+
 func TestOtelTasksPathMetacharactersInert(t *testing.T) {
 	h := newOtelTaskHarness(t, filepath.Join(otelInjectionSegment, "repo"))
 
@@ -489,6 +556,32 @@ func (h *otelTaskHarness) stubInvocations(t *testing.T) [][]string {
 	}
 
 	return invocations
+}
+
+func assertRecordedCurlURLs(t *testing.T, h *otelTaskHarness, want []string) {
+	t.Helper()
+
+	var got []string
+	for _, argv := range h.stubInvocations(t) {
+		if argv[0] != "curl" {
+			continue
+		}
+		for _, arg := range argv[1:] {
+			if strings.HasPrefix(arg, "http://") || strings.HasPrefix(arg, "https://") {
+				got = append(got, arg)
+			}
+		}
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("recorded curl URLs = %q, want %q", got, want)
+	}
+}
+
+func resetOtelStubRecord(t *testing.T, h *otelTaskHarness) {
+	t.Helper()
+	if err := os.WriteFile(h.recordPath, nil, 0o600); err != nil {
+		t.Fatalf("reset %s: %v", h.recordPath, err)
+	}
 }
 
 var (
