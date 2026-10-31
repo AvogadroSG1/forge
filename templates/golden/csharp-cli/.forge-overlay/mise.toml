@@ -1,5 +1,5 @@
 [tools]
-dotnet = "10.0.203"
+dotnet = "10.0.403"
 lefthook = "latest"
 "github:Dicklesworthstone/destructive_command_guard" = "latest"
 

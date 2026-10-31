@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 func TestVerifyTemplatesWorkflowDefinesRequiredTriggersAndJobs(t *testing.T) {
@@ -31,10 +31,7 @@ func TestVerifyTemplatesWorkflowDefinesRequiredTriggersAndJobs(t *testing.T) {
 		"github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'",
 		"fail-fast: false",
 		"stack: [go-cli-cobra, python-cli-typer, csharp-cli, go-api-chi, python-fastapi, csharp-webapi]",
-		"uses: actions/checkout@v4",
-		"uses: actions/setup-go@v5",
 		"go-version-file: go.mod",
-		"uses: jdx/mise-action@v2",
 		"run: make verify-fast",
 		`-run "TestLocalRelease/${{ matrix.stack }}" ./test/`,
 	} {

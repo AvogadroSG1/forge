@@ -1,5 +1,5 @@
 [tools]
-node = "24"
+node = "26.13.0"
 lefthook = "latest"
 "github:Dicklesworthstone/destructive_command_guard" = "latest"
 

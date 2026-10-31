@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/huh"
+	"charm.land/huh/v2"
 
 	"forge"
 	"forge/internal/prompt"
@@ -337,6 +337,12 @@ func TestRunHelpListsCompletionCommand(t *testing.T) {
 	}
 	if !strings.Contains(output, "completion      Generate shell completion script") {
 		t.Fatalf("usage output = %q, want completion command listed", output)
+	}
+}
+
+func TestRunInitHelpReturnsSuccess(t *testing.T) {
+	if err := run([]string{"init", "--help"}, forge.Assets()); err != nil {
+		t.Fatalf("run([init --help]) error = %v, want nil", err)
 	}
 }
 

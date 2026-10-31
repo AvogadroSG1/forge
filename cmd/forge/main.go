@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/huh"
+	"charm.land/huh/v2"
 
 	"forge"
 	allowlist "forge/internal/allowlist"
@@ -131,6 +131,9 @@ func initFlagSet() (*flag.FlagSet, *prompt.Inputs) {
 func runInit(args []string, assets fs.FS) error {
 	flags, inputsPtr := initFlagSet()
 	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
 		return err
 	}
 	inputs := *inputsPtr

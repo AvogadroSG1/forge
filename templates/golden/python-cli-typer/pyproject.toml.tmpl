@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.33.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -9,16 +9,16 @@ description = "Walking-skeleton Typer CLI"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-  "opentelemetry-distro~=0.65b0",
-  "opentelemetry-exporter-otlp-proto-http~=1.44",
-  "typer>=0.12,<1.0",
+  "opentelemetry-distro>=0.66b2,<0.67",
+  "opentelemetry-exporter-otlp-proto-http>=1.45.2,<1.46",
+  "typer>=0.27.3,<1.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=8.2,<9.0",
-  "pytest-cov>=5.0,<6.0",
-  "pytest-mock>=3.14,<4.0",
+  "pytest>=9.2.0,<10.0",
+  "pytest-cov>=7.1.0,<8.0",
+  "pytest-mock>=3.17.0,<4.0",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -26,3 +26,6 @@ packages = ["src/{{.PythonPackage}}"]
 
 [project.scripts]
 {{.PythonPackage}} = "{{.PythonPackage}}.main:main"
+
+[tool.ruff]
+extend-exclude = [".agents/**", ".beads/**", ".claude/skills/**", ".opencode/**", "apm_modules/**"]

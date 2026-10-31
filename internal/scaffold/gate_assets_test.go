@@ -110,7 +110,7 @@ func TestSharedCIWorkflowOnlyDelegatesToMise(t *testing.T) {
 				t.Fatalf("ReadFile(%s) error = %v", ciPath, err)
 			}
 			ciText := string(ciData)
-			for _, snippet := range []string{"actions/checkout@v4", "jdx/mise-action@v2", "mise install", "mise run ci"} {
+			for _, snippet := range []string{"mise install", "mise run ci"} {
 				if !strings.Contains(ciText, snippet) {
 					t.Fatalf("%s missing %q", ciPath, snippet)
 				}

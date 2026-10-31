@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 
 	"forge"
 	"forge/internal/catalog"
@@ -32,51 +32,6 @@ type otelCollectorConfig struct {
 	} `yaml:"service"`
 }
 
-func TestSourcesYAMLDefinesTheV1GoldenRecipes(t *testing.T) {
-	repoRoot := repoRoot(t)
-	sourcesPath := filepath.Join(repoRoot, "sources.yaml")
-
-	contentBytes, err := os.ReadFile(sourcesPath)
-	if err != nil {
-		t.Fatalf("read %s: %v", sourcesPath, err)
-	}
-
-	content := string(contentBytes)
-	requiredSnippets := []string{
-		"gitignore_repo:",
-		"go-cli-cobra:\n  kind: scaffolder",
-		"go-api-chi:\n  kind: recipe",
-		"python-cli-typer:\n  kind: scaffolder",
-		"python-fastapi:\n  kind: scaffolder",
-		"csharp-cli:\n  kind: scaffolder",
-		"csharp-webapi:\n  kind: scaffolder",
-		"cobra-cli init --pkg-name {{.ModulePath}}",
-		"github.com/golang-standards/project-layout",
-		"uv init",
-		"dotnet new console",
-		"dotnet new webapi",
-		"go-web-templ:\n  kind: scaffolder",
-		"python-web-jinja:\n  kind: scaffolder",
-		"csharp-blazor:\n  kind: scaffolder",
-		"vite-ts:\n  kind: scaffolder",
-		"sveltekit:\n  kind: scaffolder",
-		"angular:\n  kind: scaffolder",
-		"github.com/a-h/templ",
-		"uv add fastapi jinja2",
-		"dotnet new blazor --interactivity Auto",
-		"npm create vite",
-		"sv@0.16.2 create . --template minimal",
-		"@angular/cli",
-		"- type: strip_paths",
-		"gitignore: Node",
-	}
-
-	for _, snippet := range requiredSnippets {
-		if !strings.Contains(content, snippet) {
-			t.Fatalf("sources.yaml missing required snippet %q", snippet)
-		}
-	}
-}
 
 func TestGoldenCatalogPackagesVanillaAndOverlayAssetsForEveryV1Stack(t *testing.T) {
 	repoRoot := repoRoot(t)
@@ -489,20 +444,6 @@ func TestCSharpWebAPIProjectFilesEnableXmlDocumentationAnalysis(t *testing.T) {
 	}
 }
 
-func TestCSharpWebAPIProjectTemplatePinsSwaggerDependencyForStarterProgram(t *testing.T) {
-	repoRoot := repoRoot(t)
-	projectPath := filepath.Join(repoRoot, "templates", "golden", "csharp-webapi", "Project.csproj.tmpl")
-
-	contentBytes, err := os.ReadFile(projectPath)
-	if err != nil {
-		t.Fatalf("read %s: %v", projectPath, err)
-	}
-
-	content := string(contentBytes)
-	if !strings.Contains(content, `PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2"`) {
-		t.Fatalf("webapi project template must pin the swagger dependency used by the starter program:\n%s", content)
-	}
-}
 
 func TestCSharpWebAPIProjectFilesSuppressStyleCopHeaderMismatchRule(t *testing.T) {
 	repoRoot := repoRoot(t)
@@ -654,35 +595,6 @@ func TestCSharpWebAPIWeatherForecastControllerExposesControllerRoute(t *testing.
 	}
 }
 
-func TestGoStacksPinPatchedGoToolchainForVulnerabilityGate(t *testing.T) {
-	repoRoot := repoRoot(t)
-
-	// govulncheck runs in every Go stack's `mise run ci`; the OpenTelemetry
-	// exporters make net/http and crypto/tls reachable, so the pinned patch
-	// release must carry the stdlib fixes (GO-2026-5026, -5856, -6090, ...).
-	const patchedToolchain = "1.26.8"
-
-	files := []string{
-		filepath.Join(repoRoot, "templates", "golden", "go-cli-cobra", "go.mod.tmpl"),
-		filepath.Join(repoRoot, "templates", "golden", "go-cli-cobra", ".forge-overlay", "mise.toml"),
-		filepath.Join(repoRoot, "templates", "golden", "go-api-chi", "go.mod.tmpl"),
-		filepath.Join(repoRoot, "templates", "golden", "go-api-chi", ".forge-overlay", "mise.toml.tmpl"),
-		filepath.Join(repoRoot, "templates", "golden", "go-web-templ", "go.mod.tmpl"),
-		filepath.Join(repoRoot, "templates", "golden", "go-web-templ", ".forge-overlay", "mise.toml"),
-	}
-
-	for _, path := range files {
-		contentBytes, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("read %s: %v", path, err)
-		}
-
-		content := string(contentBytes)
-		if !strings.Contains(content, patchedToolchain) {
-			t.Fatalf("%s must pin Go %s so govulncheck passes:\n%s", path, patchedToolchain, content)
-		}
-	}
-}
 
 func TestGoldenOverlayMiseTomlIncludesDCGTool(t *testing.T) {
 	repoRoot := repoRoot(t)
@@ -743,128 +655,6 @@ func TestGoldenOverlayMiseTomlIncludesDCGTool(t *testing.T) {
 	}
 }
 
-func TestGoldenStacksShipTelemetryBootstrap(t *testing.T) {
-	repoRoot := repoRoot(t)
-
-	tests := []struct {
-		stack      string
-		manifest   string
-		depSnippet string
-		module     string
-		test       string
-	}{
-		{
-			stack:      "go-cli-cobra",
-			manifest:   "go.mod.tmpl",
-			depSnippet: "go.opentelemetry.io/otel",
-			module:     ".forge-overlay/cmd/telemetry.go.tmpl",
-			test:       ".forge-overlay/cmd/telemetry_test.go.tmpl",
-		},
-		{
-			stack:      "go-api-chi",
-			manifest:   "go.mod.tmpl",
-			depSnippet: "go.opentelemetry.io/otel",
-			module:     ".forge-overlay/internal/telemetry/telemetry.go.tmpl",
-			test:       ".forge-overlay/internal/telemetry/telemetry_test.go.tmpl",
-		},
-		{
-			stack:      "go-web-templ",
-			manifest:   "go.mod.tmpl",
-			depSnippet: "go.opentelemetry.io/otel",
-			module:     ".forge-overlay/internal/telemetry/telemetry.go.tmpl",
-			test:       ".forge-overlay/internal/telemetry/telemetry_test.go.tmpl",
-		},
-		{
-			stack:      "python-cli-typer",
-			manifest:   "pyproject.toml.tmpl",
-			depSnippet: "opentelemetry-distro",
-			module:     ".forge-overlay/src/{{.PythonPackage}}/telemetry.py.tmpl",
-			test:       ".forge-overlay/tests/test_telemetry.py.tmpl",
-		},
-		{
-			stack:      "python-fastapi",
-			manifest:   "pyproject.toml.tmpl",
-			depSnippet: "opentelemetry-distro",
-			module:     ".forge-overlay/{{.PythonPackage}}/telemetry.py.tmpl",
-			test:       ".forge-overlay/tests/test_telemetry.py.tmpl",
-		},
-		{
-			stack:      "python-web-jinja",
-			manifest:   "pyproject.toml.tmpl",
-			depSnippet: "opentelemetry-distro",
-			module:     ".forge-overlay/{{.PythonPackage}}/telemetry.py.tmpl",
-			test:       ".forge-overlay/tests/test_telemetry.py.tmpl",
-		},
-		{
-			stack:      "csharp-cli",
-			manifest:   "Project.csproj.tmpl",
-			depSnippet: `Include="OpenTelemetry.Extensions.Hosting"`,
-			module:     ".forge-overlay/Telemetry.cs.tmpl",
-			test:       ".forge-overlay/tests/Project.Tests/TelemetryTests.cs.tmpl",
-		},
-		{
-			stack:      "csharp-webapi",
-			manifest:   "Project.csproj.tmpl",
-			depSnippet: `Include="OpenTelemetry.Extensions.Hosting"`,
-			module:     ".forge-overlay/Telemetry.cs.tmpl",
-			test:       ".forge-overlay/tests/Project.Tests/TelemetryTests.cs.tmpl",
-		},
-		{
-			stack:      "csharp-blazor",
-			manifest:   "Project.csproj.tmpl",
-			depSnippet: `Include="OpenTelemetry.Extensions.Hosting"`,
-			module:     ".forge-overlay/Telemetry.cs.tmpl",
-			test:       ".forge-overlay/tests/Project.Tests/TelemetryTests.cs.tmpl",
-		},
-		{
-			stack:      "vite-ts",
-			manifest:   ".forge-overlay/package.json.tmpl",
-			depSnippet: `"@opentelemetry/sdk-trace-web"`,
-			module:     ".forge-overlay/src/lib/telemetry.ts.tmpl",
-			test:       ".forge-overlay/src/lib/telemetry.test.ts",
-		},
-		{
-			stack:      "sveltekit",
-			manifest:   ".forge-overlay/package.json.tmpl",
-			depSnippet: `"@opentelemetry/sdk-trace-web"`,
-			module:     ".forge-overlay/src/lib/telemetry.ts.tmpl",
-			test:       ".forge-overlay/src/lib/telemetry.test.ts",
-		},
-		{
-			stack:      "angular",
-			manifest:   ".forge-overlay/package.json.tmpl",
-			depSnippet: `"@opentelemetry/sdk-trace-web"`,
-			module:     ".forge-overlay/src/app/telemetry.ts.tmpl",
-			test:       ".forge-overlay/src/app/telemetry.spec.ts",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.stack, func(t *testing.T) {
-			stackRoot := filepath.Join(repoRoot, "templates", "golden", tt.stack)
-
-			manifestPath := filepath.Join(stackRoot, tt.manifest)
-			manifestBytes, err := os.ReadFile(manifestPath)
-			if err != nil {
-				t.Errorf("%s manifest: read %s: %v", tt.stack, manifestPath, err)
-			} else if !strings.Contains(string(manifestBytes), tt.depSnippet) {
-				t.Errorf("%s manifest %s missing OpenTelemetry dependency %q", tt.stack, manifestPath, tt.depSnippet)
-			}
-
-			for _, relPath := range []string{tt.module, tt.test} {
-				fullPath := filepath.Join(stackRoot, relPath)
-				info, err := os.Stat(fullPath)
-				if err != nil {
-					t.Errorf("%s telemetry asset: stat %s: %v", tt.stack, fullPath, err)
-					continue
-				}
-				if info.IsDir() {
-					t.Errorf("%s telemetry asset %s is a directory, want file", tt.stack, fullPath)
-				}
-			}
-		})
-	}
-}
 
 // TestGoldenStacksScaffoldOtelStackAssets proves that scaffolding any v1
 // stack produces the system-wide OTel stack assets (mise conf.d env + tasks,

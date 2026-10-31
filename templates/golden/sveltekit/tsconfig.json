@@ -1,5 +1,5 @@
 {
-	"extends": "./.svelte-kit/tsconfig.json",
+	"extends": "$app/tsconfig",
 	"compilerOptions": {
 		"rewriteRelativeImportExtensions": true,
 		"allowJs": true,
@@ -11,10 +11,10 @@
 		"sourceMap": true,
 		"strict": true,
 		"moduleResolution": "bundler"
-	}
-	// Path aliases are handled by https://svelte.dev/docs/kit/configuration#alias
-	// except $lib which is handled by https://svelte.dev/docs/kit/configuration#files
-	//
-	// To make changes to top-level options such as include and exclude, we recommend extending
-	// the generated config; see https://svelte.dev/docs/kit/configuration#typescript
+	},
+	"include": ["src", "vite.config.ts"]
+	// Package imports are configured in package.json for the #lib alias.
+	// Keep project checks scoped to app source and Vite configuration.
+	// SvelteKit's built-in `$app/tsconfig` supplies the remaining framework defaults.
+	// To change top-level options, extend the SvelteKit config; see https://svelte.dev/docs/kit/configuration#typescript
 }

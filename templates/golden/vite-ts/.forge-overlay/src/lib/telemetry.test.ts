@@ -1,10 +1,10 @@
-import { trace } from '@opentelemetry/api';
+import { context, propagation, trace } from '@opentelemetry/api';
 import {
   AggregationTemporality,
   InMemoryMetricExporter,
   PeriodicExportingMetricReader,
 } from '@opentelemetry/sdk-metrics';
-import { InMemorySpanExporter } from '@opentelemetry/sdk-trace-web';
+import { InMemorySpanExporter } from '@opentelemetry/sdk-trace';
 import { afterEach, describe, expect, it } from 'vitest';
 import { startTelemetry } from './telemetry';
 
@@ -76,6 +76,48 @@ describe('telemetry', () => {
 
     const second = startTelemetry({ ...globalOptions, spanExporter: exporterB });
     trace.getTracer('t').startSpan('second').end();
+    expect(exporterB.getFinishedSpans().map((span) => span.name)).toEqual(['second']);
+    await second.shutdown();
+  });
+  it('propagates active W3C trace and baggage and resets globals', async () => {
+    const globalOptions = { instrumentFetch: false, register: true };
+    const exporterA = new InMemorySpanExporter();
+    const first = startTelemetry({
+      ...globalOptions,
+      spanExporter: exporterA,
+      serviceName: 'context',
+    });
+    const firstSpan = first.tracer.startSpan('first');
+    const firstContext = propagation.setBaggage(
+      trace.setSpan(context.active(), firstSpan),
+      propagation.createBaggage({ 'test-entry': { value: 'first' } }),
+    );
+    const firstCarrier: Record<string, string> = {};
+    context.with(firstContext, () => propagation.inject(context.active(), firstCarrier));
+    const firstSpanContext = firstSpan.spanContext();
+    expect(firstCarrier.traceparent).toBe(
+      `00-${firstSpanContext.traceId}-${firstSpanContext.spanId}-${firstSpanContext.traceFlags.toString(16).padStart(2, '0')}`,
+    );
+    expect(firstCarrier.baggage).toContain('test-entry=first');
+    firstSpan.end();
+    expect(exporterA.getFinishedSpans().map((span) => span.name)).toEqual(['first']);
+    await first.shutdown();
+
+    const exporterB = new InMemorySpanExporter();
+    const second = startTelemetry({ ...globalOptions, spanExporter: exporterB });
+    const secondSpan = second.tracer.startSpan('second');
+    const secondContext = propagation.setBaggage(
+      trace.setSpan(context.active(), secondSpan),
+      propagation.createBaggage({ 'test-entry': { value: 'second' } }),
+    );
+    const secondCarrier: Record<string, string> = {};
+    context.with(secondContext, () => propagation.inject(context.active(), secondCarrier));
+    const secondSpanContext = secondSpan.spanContext();
+    expect(secondCarrier.traceparent).toBe(
+      `00-${secondSpanContext.traceId}-${secondSpanContext.spanId}-${secondSpanContext.traceFlags.toString(16).padStart(2, '0')}`,
+    );
+    expect(secondCarrier.baggage).toContain('test-entry=second');
+    secondSpan.end();
     expect(exporterB.getFinishedSpans().map((span) => span.name)).toEqual(['second']);
     await second.shutdown();
   });

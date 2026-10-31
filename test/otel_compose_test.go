@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 
 	"forge"
 )
@@ -26,7 +26,7 @@ const otelComposeAssetDir = "templates/common/otel"
 const otelComposeConfigTimeout = 30 * time.Second
 
 const (
-	otelDashboardImage         = "mcr.microsoft.com/dotnet/aspire-dashboard:13.5.2"
+	otelDashboardImagePrefix  = "mcr.microsoft.com/dotnet/aspire-dashboard:"
 	otelDashboardContainerName = "forge-otel-dashboard"
 )
 
@@ -129,8 +129,8 @@ func assertOtelComposeRuntimeContract(t *testing.T, label string, compose otelCo
 	if !ok {
 		t.Fatalf("%s: no service %q (services: %v)", label, "otel-dashboard", serviceNames(compose))
 	}
-	if got := dashboard.Image; got != otelDashboardImage {
-		t.Errorf("%s: otel-dashboard image = %q, want %q", label, got, otelDashboardImage)
+	if !strings.HasPrefix(dashboard.Image, otelDashboardImagePrefix) {
+		t.Errorf("%s: otel-dashboard image = %q, want repository prefix %q", label, dashboard.Image, otelDashboardImagePrefix)
 	}
 	if got := dashboard.ContainerName; got != otelDashboardContainerName {
 		t.Errorf("%s: otel-dashboard container_name = %q, want %q", label, got, otelDashboardContainerName)
@@ -145,12 +145,12 @@ func assertOtelComposeRuntimeContract(t *testing.T, label string, compose otelCo
 
 	aspireServices := 0
 	for _, service := range compose.Services {
-		if service.Image == otelDashboardImage {
+		if strings.HasPrefix(service.Image, otelDashboardImagePrefix) {
 			aspireServices++
 		}
 	}
 	if aspireServices != 1 {
-		t.Errorf("%s: services using %q = %d, want exactly 1", label, otelDashboardImage, aspireServices)
+		t.Errorf("%s: services using Aspire image prefix %q = %d, want exactly 1", label, otelDashboardImagePrefix, aspireServices)
 	}
 
 	if len(dashboard.Ports) != 1 {

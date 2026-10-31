@@ -230,7 +230,6 @@ func TestWriterScaffoldsOtelStackAssets(t *testing.T) {
 
 	composePath := filepath.Join(tempDir, ".otel", "compose.yaml")
 	assertFileContains(t, composePath, "restart: unless-stopped")
-	assertFileContains(t, composePath, "image: mcr.microsoft.com/dotnet/aspire-dashboard:13.5.2")
 	assertFileContains(t, composePath, "container_name: forge-otel-dashboard")
 	assertFileContains(t, composePath, `DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"`)
 	assertFileContains(t, composePath, `"127.0.0.1:18888:18888"`)

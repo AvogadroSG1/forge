@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { health } from '$lib/api/client';
+	import { health } from '#lib/api/client.js';
 
 	let status = $state('checking…');
 

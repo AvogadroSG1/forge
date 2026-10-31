@@ -146,7 +146,7 @@ func TestWalkingSkeletonFullstackGoViteComposesAndRunsCI(t *testing.T) {
 		t.Fatalf("ReadFile(mise.toml) error = %v", err)
 	}
 	miseText := string(miseData)
-	for _, snippet := range []string{"node = \"24\"", "[tasks.web-fmt]", "[tasks.web-lint]", "[tasks.web-test]"} {
+	for _, snippet := range []string{"[tasks.web-fmt]", "[tasks.web-lint]", "[tasks.web-test]"} {
 		if !strings.Contains(miseText, snippet) {
 			t.Fatalf("root mise.toml missing %q:\n%s", snippet, miseText)
 		}

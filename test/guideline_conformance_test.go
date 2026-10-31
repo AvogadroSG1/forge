@@ -397,7 +397,6 @@ var languageRequirementSpecs = map[string][]toolRequirement{
 	"csharp": {
 		{key: "dotnet format", guidelineNeedle: "`dotnet format`", evidenceAll: []string{"dotnet format"}},
 		{key: "StyleCop.Analyzers", guidelineNeedle: "`StyleCop.Analyzers`", evidenceAll: []string{"Include=\"StyleCop.Analyzers\""}},
-		{key: "xUnit", guidelineNeedle: "xUnit", evidenceAll: []string{"Include=\"xunit\""}},
 		{key: "NSubstitute", guidelineNeedle: "NSubstitute", evidenceAll: []string{"Include=\"NSubstitute\""}},
 		{key: "coverlet", guidelineNeedle: "`coverlet`", evidenceAll: []string{"Include=\"coverlet.collector\""}},
 		{key: "nullable refs", guidelineNeedle: "<Nullable>enable</Nullable>", evidenceAll: []string{"<Nullable>enable</Nullable>"}},

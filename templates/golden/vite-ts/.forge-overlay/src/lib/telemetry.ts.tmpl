@@ -9,6 +9,11 @@
 // Tests inject in-memory exporters through `spanExporter` / `metricReader`.
 import { context, metrics, propagation, trace } from '@opentelemetry/api';
 import type { Meter, Tracer } from '@opentelemetry/api';
+import {
+  CompositePropagator,
+  W3CBaggagePropagator,
+  W3CTraceContextPropagator,
+} from '@opentelemetry/core';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { registerInstrumentations } from '@opentelemetry/instrumentation';
@@ -19,9 +24,10 @@ import type { IMetricReader } from '@opentelemetry/sdk-metrics';
 import {
   BatchSpanProcessor,
   SimpleSpanProcessor,
-  WebTracerProvider,
-} from '@opentelemetry/sdk-trace-web';
-import type { SpanExporter, SpanProcessor } from '@opentelemetry/sdk-trace-web';
+  StackContextManager,
+  TracerProvider,
+} from '@opentelemetry/sdk-trace';
+import type { SpanExporter, SpanProcessor } from '@opentelemetry/sdk-trace';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 
 const DEFAULT_SERVICE_NAME = '{{.NpmPackage}}';
@@ -75,10 +81,12 @@ export function startTelemetry(options: TelemetryOptions = {}): Telemetry {
 
   const spanProcessors: SpanProcessor[] = [];
   if (options.spanExporter) {
-    spanProcessors.push(new SimpleSpanProcessor(options.spanExporter));
+    spanProcessors.push(new SimpleSpanProcessor({ exporter: options.spanExporter }));
   } else if (endpoint) {
     spanProcessors.push(
-      new BatchSpanProcessor(new OTLPTraceExporter({ url: `${endpoint}/v1/traces` })),
+      new BatchSpanProcessor({
+        exporter: new OTLPTraceExporter({ url: `${endpoint}/v1/traces` }),
+      }),
     );
   }
 
@@ -93,13 +101,20 @@ export function startTelemetry(options: TelemetryOptions = {}): Telemetry {
     );
   }
 
-  const tracerProvider = new WebTracerProvider({ resource, spanProcessors });
+  const tracerProvider = new TracerProvider({ resource, spanProcessors });
   const meterProvider = new MeterProvider({ resource, readers });
 
   const registered = options.register ?? true;
+  const contextManager = registered ? new StackContextManager() : undefined;
   if (registered) {
-    // register() also installs the W3C trace-context + baggage propagators.
-    tracerProvider.register();
+    contextManager!.enable();
+    context.setGlobalContextManager(contextManager!);
+    propagation.setGlobalPropagator(
+      new CompositePropagator({
+        propagators: [new W3CTraceContextPropagator(), new W3CBaggagePropagator()],
+      }),
+    );
+    trace.setGlobalTracerProvider(tracerProvider);
     metrics.setGlobalMeterProvider(meterProvider);
   }
 
@@ -118,8 +133,7 @@ export function startTelemetry(options: TelemetryOptions = {}): Telemetry {
     async shutdown() {
       disableInstrumentations?.();
       if (registered) {
-        // The API refuses to replace a registered global, so release everything
-        // register() installed; a later startTelemetry() then re-registers cleanly.
+        contextManager!.disable();
         trace.disable();
         metrics.disable();
         context.disable();

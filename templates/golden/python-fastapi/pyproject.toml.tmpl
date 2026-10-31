@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.33.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -9,11 +9,11 @@ description = "Walking-skeleton FastAPI service"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-  "fastapi>=0.111,<1.0",
-  "opentelemetry-distro~=0.65b0",
-  "opentelemetry-exporter-otlp-proto-http~=1.44",
-  "opentelemetry-instrumentation-fastapi~=0.65b0",
-  "uvicorn[standard]>=0.30,<1.0",
+  "fastapi>=0.162.0,<1.0",
+  "opentelemetry-distro>=0.66b2,<0.67",
+  "opentelemetry-exporter-otlp-proto-http>=1.45.2,<1.46",
+  "opentelemetry-instrumentation-fastapi>=0.66b2,<0.67",
+  "uvicorn[standard]>=0.54.0,<1.0",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -21,8 +21,11 @@ packages = ["{{.PythonPackage}}"]
 
 [project.optional-dependencies]
 dev = [
-  "httpx2>=2.0,<3.0",
-  "pytest>=8.2,<9.0",
-  "pytest-cov>=5.0,<6.0",
-  "pytest-mock>=3.14,<4.0",
+  "httpx2>=2.16.0,<3.0",
+  "pytest>=9.2.0,<10.0",
+  "pytest-cov>=7.1.0,<8.0",
+  "pytest-mock>=3.17.0,<4.0",
 ]
+
+[tool.ruff]
+extend-exclude = [".agents/**", ".beads/**", ".claude/skills/**", ".opencode/**", "apm_modules/**"]

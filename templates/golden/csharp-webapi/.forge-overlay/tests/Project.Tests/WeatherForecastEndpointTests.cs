@@ -78,7 +78,7 @@ public sealed class WeatherForecastEndpointTests
             if (!process.HasExited)
             {
                 process.Kill(entireProcessTree: true);
-                await process.WaitForExitAsync();
+                await process.WaitForExitAsync(TestContext.Current.CancellationToken);
             }
         }
 
