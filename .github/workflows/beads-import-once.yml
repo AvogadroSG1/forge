@@ -64,7 +64,7 @@ jobs:
           fi
           grep "\"id\":\"${EPIC}[\".]" .beads/issues.jsonl > /tmp/import.jsonl
           test "$(wc -l < /tmp/import.jsonl)" -eq 25
-          bd import /tmp/import.jsonl --dry-run | tee /tmp/dry.txt
+          bd import /tmp/import.jsonl --dry-run 2>&1 | tee /tmp/dry.txt
           grep -q "25 new, 0 updated" /tmp/dry.txt
           bd import /tmp/import.jsonl
           bd dep add agentic_template_start-mcu "$EPIC.1"
