@@ -31,10 +31,10 @@ func TestVerifyTemplatesWorkflowDefinesRequiredTriggersAndJobs(t *testing.T) {
 		"github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'",
 		"fail-fast: false",
 		"stack: [go-cli-cobra, python-cli-typer, csharp-cli, go-api-chi, python-fastapi, csharp-webapi]",
-		"uses: actions/checkout@v4",
-		"uses: actions/setup-go@v5",
+		"uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
+		"uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0",
 		"go-version-file: go.mod",
-		"uses: jdx/mise-action@v2",
+		"uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9",
 		"run: make verify-fast",
 		`-run "TestLocalRelease/${{ matrix.stack }}" ./test/`,
 	} {

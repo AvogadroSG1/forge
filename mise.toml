@@ -7,7 +7,7 @@
 # Debian/Ubuntu.
 
 [tools]
-bats = "latest"
+bats = "1.14.0"
 
 [tasks.build]
 description = "Build the forge binary into bin/"
