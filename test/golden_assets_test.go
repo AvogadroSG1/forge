@@ -499,7 +499,7 @@ func TestCSharpWebAPIProjectTemplatePinsSwaggerDependencyForStarterProgram(t *te
 	}
 
 	content := string(contentBytes)
-	if !strings.Contains(content, `PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2"`) {
+	if !strings.Contains(content, `PackageReference Include="Swashbuckle.AspNetCore" Version="11.0.1"`) {
 		t.Fatalf("webapi project template must pin the swagger dependency used by the starter program:\n%s", content)
 	}
 }
