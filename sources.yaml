@@ -154,7 +154,7 @@ vite-ts:
 sveltekit:
   kind: scaffolder
   steps:
-    - run: "npx --yes sv@0.16.2 create . --template minimal --types ts --no-add-ons --no-install"
+    - run: "npx --yes sv@1.5.0 create . --template minimal --types ts --no-add-ons --no-install"
   gitignore: Node
   normalize:
     - type: strip_paths
@@ -163,8 +163,8 @@ sveltekit:
     - type: trailing_newline
     - type: sort_files
   resolved:
-    ref: "sv 0.16.2"
-    captured: "2026-07-11"
+    ref: "sv 1.5.0"
+    captured: "2026-11-18"
 
 angular:
   kind: scaffolder
