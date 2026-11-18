@@ -415,7 +415,7 @@ test, shipped as a vetted extra (ADR-0010, §10.2) with no guideline edit.
   `TelemetryServiceCollectionExtensions.cs` (extension in namespace
   `Microsoft.Extensions.DependencyInjection` so the verbatim webapi `Program.cs` needs no `using`).
   TypeScript: `src/lib/telemetry.ts` (vite-ts, sveltekit) / `src/app/telemetry.ts` (angular),
-  built on `@opentelemetry/sdk-trace-web` because the three TS stacks are browser bundles.
+  built on `@opentelemetry/sdk-trace` because the three TS stacks are browser bundles.
 - **Env contract.** Tracer + meter providers, `service.name` and W3C propagation are installed
   unconditionally; `service.name` is `OTEL_SERVICE_NAME`, else the repo slug (under `mise`, §9.5
   unsets an inherited `OTEL_SERVICE_NAME`; set it in `mise.local.toml`). OTLP/HTTP exporters
@@ -558,7 +558,7 @@ Every overlay tool traces to a canonical guideline file; the conformance test (`
 | **Go** | `gofmt` | `golangci-lint` | `testing` + `go-cmp` | *(none — idiomatic fakes)* | `go test -cover` | — | `govulncheck` | `otel` + `otelhttp` + runtime metrics |
 | **Python** | `ruff format` | `ruff` | `pytest` | `pytest-mock` | `pytest-cov` | `pyright` | `pip-audit` | `opentelemetry-distro` / `opentelemetry-instrument` + `instrumentation-fastapi` |
 | **C#** | `dotnet format` | StyleCop.Analyzers | **xUnit** | NSubstitute | coverlet | nullable refs | `dotnet list package --vulnerable` | `OpenTelemetry.Extensions.Hosting` + AspNetCore/Http/Runtime instrumentation |
-| **TypeScript** | `prettier` | `eslint` (typescript-eslint / angular-eslint / eslint-plugin-svelte) | `vitest` | *(vi stubs)* | vitest coverage | `tsc --noEmit` / `svelte-check` | `npm audit --audit-level=high` | `sdk-trace-web` + `sdk-metrics` + `instrumentation-fetch` |
+| **TypeScript** | `prettier` | `eslint` (typescript-eslint / angular-eslint / eslint-plugin-svelte) | `vitest` | *(vi stubs)* | vitest coverage | `tsc --noEmit` / `svelte-check` | `npm audit --audit-level=high` | `sdk-trace` + `sdk-metrics` + `instrumentation-fetch` |
 
 ### 10.2 Conformance semantics — guideline is the floor, not the ceiling
 
