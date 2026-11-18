@@ -702,7 +702,7 @@ func TestGoldenOverlayMiseTomlIncludesDCGTool(t *testing.T) {
 		"angular",
 	}
 
-	const requiredTool = `"github:Dicklesworthstone/destructive_command_guard" = "latest"`
+	const requiredTool = `"github:Dicklesworthstone/destructive_command_guard" = "0.16.0"`
 
 	for _, stack := range stacks {
 		t.Run(stack, func(t *testing.T) {
