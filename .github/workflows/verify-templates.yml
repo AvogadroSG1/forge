@@ -25,7 +25,12 @@ jobs:
           version: 2026.11.9
           install: false
           env: false
+      # setup-go exports GOTOOLCHAIN=local to later steps. Generated repos
+      # pin a newer Go than forge's go.mod, so let Go download the toolchain
+      # their go.mod asks for. Step-level env wins over the exported value.
       - name: go test ./...
+        env:
+          GOTOOLCHAIN: auto
         run: |
           GOCACHE=$GITHUB_WORKSPACE/.cache/go-build go test ./... -count=1
 
@@ -52,7 +57,12 @@ jobs:
           mkdir -p "$HOME/.local/bin"
           install -m 0755 "$(find "$extract_dir" -type f -name bd | head -n 1)" "$HOME/.local/bin/bd"
           bd version
+      # setup-go exports GOTOOLCHAIN=local to later steps. Generated repos
+      # pin a newer Go than forge's go.mod, so let Go download the toolchain
+      # their go.mod asks for. Step-level env wins over the exported value.
       - run: make verify-fast
+        env:
+          GOTOOLCHAIN: auto
 
   slow-gate:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -82,7 +92,12 @@ jobs:
           mkdir -p "$HOME/.local/bin"
           install -m 0755 "$(find "$extract_dir" -type f -name bd | head -n 1)" "$HOME/.local/bin/bd"
           bd version
+      # setup-go exports GOTOOLCHAIN=local to later steps. Generated repos
+      # pin a newer Go than forge's go.mod, so let Go download the toolchain
+      # their go.mod asks for. Step-level env wins over the exported value.
       - run: >
           GOCACHE=$GITHUB_WORKSPACE/.cache/go-build
           go test -tags=integration -count=1 -timeout=10m
           -run "TestLocalRelease/${{ matrix.stack }}" ./test/
+        env:
+          GOTOOLCHAIN: auto
