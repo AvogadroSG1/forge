@@ -651,7 +651,7 @@ const otelAngularBuildTimeout = 5 * time.Minute
 // newOtelAngularRealHarness uses the developer's real node/npm. mise's own
 // node@24 is not installed in the isolated data dir and MISE_OFFLINE keeps
 // it from downloading one, so the task resolves npm from PATH instead;
-// Angular 21 accepts any node >= 20.19, so the host node is sufficient.
+// Angular 22 needs node ^22.22.3, ^24.15.0 or >=26, so the host node is sufficient.
 func newOtelAngularRealHarness(t *testing.T, input project.Input) *otelAngularHarness {
 	t.Helper()
 

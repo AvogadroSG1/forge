@@ -169,7 +169,7 @@ sveltekit:
 angular:
   kind: scaffolder
   steps:
-    - run: "npx --yes @angular/cli@21.2.19 new {{.RepoSlug}} --directory . --style css --ssr false --skip-git --skip-install --defaults"
+    - run: "npx --yes @angular/cli@22.2.7 new {{.RepoSlug}} --directory . --style css --ssr false --skip-git --skip-install --defaults"
   gitignore: Node
   normalize:
     - type: strip_paths
@@ -178,5 +178,5 @@ angular:
     - type: trailing_newline
     - type: sort_files
   resolved:
-    ref: "@angular/cli 21.2.19"
-    captured: "2026-07-11"
+    ref: "@angular/cli 22.2.7"
+    captured: "2026-11-18"
