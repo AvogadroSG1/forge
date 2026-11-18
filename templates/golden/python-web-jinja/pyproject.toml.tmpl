@@ -23,7 +23,10 @@ packages = ["{{.PythonPackage}}"]
 [project.optional-dependencies]
 dev = [
   "httpx2==2.16.2",
-  "pytest>=8.2,<9.0",
-  "pytest-cov>=5.0,<6.0",
+  "pytest==9.2.0",
+  "pytest-cov==7.1.0",
   "pytest-mock==3.17.0",
 ]
+
+[tool.coverage.run]
+patch = ["subprocess"]
