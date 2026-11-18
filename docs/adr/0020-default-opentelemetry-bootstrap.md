@@ -39,7 +39,7 @@ Every shipped stack ships a **telemetry bootstrap** as a vetted extra (ADR-0010)
   `ng --define` through the **OTLP define bridge**; plain `npm start` / `ng build` stays silent.)
 - **Traces + metrics.** Logs are deferred to a follow-up issue (slog handler, Python
   `LoggingHandler`, `ILogger` via `OpenTelemetry.Logs`, browser console bridge).
-- **TypeScript uses `@opentelemetry/sdk-trace-web`.** vite-ts, sveltekit and angular are all
+- **TypeScript uses `@opentelemetry/sdk-trace`.** vite-ts, sveltekit and angular are all
   browser bundles; `sdk-node` would be dead weight that never runs. `instrumentation-fetch`
   traces the existing `/health` client call.
 - **Python additionally exposes `opentelemetry-instrument`.** Each Python `mise.toml` gains a
@@ -58,8 +58,8 @@ Every shipped stack ships a **telemetry bootstrap** as a vetted extra (ADR-0010)
 - **Pinned versions.** Go `go.opentelemetry.io/otel*` v1.46.0 + `contrib` v0.71.0; Python
   `opentelemetry-distro~=0.65b0` + `opentelemetry-exporter-otlp-proto-http~=1.44` (+
   `instrumentation-fastapi~=0.65b0` on the FastAPI stacks); C# `OpenTelemetry.*` 1.18.0 (+
-  `OpenTelemetry.Exporter.InMemory` in test projects); TS `@opentelemetry/api ^1.9.1`,
-  `sdk-trace-web`/`sdk-metrics`/`resources ^2.11.0`, exporters + instrumentation `^0.222.0`.
+  `OpenTelemetry.Exporter.InMemory` in test projects); TS `@opentelemetry/api 1.10.0`,
+  `core`/`sdk-trace`/`sdk-metrics`/`resources 3.1.1`, exporters + instrumentation `0.301.2`.
   Dependencies are edited in the stack manifests (`go.mod.tmpl`, `pyproject.toml.tmpl`,
   `*.csproj.tmpl`, overlay `package.json.tmpl`), the existing precedent for StyleCop,
   Swashbuckle and pytest.
