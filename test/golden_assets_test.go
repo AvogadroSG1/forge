@@ -660,7 +660,7 @@ func TestGoStacksPinPatchedGoToolchainForVulnerabilityGate(t *testing.T) {
 	// govulncheck runs in every Go stack's `mise run ci`; the OpenTelemetry
 	// exporters make net/http and crypto/tls reachable, so the pinned patch
 	// release must carry the stdlib fixes (GO-2026-5026, -5856, -6090, ...).
-	const patchedToolchain = "1.26.8"
+	const patchedToolchain = "1.26.11"
 
 	files := []string{
 		filepath.Join(repoRoot, "templates", "golden", "go-cli-cobra", "go.mod.tmpl"),
