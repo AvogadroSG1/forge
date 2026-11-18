@@ -10,7 +10,7 @@ The viewer must remain a local development aid. It must not replace the Collecto
 
 ## Decision
 
-The shared `forge-otel` Compose project additionally runs the standalone Aspire Dashboard image `mcr.microsoft.com/dotnet/aspire-dashboard:13.5.2` as service `otel-dashboard`, with container name `forge-otel-dashboard` and `restart: unless-stopped`.
+The shared `forge-otel` Compose project additionally runs the standalone Aspire Dashboard image `mcr.microsoft.com/dotnet/aspire-dashboard:13.6.5` as service `otel-dashboard`, with container name `forge-otel-dashboard` and `restart: unless-stopped`.
 
 Only the dashboard frontend is published, at `127.0.0.1:18888:18888`. Anonymous access is enabled with `DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true`; that setting is acceptable only because the sole host publication is loopback-only. The dashboard's OTLP/gRPC port `18889` and OTLP/HTTP port `18890` are not published to the host. Dashboard telemetry is held in memory and disappears whenever the dashboard container restarts; no dashboard volume or second storage backend is added. Its Docker logs use the same bounded `local` driver policy as the Collector: `max-size: "10m"`, `max-file: "3"`.
 
