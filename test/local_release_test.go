@@ -5,6 +5,7 @@ package test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -123,8 +124,11 @@ func TestLocalRelease(t *testing.T) {
 		t.Run(stack.name, func(t *testing.T) {
 			t.Parallel()
 
-			dir := tempRuntimeDir(t)
-			envRoot := tempRuntimeDir(t)
+			// Outside the forge checkout: bd walks up to the nearest
+			// .beads/config.yaml, and forge's own would make "bd init"
+			// clone forge's issue database into the generated repo.
+			dir := tempRuntimeDirIn(t, "")
+			envRoot := tempRuntimeDirIn(t, "")
 
 			runStep(
 				t,
@@ -141,6 +145,7 @@ func TestLocalRelease(t *testing.T) {
 				"--author-email", "ci@example.com",
 				"--remote", "none",
 			)
+			assertEmptyIssueDatabase(t, dir)
 			runStep(t, "mise install", dir, envRoot, "mise", "install")
 			runStep(t, "mise run ci", dir, envRoot, "mise", "run", "ci")
 
@@ -151,15 +156,42 @@ func TestLocalRelease(t *testing.T) {
 	}
 }
 
+func assertEmptyIssueDatabase(t *testing.T, dir string) {
+	t.Helper()
+
+	cmd := exec.Command("bd", "list", "--all", "--json")
+	cmd.Dir = dir
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("bd list --all --json: %v\n--- stdout ---\n%s\n--- stderr ---\n%s", err, stdout.String(), stderr.String())
+	}
+
+	var issues []json.RawMessage
+	if err := json.Unmarshal(stdout.Bytes(), &issues); err != nil {
+		t.Fatalf("parse bd list --all --json output: %v\n--- stdout ---\n%s", err, stdout.String())
+	}
+	if len(issues) != 0 {
+		t.Fatalf("generated repo starts with %d issues, want an empty issue database\n%s", len(issues), stdout.String())
+	}
+}
+
 func tempRuntimeDir(t *testing.T) string {
+	t.Helper()
+
+	return tempRuntimeDirIn(t, runtimeWorkspaceRoot)
+}
+
+func tempRuntimeDirIn(t *testing.T, workspaceRoot string) string {
 	t.Helper()
 
 	var (
 		dir string
 		err error
 	)
-	if runtimeWorkspaceRoot != "" {
-		dir, err = newWorkspaceRuntimeDir(runtimeWorkspaceRoot, "forge-runtime")
+	if workspaceRoot != "" {
+		dir, err = newWorkspaceRuntimeDir(workspaceRoot, "forge-runtime")
 	} else {
 		dir, err = os.MkdirTemp("", "forge-runtime-*")
 	}

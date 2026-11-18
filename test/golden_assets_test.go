@@ -499,7 +499,7 @@ func TestCSharpWebAPIProjectTemplatePinsSwaggerDependencyForStarterProgram(t *te
 	}
 
 	content := string(contentBytes)
-	if !strings.Contains(content, `PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2"`) {
+	if !strings.Contains(content, `PackageReference Include="Swashbuckle.AspNetCore" Version="11.0.1"`) {
 		t.Fatalf("webapi project template must pin the swagger dependency used by the starter program:\n%s", content)
 	}
 }
@@ -660,7 +660,7 @@ func TestGoStacksPinPatchedGoToolchainForVulnerabilityGate(t *testing.T) {
 	// govulncheck runs in every Go stack's `mise run ci`; the OpenTelemetry
 	// exporters make net/http and crypto/tls reachable, so the pinned patch
 	// release must carry the stdlib fixes (GO-2026-5026, -5856, -6090, ...).
-	const patchedToolchain = "1.26.8"
+	const patchedToolchain = "1.26.11"
 
 	files := []string{
 		filepath.Join(repoRoot, "templates", "golden", "go-cli-cobra", "go.mod.tmpl"),
@@ -702,7 +702,7 @@ func TestGoldenOverlayMiseTomlIncludesDCGTool(t *testing.T) {
 		"angular",
 	}
 
-	const requiredTool = `"github:Dicklesworthstone/destructive_command_guard" = "latest"`
+	const requiredTool = `"github:Dicklesworthstone/destructive_command_guard" = "0.16.0"`
 
 	for _, stack := range stacks {
 		t.Run(stack, func(t *testing.T) {

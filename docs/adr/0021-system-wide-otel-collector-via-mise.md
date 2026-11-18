@@ -195,7 +195,7 @@ the zero-setup `docker logs` verification path, and the log bound removes its on
   errors if `mise run otel` was never run or the collector was stopped. This is the trade-off
   ADR-0020 was written to avoid outside `mise`; inside `mise` it is accepted in exchange for
   telemetry working by default. Outside `mise`, ADR-0020's silence holds.
-- **A Docker Hub pull.** `otel/opentelemetry-collector-contrib:0.161.0` and `busybox:1.36` (a
+- **A Docker Hub pull.** `otel/opentelemetry-collector-contrib:0.165.0` and `busybox:1.36.1` (a
   one-shot init step that `chown`s the `forge-otel-data` volume to the collector's non-root uid
   10001 before the collector starts, since Docker creates named volumes root-owned) are pulled the
   first time `mise run otel` runs on a machine.

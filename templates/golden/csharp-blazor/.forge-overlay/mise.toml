@@ -1,7 +1,7 @@
 [tools]
-dotnet = "10.0.203"
-lefthook = "latest"
-"github:Dicklesworthstone/destructive_command_guard" = "latest"
+dotnet = "10.0.404"
+lefthook = "2.2.2"
+"github:Dicklesworthstone/destructive_command_guard" = "0.16.0"
 
 [tasks.fmt]
 run = "dotnet format Project.csproj --verify-no-changes"

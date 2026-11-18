@@ -26,7 +26,7 @@ const otelComposeAssetDir = "templates/common/otel"
 const otelComposeConfigTimeout = 30 * time.Second
 
 const (
-	otelDashboardImage         = "mcr.microsoft.com/dotnet/aspire-dashboard:13.5.2"
+	otelDashboardImage         = "mcr.microsoft.com/dotnet/aspire-dashboard:13.6.5"
 	otelDashboardContainerName = "forge-otel-dashboard"
 )
 

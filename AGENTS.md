@@ -4,7 +4,7 @@ This file is the project-specific guide for working on the `forge` generator its
 
 ## WHAT
 
-- `forge` is a Go `1.24.x` CLI that scaffolds AI-native repositories from embedded assets.
+- `forge` is a Go `1.26.x` CLI that scaffolds AI-native repositories from embedded assets.
 - `cmd/forge/main.go` owns the command surface: `init`, `sync-allowlist`, `update`, `upgrade`, and `completion`.
 - `internal/init/` orchestrates project creation; `internal/scaffold/` writes and composes assets; `internal/allowlist/` owns the managed block reconciler; `internal/update/` owns maintainer refresh; `internal/upgrade/` owns infrastructure file propagation.
 - `templates/common/` holds assets that every generated repo receives.
