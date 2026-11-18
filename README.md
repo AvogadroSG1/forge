@@ -53,7 +53,7 @@ flowchart LR
 
 To build `forge` locally:
 
-- Go `1.24.x`
+- Go `1.26.x`
 
 To run `forge init` end to end, you also need:
 
