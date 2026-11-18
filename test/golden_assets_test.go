@@ -65,7 +65,7 @@ func TestSourcesYAMLDefinesTheV1GoldenRecipes(t *testing.T) {
 		"uv add fastapi jinja2",
 		"dotnet new blazor --interactivity Auto",
 		"npm create vite",
-		"sv@0.16.2 create . --template minimal",
+		"sv@1.5.0 create . --template minimal",
 		"@angular/cli",
 		"- type: strip_paths",
 		"gitignore: Node",
