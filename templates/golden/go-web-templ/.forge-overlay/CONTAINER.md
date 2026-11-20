@@ -12,7 +12,7 @@ flowchart LR
 | Target | Contents | Runs as | Use it for |
 |---|---|---|---|
 | `runtime` (default) | The static binary on distroless, no shell | UID 65532 | Running the application |
-| `sandbox` | Go, gopls, golangci-lint, bash, git, curl, jq, coreutils | UID 10001, in `/workspace` | Agents and jobs that edit, build, and lint this code |
+| `sandbox` | Go, gopls, golangci-lint, templ, bash, git, curl, jq, coreutils | UID 10001, in `/workspace` | Agents and jobs that edit, build, and lint this code |
 
 ## Commands
 
@@ -29,6 +29,10 @@ IMAGE=registry.example.com/team/app PLATFORM=linux/arm64 mise run image
 ```
 
 Nothing in the `Dockerfile` names a CPU architecture. The build stage runs on the build machine and cross-compiles, so an arm64 runtime image builds quickly on an amd64 host. Cross-building the `sandbox` target runs under emulation and needs QEMU registered with Docker.
+
+## Templates
+
+The image build runs `templ generate` on the `.templ` sources before compiling, so a template edit reaches the image even if the checked-in `*_templ.go` files were not regenerated. The generator is pinned by `TEMPL_VERSION` and is also installed in the sandbox.
 
 ## Running
 
@@ -66,7 +70,7 @@ docker buildx imagetools inspect golang:1.27.4-alpine3.24 --format '{{.Manifest.
 
 - Use the digest of the multi-platform index, as printed above, so one pin serves amd64 and arm64.
 - Keep the Go and golangci-lint versions equal to the ones in `mise.toml`.
-- `GOPLS_VERSION` is an exact Go module version, checked against the Go checksum database.
+- `GOPLS_VERSION` and `TEMPL_VERSION` are exact Go module versions, checked against the Go checksum database. Keep `TEMPL_VERSION` equal to the templ tool in `mise.toml` and the module in `go.mod`.
 - Alpine packages are not version-pinned, because Alpine removes superseded versions and exact pins break rebuilds. The digest fixes the Alpine release.
 
 ## Extending the sandbox

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -127,6 +128,12 @@ func TestGoStackContainerImagesBuildAndRun(t *testing.T) {
 					t.Errorf("sandbox output missing %q:\n%s", want, sandbox)
 				}
 			}
+			if tc.stack == "go-web-templ" {
+				out := mustGoImageCommand(t, goImageRunTimeout, dir, "docker", "run", "--rm", images["sandbox"], "templ", "version")
+				if !strings.HasPrefix(strings.TrimSpace(out), "v") {
+					t.Errorf("sandbox templ version output = %q", out)
+				}
+			}
 		})
 	}
 }
@@ -137,35 +144,8 @@ func TestGoStackContainerImagesBuildAndRun(t *testing.T) {
 func assertGoServerImageRuns(t *testing.T, dir, image string) {
 	t.Helper()
 
-	id := strings.TrimSpace(mustGoImageCommand(t, goImageRunTimeout, dir, "docker", "run", "--detach",
-		"--read-only", "--cap-drop", "ALL",
-		"--env", "PORT="+goImageProbePort,
-		"--publish", "127.0.0.1::"+goImageProbePort,
-		image))
-	t.Cleanup(func() { _, _ = otelHostDocker("container", "rm", "--force", id) })
-
-	hostPort := strings.TrimSpace(mustGoImageCommand(t, goImageRunTimeout, dir, "docker", "port", id, goImageProbePort+"/tcp"))
-	url := "http://" + strings.Split(hostPort, "\n")[0] + "/health"
-
-	var body string
-	deadline := time.Now().Add(goImageRunTimeout)
-	for {
-		resp, err := http.Get(url) //nolint:gosec // loopback URL built from docker's own port mapping
-		if err == nil {
-			data, _ := io.ReadAll(resp.Body)
-			_ = resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				body = string(data)
-				break
-			}
-		}
-		if time.Now().After(deadline) {
-			logs, _ := otelHostDocker("logs", id)
-			t.Fatalf("GET %s never returned 200 (last error: %v)\n%s", url, err, logs)
-		}
-		time.Sleep(200 * time.Millisecond)
-	}
-	if body != `{"status":"ok"}` {
+	id, baseURL := startGoServerImage(t, dir, image)
+	if body := goImageGetOK(t, id, baseURL+"/health"); body != `{"status":"ok"}` {
 		t.Errorf("health body = %q", body)
 	}
 
@@ -189,5 +169,111 @@ func assertGoServerImageRuns(t *testing.T, dir, image string) {
 	}
 	if !sawListening {
 		t.Errorf("logs never reported listening on :%s:\n%s", goImageProbePort, logs)
+	}
+}
+
+// startGoServerImage runs a server runtime image on a non-default PORT with a
+// read-only root filesystem and no capabilities, and returns the container id
+// and its loopback base URL.
+func startGoServerImage(t *testing.T, dir, image string) (string, string) {
+	t.Helper()
+
+	id := strings.TrimSpace(mustGoImageCommand(t, goImageRunTimeout, dir, "docker", "run", "--detach",
+		"--read-only", "--cap-drop", "ALL",
+		"--env", "PORT="+goImageProbePort,
+		"--publish", "127.0.0.1::"+goImageProbePort,
+		image))
+	t.Cleanup(func() { _, _ = otelHostDocker("container", "rm", "--force", id) })
+
+	hostPort := strings.TrimSpace(mustGoImageCommand(t, goImageRunTimeout, dir, "docker", "port", id, goImageProbePort+"/tcp"))
+	return id, "http://" + strings.Split(hostPort, "\n")[0]
+}
+
+// goImageGetOK polls url until it answers 200 and returns the body.
+func goImageGetOK(t *testing.T, id, url string) string {
+	t.Helper()
+
+	deadline := time.Now().Add(goImageRunTimeout)
+	for {
+		resp, err := http.Get(url) //nolint:gosec // loopback URL built from docker's own port mapping
+		if err == nil {
+			data, _ := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return string(data)
+			}
+		}
+		if time.Now().After(deadline) {
+			logs, _ := otelHostDocker("logs", id)
+			t.Fatalf("GET %s never returned 200 (last error: %v)\n%s", url, err, logs)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+// TestGoWebTemplImageServesTemplateOnlyEdits proves the image is built from the
+// .templ sources, not from the checked-in generated *_templ.go: after a first
+// build, editing only a template and rebuilding must change the served page.
+// A build that skips `templ generate`, or a build context without .templ files
+// (which also leaves the layer cache valid), would keep serving the old page.
+func TestGoWebTemplImageServesTemplateOnlyEdits(t *testing.T) {
+	requireGoImageDocker(t)
+
+	const (
+		original = "API health:"
+		marker   = "TEMPLATE_ONLY_EDIT_MARKER:"
+	)
+
+	dir := t.TempDir()
+	vars, err := project.ResolveVariables(project.Input{
+		ProjectName: "Templ Image Check",
+		Language:    "go",
+		ProjectType: "fullstack",
+		Stack:       "go-web-templ",
+		AuthorName:  "CI Bot",
+		AuthorEmail: "ci@example.com",
+		Remote:      project.RemoteNone,
+	})
+	if err != nil {
+		t.Fatalf("ResolveVariables() error = %v", err)
+	}
+	if err := (scaffold.Writer{Assets: forge.Assets()}).Write(dir, vars); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	mustGoImageCommand(t, goImageBuildTimeout, dir, "go", "mod", "tidy")
+
+	tag := fmt.Sprintf("forge-image-test-templ-edit:%d", os.Getpid())
+	t.Cleanup(func() { _, _ = otelHostDocker("image", "rm", "--force", tag) })
+	build := func() {
+		args := append([]string{"build"}, strings.Fields(os.Getenv("FORGE_DOCKER_BUILD_ARGS"))...)
+		mustGoImageCommand(t, goImageBuildTimeout, dir, "docker", append(args, "--target", "runtime", "--tag", tag, ".")...)
+	}
+	servedPage := func() string {
+		id, baseURL := startGoServerImage(t, dir, tag)
+		page := goImageGetOK(t, id, baseURL+"/")
+		mustGoImageCommand(t, goImageRunTimeout, dir, "docker", "rm", "--force", id)
+		return page
+	}
+
+	build()
+	if page := servedPage(); !strings.Contains(page, original) || strings.Contains(page, marker) {
+		t.Fatalf("page before the edit should contain %q and not %q:\n%s", original, marker, page)
+	}
+
+	templPath := filepath.Join(dir, "internal", "web", "index.templ")
+	source, err := os.ReadFile(templPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", templPath, err)
+	}
+	if !strings.Contains(string(source), original) {
+		t.Fatalf("%s no longer contains %q; update this test's marker", templPath, original)
+	}
+	if err := os.WriteFile(templPath, []byte(strings.Replace(string(source), original, marker, 1)), 0o644); err != nil {
+		t.Fatalf("write %s: %v", templPath, err)
+	}
+
+	build()
+	if page := servedPage(); !strings.Contains(page, marker) || strings.Contains(page, original) {
+		t.Fatalf("template-only edit did not reach the served page; want %q instead of %q:\n%s", marker, original, page)
 	}
 }

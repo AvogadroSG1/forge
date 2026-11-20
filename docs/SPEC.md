@@ -557,6 +557,9 @@ plain files (no template variables): the main package is fixed per stack (`.`, `
 - **Platform.** The Dockerfile MUST NOT hardcode `GOARCH`. The build stage runs on
   `BUILDPLATFORM` and cross-compiles to `TARGETOS`/`TARGETARCH`.
 - **Runtime stage.** No `RUN`, no `HEALTHCHECK`, numeric non-root `USER`.
+- **Generated code.** `go-web-templ` MUST run `templ generate` in the build stage before
+  `go build`, with templ pinned once as `ARG TEMPL_VERSION` equal to the mise tool and `go.mod`
+  module versions, and MUST re-include `**/*.templ` in `.dockerignore`. Its sandbox ships templ.
 - **Build context.** `.dockerignore` starts with `*` and re-includes only `go.mod`, `go.sum`, Go
   sources, and embedded assets.
 - **Twelve-Factor code.** The server stacks (`go-api-chi`, `go-web-templ`) read the listen port
@@ -568,9 +571,11 @@ plain files (no template variables): the main package is fixed per stack (`.`, `
 
 Owning tests: `TestGoStacksShipPinnedMultiStageDockerfile`,
 `TestGoStackDockerfileToolVersionsMatchMise`, `TestGoStacksShipAllowlistDockerignore`,
-`TestGoStacksDocumentTheContainerPattern`, `TestGoServerStacksReadPortFromEnvironmentAndLogJSON`
-(`test/go_container_assets_test.go`), and the opt-in live build
-`TestGoStackContainerImagesBuildAndRun` (`FORGE_DOCKER_TESTS=1`).
+`TestGoStacksDocumentTheContainerPattern`, `TestGoServerStacksReadPortFromEnvironmentAndLogJSON`,
+`TestGoWebTemplImageGeneratesTemplatesFromSource`
+(`test/go_container_assets_test.go`), and the opt-in live tests
+`TestGoStackContainerImagesBuildAndRun` and `TestGoWebTemplImageServesTemplateOnlyEdits`
+(`FORGE_DOCKER_TESTS=1`).
 
 ---
 

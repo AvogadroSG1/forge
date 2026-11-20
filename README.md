@@ -365,7 +365,7 @@ GOCACHE=$PWD/.cache/go-build go test -tags=integration -timeout 15m -run TestGen
 FORGE_DOCKER_TESTS=1 GOCACHE=$PWD/.cache/go-build go test ./test/ -run OtelLifecycle -count=1 -timeout 10m
 # Live build-and-run test for the Go stack container images (requires Docker and network; skipped unless set).
 # FORGE_DOCKER_BUILD_ARGS adds arguments to every `docker build`, e.g. for a registry mirror.
-FORGE_DOCKER_TESTS=1 GOCACHE=$PWD/.cache/go-build go test ./test/ -run TestGoStackContainerImagesBuildAndRun -count=1 -timeout 40m
+FORGE_DOCKER_TESTS=1 GOCACHE=$PWD/.cache/go-build go test ./test/ -run "TestGoStackContainerImagesBuildAndRun|TestGoWebTemplImageServesTemplateOnlyEdits" -count=1 -timeout 40m
 ```
 
 ### BDD And Review Expectations

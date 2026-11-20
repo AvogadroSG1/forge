@@ -43,6 +43,8 @@ This departs from the position recorded in Beads issue `agentic_template_start-3
 
 **Runtime target.** A static binary (`CGO_ENABLED=0`, `-trimpath`, stripped) on `gcr.io/distroless/static-debian13:nonroot`. It runs as numeric UID 65532, has an exec-form `ENTRYPOINT`, and contains no shell and no `RUN` instruction. It has no `HEALTHCHECK`, because there is no shell to run one and probing belongs to the platform. Server stacks add `ENV PORT=8080` and `EXPOSE 8080`.
 
+**Generated code is regenerated in the build.** `go-web-templ` checks in `*_templ.go`, generated from `.templ` sources. Its build stage runs `templ generate` before `go build`, and `.dockerignore` re-includes `**/*.templ`, so a template-only edit reaches the image and invalidates the layer cache. The generator is pinned once as `ARG TEMPL_VERSION`, equal to the templ tool in `mise.toml` and the module in `go.mod`, and is installed in two stages: for the build platform (used by the build) and for the target platform (shipped in the sandbox).
+
 **Sandbox target.** The Go image plus `bash`, `coreutils`, `curl`, `git`, `jq`, gopls, and golangci-lint. It runs as numeric UID 10001 in `/workspace` with `CGO_ENABLED=0`. It has no C compiler; `CONTAINER.md` documents how to add one.
 
 **Twelve-Factor app code.** The two server stacks read their port from `PORT` (default `8080`) and write one JSON object per log line to stdout with `log/slog`. The existing `SIGTERM` drain and telemetry flush are unchanged. `CONTAINER.md` maps all twelve factors to what the repository does.

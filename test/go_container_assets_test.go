@@ -262,3 +262,64 @@ func TestGoServerStacksReadPortFromEnvironmentAndLogJSON(t *testing.T) {
 		})
 	}
 }
+
+// TestGoWebTemplImageGeneratesTemplatesFromSource guards the static half of
+// the templ contract: the image build must see the .templ sources and run a
+// templ generator pinned to the same version as mise and go.mod, before it
+// compiles. The behavior is proven by TestGoWebTemplImageServesTemplateOnlyEdits.
+func TestGoWebTemplImageGeneratesTemplatesFromSource(t *testing.T) {
+	const stack = "go-web-templ"
+	dockerfile := readGoContainerAsset(t, stack, "Dockerfile")
+	ignore := readGoContainerAsset(t, stack, ".dockerignore")
+	mise := readGoContainerAsset(t, stack, "mise.toml")
+
+	goModPath := filepath.Join(repoRoot(t), "templates", "golden", stack, "go.mod.tmpl")
+	goMod, err := os.ReadFile(goModPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", goModPath, err)
+	}
+
+	miseVersion := regexp.MustCompile(`(?m)^"go:github\.com/a-h/templ/cmd/templ" = "(v[0-9.]+)"$`).FindStringSubmatch(mise)
+	if miseVersion == nil {
+		t.Fatalf("mise.toml does not pin the templ tool")
+	}
+	want := miseVersion[1]
+
+	pins := regexp.MustCompile(`(?m)^ARG TEMPL_VERSION=(\S+)$`).FindAllStringSubmatch(dockerfile, -1)
+	if len(pins) != 1 || pins[0][1] != want {
+		t.Errorf("Dockerfile must declare ARG TEMPL_VERSION=%s exactly once, got %v", want, pins)
+	}
+	if !strings.Contains(string(goMod), "github.com/a-h/templ "+want+"\n") {
+		t.Errorf("go.mod.tmpl must require github.com/a-h/templ %s to match the generator", want)
+	}
+
+	if !strings.Contains(ignore, "!**/*.templ\n") {
+		t.Errorf(".dockerignore must re-include .templ sources so template edits reach the build")
+	}
+
+	build := stageBody(t, dockerfile, "build")
+	generate := strings.Index(build, "RUN templ generate\n")
+	if generate < 0 {
+		t.Fatalf("build stage must run `templ generate`")
+	}
+	if generate < strings.Index(build, "COPY . .") || generate > strings.Index(build, "go build ") {
+		t.Errorf("`templ generate` must run after the source is copied and before `go build`")
+	}
+	if !strings.Contains(build, "COPY --from=templ /out/templ ") {
+		t.Errorf("build stage must take templ from the pinned templ stage")
+	}
+
+	// The generator runs during the build, so it must be built for the build
+	// machine; the sandbox copy must be built for the target platform.
+	if !strings.Contains(dockerfile, "FROM --platform=${BUILDPLATFORM} ${GO_IMAGE} AS templ\n") {
+		t.Errorf("templ stage must be built for BUILDPLATFORM from the pinned Go image")
+	}
+	for _, body := range []string{stageBody(t, dockerfile, "templ"), stageBody(t, dockerfile, "tools")} {
+		if !strings.Contains(body, `go install "github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}"`) {
+			t.Errorf("templ must be installed at ${TEMPL_VERSION}, got stage:\n%s", body)
+		}
+	}
+	if !strings.Contains(stageBody(t, dockerfile, "sandbox"), "COPY --from=tools /out/templ ") {
+		t.Errorf("sandbox must ship templ so template edits can be regenerated there")
+	}
+}
