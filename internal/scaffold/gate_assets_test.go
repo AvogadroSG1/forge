@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io/fs"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -227,6 +228,12 @@ func TestGoStacksDefineContainerImageGates(t *testing.T) {
 
 // ADR-0024: Lefthook owns .git/hooks and Beads runs as a Lefthook command in
 // every hook it supports. All twelve overlays MUST stay byte-identical.
+var (
+	hookArgPlaceholder     = regexp.MustCompile(`\{\d+\}`)
+	hookArgPlaceholderLine = regexp.MustCompile(`^\{[1-9]\}$`)
+	hookArgHeredocOpen     = regexp.MustCompile(`<<'([A-Za-z0-9_]+)'$`)
+)
+
 func TestShippedLefthookConfigsRunBeadsHooksAndAreIdentical(t *testing.T) {
 	t.Parallel()
 
@@ -254,8 +261,28 @@ func TestShippedLefthookConfigsRunBeadsHooksAndAreIdentical(t *testing.T) {
 			if !strings.Contains(run, "command -v bd") {
 				t.Errorf("%s: %s.beads must be guarded by `command -v bd`; got %q", path, hook, run)
 			}
-			if want := "bd hooks run " + hook + " {0}"; !strings.Contains(run, want) {
+			if want := "bd hooks run " + hook; !strings.Contains(run, want) {
 				t.Errorf("%s: %s.beads run = %q, want it to contain %q", path, hook, run, want)
+			}
+			// Lefthook splices {0}/{N} into shell source unescaped (ADR-0024):
+			// {0} is banned, and a {N} may only be the whole body of a quoted
+			// here-document.
+			if strings.Contains(run, "{0}") {
+				t.Errorf("%s: %s.beads uses {0}, which loses argument boundaries and executes shell syntax in arguments", path, hook)
+			}
+			lines := strings.Split(run, "\n")
+			for i, line := range lines {
+				if !hookArgPlaceholder.MatchString(line) {
+					continue
+				}
+				if !hookArgPlaceholderLine.MatchString(line) || i == 0 || i+1 >= len(lines) {
+					t.Errorf("%s: %s.beads line %q: a hook argument placeholder must be alone on its line", path, hook, line)
+					continue
+				}
+				open := hookArgHeredocOpen.FindStringSubmatch(lines[i-1])
+				if open == nil || lines[i+1] != open[1] {
+					t.Errorf("%s: %s.beads placeholder %q is not the sole body of a quoted here-document (previous %q, next %q)", path, hook, line, lines[i-1], lines[i+1])
+				}
 			}
 		}
 		if _, ok := config["pre-commit"].Commands["secret-scan"]; !ok {

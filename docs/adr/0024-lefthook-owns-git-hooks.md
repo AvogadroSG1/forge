@@ -30,7 +30,7 @@ checkout:
   rewrote `pre-commit` and `pre-push`: zero Beads markers were left. It also leaves `*.backup`
   files.
 - Lefthook as sole owner works. With `bd init --skip-hooks` and a `lefthook.yml` whose commands
-  call `bd hooks run <hook> {0}`, `git commit`, `git push` and `git checkout -b` each ran Beads
+  call `bd hooks run <hook>`, `git commit`, `git push` and `git checkout -b` each ran Beads
   exactly once, `.git/hooks` held only Lefthook's scripts, `core.hooksPath` stayed unset, and a
   plain `lefthook install` (no `--force`, no warning) twice in a row left the hook files
   byte-identical.
@@ -52,14 +52,37 @@ Lefthook owns `.git/hooks`. Beads is one more Lefthook command.
 
   ```yaml
   run: |
-    if command -v bd >/dev/null 2>&1; then
-      BD_GIT_HOOK=1 bd hooks run <hook> {0} || { rc=$?; [ "$rc" -eq 3 ] || exit "$rc"; }
-    fi
+    command -v bd >/dev/null 2>&1 || exit 0
+    open='{'
+    set --
+    arg=$(cat <<'FORGE_HOOK_ARG_7c41d9e2'
+    {1}
+    FORGE_HOOK_ARG_7c41d9e2
+    )
+    [ "$arg" = "${open}1}" ] || set -- "$@" "$arg"
+    # ...one block per argument the hook can receive...
+    BD_GIT_HOOK=1 bd hooks run <hook> "$@" || { rc=$?; [ "$rc" -eq 3 ] || exit "$rc"; }
   ```
 
   The `command -v` guard keeps a repo without `bd` working; exit 3 does not block git, matching
   bd's own shim. The shim's `BEADS_HOOK_TIMEOUT` is not reproduced: a hung `bd` blocks the git
   operation until interrupted.
+
+- **Hook arguments are data and never reach the shell as source.** Lefthook 2.2.2 substitutes
+  `{0}` and `{N}` into the command text unescaped, for `commands` and for `scripts` alike. A
+  remote whose path contained `$(touch X)` ran `touch X` on `git push`, and a commit message
+  path with spaces arrived as several arguments. So `{0}` is never used. Each `{N}` appears
+  only as the body of a quoted here-document, where the shell performs no expansion, and is
+  appended to `"$@"` as one argument. An argument git did not pass is left by Lefthook as the
+  literal `{N}`; the command compares against that literal (built so Lefthook does not
+  substitute it) and drops it. `pre-commit` receives no arguments from git and passes none.
+  `TestLefthookBeadsHooksPreserveArgumentsAndExecuteNone` drives the real Lefthook and git with
+  hostile arguments; `TestShippedLefthookConfigsRunBeadsHooksAndAreIdentical` rejects `{0}` and
+  any `{N}` outside a quoted here-document.
+
+  One limit remains: an argument that contains a newline followed by a line equal to the
+  here-document delimiter would end the here-document early. Git does not produce such a value
+  on its own; it would have to be a remote URL or path the repository's own user configured.
 
 ## Considered options
 
