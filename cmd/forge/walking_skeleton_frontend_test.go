@@ -55,7 +55,7 @@ import sys
 
 task = sys.argv[1]
 text = pathlib.Path("mise.toml").read_text()
-pattern = rf"(?ms)^\[tasks\.{re.escape(task)}\]\s*\nrun = \"([^\"]+)\""
+pattern = rf"(?m)^\[tasks\.\"?{re.escape(task)}\"?\]\s*\n(?:description = .*\n)?run = \"([^\"]+)\""
 match = re.search(pattern, text)
 if not match:
     raise SystemExit(1)
@@ -84,6 +84,7 @@ func writeFrontendStubs(t *testing.T, stubDir string, npmLogPath string) {
 	writeExecutable(t, filepath.Join(stubDir, "lefthook"), "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n")
 	writeExecutable(t, filepath.Join(stubDir, "golangci-lint"), "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n")
 	writeExecutable(t, filepath.Join(stubDir, "govulncheck"), "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n")
+	writeExecutable(t, filepath.Join(stubDir, "hadolint"), "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n")
 	writeExecutable(t, filepath.Join(stubDir, "npm"), "#!/usr/bin/env bash\nset -euo pipefail\necho \"npm $*\" >> \""+npmLogPath+"\"\nexit 0\n")
 	writeExecutable(t, filepath.Join(stubDir, "mise"), miseStubScript)
 }

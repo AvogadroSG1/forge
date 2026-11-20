@@ -1,6 +1,8 @@
 [tools]
 go = "1.27.4"
 golangci-lint = "2.15.0"
+hadolint = "2.15.1"
+trivy = "0.76.2"
 "go:golang.org/x/vuln/cmd/govulncheck" = "1.10.0"
 "go:github.com/a-h/templ/cmd/templ" = "v0.3.1118"
 lefthook = "2.2.2"
@@ -16,4 +18,30 @@ run = "golangci-lint run ./..."
 run = "go test -cover ./..."
 
 [tasks.ci]
-run = "mise run fmt && mise run lint && mise run test && govulncheck ./..."
+run = "mise run fmt && mise run lint && mise run image:lint && mise run test && govulncheck ./..."
+
+# Container image gates (see CONTAINER.md). image:lint needs no Docker and is
+# part of ci; image and image:scan need a running Docker daemon and are run on
+# demand and as their own CI step. Bodies stay POSIX sh.
+[tasks."image:lint"]
+description = "Lint the Dockerfile"
+run = "hadolint Dockerfile"
+
+[tasks.image]
+description = "Build the runtime and sandbox images; IMAGE names them, PLATFORM cross-builds"
+run = '''
+set -eu
+image="${IMAGE:-app}"
+revision="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+for target in runtime sandbox; do
+  docker build ${PLATFORM:+--platform "$PLATFORM"} \
+    --target "$target" \
+    --build-arg "REVISION=$revision" \
+    --tag "$image:$target" .
+done
+'''
+
+[tasks."image:scan"]
+description = "Scan the runtime image for fixable HIGH and CRITICAL vulnerabilities"
+depends = ["image"]
+run = 'trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed "${IMAGE:-app}:runtime"'

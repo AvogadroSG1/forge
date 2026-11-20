@@ -3,7 +3,7 @@ package web
 import (
 	"context"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,7 +16,7 @@ import (
 )
 
 func TestIndexPageRendersTheSkeleton(t *testing.T) {
-	router := NewServer("Sample App", log.New(io.Discard, "", 0))
+	router := NewServer("Sample App", slog.New(slog.NewJSONHandler(io.Discard, nil)))
 
 	request := httptest.NewRequest(http.MethodGet, "/", nil)
 	response := httptest.NewRecorder()
@@ -38,7 +38,7 @@ func TestIndexPageRendersTheSkeleton(t *testing.T) {
 }
 
 func TestHealthEndpointReturnsOK(t *testing.T) {
-	router := NewServer("Sample App", log.New(io.Discard, "", 0))
+	router := NewServer("Sample App", slog.New(slog.NewJSONHandler(io.Discard, nil)))
 
 	request := httptest.NewRequest(http.MethodGet, "/health", nil)
 	response := httptest.NewRecorder()
@@ -63,7 +63,7 @@ func TestHealthRequestRecordsServerSpan(t *testing.T) {
 		_ = provider.Shutdown(ctx)
 	})
 
-	router := NewServer("Sample App", log.New(io.Discard, "", 0))
+	router := NewServer("Sample App", slog.New(slog.NewJSONHandler(io.Discard, nil)))
 	request := httptest.NewRequest(http.MethodGet, "/health", nil)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
@@ -82,7 +82,7 @@ func TestHealthRequestRecordsServerSpan(t *testing.T) {
 }
 
 func TestStaticHTMXIsServedLocally(t *testing.T) {
-	router := NewServer("Sample App", log.New(io.Discard, "", 0))
+	router := NewServer("Sample App", slog.New(slog.NewJSONHandler(io.Discard, nil)))
 
 	request := httptest.NewRequest(http.MethodGet, "/static/htmx.min.js", nil)
 	response := httptest.NewRecorder()

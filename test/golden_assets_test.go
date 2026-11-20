@@ -89,6 +89,9 @@ func TestGoldenCatalogPackagesVanillaAndOverlayAssetsForEveryV1Stack(t *testing.
 			name: "go-cli-cobra",
 			files: []string{
 				"templates/golden/go-cli-cobra/go.mod.tmpl",
+				"templates/golden/go-cli-cobra/.forge-overlay/Dockerfile",
+				"templates/golden/go-cli-cobra/.forge-overlay/.dockerignore",
+				"templates/golden/go-cli-cobra/.forge-overlay/CONTAINER.md",
 				"templates/golden/go-cli-cobra/main.go.tmpl",
 				"templates/golden/go-cli-cobra/cmd/root.go.tmpl",
 				"templates/golden/go-cli-cobra/cmd/serve.go.tmpl",
@@ -102,6 +105,9 @@ func TestGoldenCatalogPackagesVanillaAndOverlayAssetsForEveryV1Stack(t *testing.
 			name: "go-api-chi",
 			files: []string{
 				"templates/golden/go-api-chi/go.mod.tmpl",
+				"templates/golden/go-api-chi/.forge-overlay/Dockerfile",
+				"templates/golden/go-api-chi/.forge-overlay/.dockerignore",
+				"templates/golden/go-api-chi/.forge-overlay/CONTAINER.md",
 				"templates/golden/go-api-chi/api/.keep",
 				"templates/golden/go-api-chi/configs/.keep",
 				"templates/golden/go-api-chi/internal/platform/.keep",
@@ -170,6 +176,9 @@ func TestGoldenCatalogPackagesVanillaAndOverlayAssetsForEveryV1Stack(t *testing.
 			name: "go-web-templ",
 			files: []string{
 				"templates/golden/go-web-templ/go.mod.tmpl",
+				"templates/golden/go-web-templ/.forge-overlay/Dockerfile",
+				"templates/golden/go-web-templ/.forge-overlay/.dockerignore",
+				"templates/golden/go-web-templ/.forge-overlay/CONTAINER.md",
 				"templates/golden/go-web-templ/.forge-overlay/cmd/web/main.go.tmpl",
 				"templates/golden/go-web-templ/.forge-overlay/internal/web/index.templ",
 				"templates/golden/go-web-templ/.forge-overlay/internal/web/index_templ.go",
@@ -664,10 +673,13 @@ func TestGoStacksPinPatchedGoToolchainForVulnerabilityGate(t *testing.T) {
 
 	files := []string{
 		filepath.Join(repoRoot, "templates", "golden", "go-cli-cobra", "go.mod.tmpl"),
+		filepath.Join(repoRoot, "templates", "golden", "go-cli-cobra", ".forge-overlay", "Dockerfile"),
 		filepath.Join(repoRoot, "templates", "golden", "go-cli-cobra", ".forge-overlay", "mise.toml"),
 		filepath.Join(repoRoot, "templates", "golden", "go-api-chi", "go.mod.tmpl"),
+		filepath.Join(repoRoot, "templates", "golden", "go-api-chi", ".forge-overlay", "Dockerfile"),
 		filepath.Join(repoRoot, "templates", "golden", "go-api-chi", ".forge-overlay", "mise.toml.tmpl"),
 		filepath.Join(repoRoot, "templates", "golden", "go-web-templ", "go.mod.tmpl"),
+		filepath.Join(repoRoot, "templates", "golden", "go-web-templ", ".forge-overlay", "Dockerfile"),
 		filepath.Join(repoRoot, "templates", "golden", "go-web-templ", ".forge-overlay", "mise.toml"),
 	}
 
@@ -679,7 +691,7 @@ func TestGoStacksPinPatchedGoToolchainForVulnerabilityGate(t *testing.T) {
 
 		content := string(contentBytes)
 		if !strings.Contains(content, patchedToolchain) {
-			t.Fatalf("%s must pin Go %s so govulncheck passes:\n%s", path, patchedToolchain, content)
+			t.Fatalf("%s must pin Go %s so govulncheck passes and images match the local toolchain:\n%s", path, patchedToolchain, content)
 		}
 	}
 }

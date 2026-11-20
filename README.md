@@ -32,6 +32,8 @@ Each shipped stack is expected to scaffold a repo that can run `mise install` an
 
 Every stack's overlay also ships an env-gated OpenTelemetry bootstrap (traces + metrics) with a real test: providers are always installed, and OTLP/HTTP export turns on only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (see ADR-0020). Every repo also ships a `mise run otel` task that starts the shared, system-wide Collector + Aspire Dashboard stack, points OTLP endpoints at the Collector under `mise`, and exposes the local viewer at `http://127.0.0.1:18888` (see ADR-0021 and ADR-0022).
 
+The three Go stacks also ship a container image pattern: one digest-pinned, multi-stage `Dockerfile` with a minimal non-root `runtime` target and a `sandbox` toolchain target for agents, plus `mise run image:lint`, `mise run image`, and `mise run image:scan`. The generated `CONTAINER.md` explains usage and Twelve-Factor compliance; see [ADR-0023](./docs/adr/0023-go-container-image-pattern.md).
+
 ## How It Works
 
 ```mermaid
@@ -361,6 +363,9 @@ bats test/secret-scan.bats
 GOCACHE=$PWD/.cache/go-build go test -tags=integration -timeout 15m -run TestGeneratedGoStacksPassFitnessBaseline ./test/
 # Live Docker lifecycle test for the shared OTel Collector + Aspire viewer (requires Docker; skipped unless set)
 FORGE_DOCKER_TESTS=1 GOCACHE=$PWD/.cache/go-build go test ./test/ -run OtelLifecycle -count=1 -timeout 10m
+# Live build-and-run test for the Go stack container images (requires Docker and network; skipped unless set).
+# FORGE_DOCKER_BUILD_ARGS adds arguments to every `docker build`, e.g. for a registry mirror.
+FORGE_DOCKER_TESTS=1 GOCACHE=$PWD/.cache/go-build go test ./test/ -run "TestGoStackContainerImagesBuildAndRun|TestGoWebTemplImageServesTemplateOnlyEdits" -count=1 -timeout 40m
 ```
 
 ### BDD And Review Expectations

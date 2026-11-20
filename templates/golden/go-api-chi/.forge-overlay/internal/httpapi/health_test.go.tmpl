@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -18,7 +18,7 @@ import (
 
 func TestHealthEndpointReturnsOK(t *testing.T) {
 	var logs bytes.Buffer
-	router := NewRouter(log.New(&logs, "", 0))
+	router := NewRouter(slog.New(slog.NewJSONHandler(&logs, nil)))
 
 	request := httptest.NewRequest(http.MethodGet, "/health", nil)
 	response := httptest.NewRecorder()
@@ -48,7 +48,7 @@ func TestHealthRequestRecordsServerSpan(t *testing.T) {
 		t.Fatalf("telemetry.Setup() error = %v", err)
 	}
 
-	router := NewRouter(log.New(io.Discard, "", 0))
+	router := NewRouter(slog.New(slog.NewJSONHandler(io.Discard, nil)))
 	request := httptest.NewRequest(http.MethodGet, "/health", nil)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)

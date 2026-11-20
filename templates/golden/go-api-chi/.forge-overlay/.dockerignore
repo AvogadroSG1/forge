@@ -1,0 +1,13 @@
+# Allowlist: nothing enters the build context unless it is re-included here.
+# This keeps secrets, VCS data and local state out of every image layer.
+*
+
+!go.mod
+!go.sum
+!**/*.go
+
+# Tests are not needed to build the binary.
+**/*_test.go
+
+# A frontend under web/ is built and shipped separately.
+web/

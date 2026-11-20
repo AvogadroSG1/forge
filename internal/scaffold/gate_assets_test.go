@@ -151,3 +151,73 @@ func TestFullstackBackendMiseTemplatesCarryWebGates(t *testing.T) {
 		})
 	}
 }
+
+// goContainerGateStacks ship the container image pattern (ADR-0023).
+var goContainerGateStacks = []string{"go-cli-cobra", "go-api-chi", "go-web-templ"}
+
+// TestGoStacksDefineContainerImageGates owns the container gate seam: the
+// Dockerfile lint is part of the Docker-free `ci` task, while build and scan
+// are their own mise tasks that the CI workflow reaches only through mise.
+func TestGoStacksDefineContainerImageGates(t *testing.T) {
+	t.Parallel()
+
+	assets := forge.Assets()
+	for _, stack := range goContainerGateStacks {
+		stack := stack
+		t.Run(stack, func(t *testing.T) {
+			t.Parallel()
+
+			misePath, miseText := readMiseOverlay(t, assets, stack)
+			for _, snippet := range []string{
+				`hadolint = "`,
+				`trivy = "`,
+				`[tasks."image:lint"]`,
+				`run = "hadolint Dockerfile"`,
+				"[tasks.image]",
+				"--target \"$target\"",
+				`[tasks."image:scan"]`,
+				`depends = ["image"]`,
+				"trivy image --exit-code 1 --severity HIGH,CRITICAL",
+			} {
+				if !strings.Contains(miseText, snippet) {
+					t.Fatalf("%s missing %q", misePath, snippet)
+				}
+			}
+
+			ciTasks := 0
+			for _, line := range strings.Split(miseText, "\n") {
+				if !strings.HasPrefix(line, `run = "mise run fmt && `) {
+					continue
+				}
+				ciTasks++
+				if !strings.Contains(line, "mise run image:lint") {
+					t.Fatalf("%s ci task must run image:lint: %s", misePath, line)
+				}
+				// ci must stay runnable without a Docker daemon.
+				for _, forbidden := range []string{"mise run image &&", "mise run image:scan", "docker ", "trivy"} {
+					if strings.Contains(line, forbidden) {
+						t.Fatalf("%s ci task must not need Docker (%q): %s", misePath, forbidden, line)
+					}
+				}
+			}
+			if ciTasks == 0 {
+				t.Fatalf("%s has no ci task line to check", misePath)
+			}
+
+			ciPath := filepath.ToSlash(filepath.Join("templates/golden", stack, ".forge-overlay", ".github", "workflows", "ci.yml"))
+			ciData, err := fs.ReadFile(assets, ciPath)
+			if err != nil {
+				t.Fatalf("ReadFile(%s) error = %v", ciPath, err)
+			}
+			ciText := string(ciData)
+			if !strings.Contains(ciText, "- run: mise run image:scan") {
+				t.Fatalf("%s must run the image scan through mise", ciPath)
+			}
+			for _, forbidden := range []string{"docker build", "trivy", "hadolint"} {
+				if strings.Contains(ciText, forbidden) {
+					t.Fatalf("%s should not inline %q", ciPath, forbidden)
+				}
+			}
+		})
+	}
+}

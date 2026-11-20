@@ -1,0 +1,15 @@
+# Allowlist: nothing enters the build context unless it is re-included here.
+# This keeps secrets, VCS data and local state out of every image layer.
+*
+
+!go.mod
+!go.sum
+!**/*.go
+# Templates: the build runs `templ generate` on them.
+!**/*.templ
+
+# Assets compiled into the binary with go:embed.
+!internal/web/static/**
+
+# Tests are not needed to build the binary.
+**/*_test.go

@@ -1,7 +1,7 @@
 package httpapi
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 
 	// Explicit alias works around AFF analyzer bug where /v5 is parsed as package name (aff-13k).
@@ -12,7 +12,7 @@ import (
 // NewRouter builds the HTTP API and wraps it in OpenTelemetry server
 // instrumentation so every request produces a span on the global tracer
 // provider installed by internal/telemetry.
-func NewRouter(logger *log.Logger) http.Handler {
+func NewRouter(logger *slog.Logger) http.Handler {
 	router := chi.NewRouter()
 	router.Get("/health", Health(logger))
 
