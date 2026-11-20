@@ -745,6 +745,10 @@ func TestRunLeavesCommittedVanillaUntouchedWhenStagedReplaceFails(t *testing.T) 
 func TestRunLeavesVanillaUntouchedWhenSourcesRepinFails(t *testing.T) {
 	t.Parallel()
 
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses the file permission bits this test uses to force a write failure")
+	}
+
 	assets := representativeStackAssets()
 	repoRoot := t.TempDir()
 	sourcesPath := filepath.Join(repoRoot, "sources.yaml")
