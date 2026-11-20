@@ -2,6 +2,8 @@
 
 **Status:** accepted · 2026-06-17
 
+> **Superseded in part by ADR-0024 (2026-11-20).** The "lefthook installs in chain mode after `bd init`, preserving beads' git hooks" decision, and the consequence that implementation must verify beads' hooks survive `lefthook install`, no longer hold. Lefthook now owns `.git/hooks` and runs Beads as a command; `bd init` runs with `--skip-hooks`. The rest of this ADR stands.
+
 ## Decision
 
 Templates don't just *include* lint/format/test tools — they **enforce** them. The

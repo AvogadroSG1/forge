@@ -280,6 +280,18 @@ existing `CONTAINER.md` is kept. Upgrade does not add the `image*` mise tasks, t
 `trivy` pins, the CI scan step or the `PORT`/`slog` code changes; it prints a notice listing them.
 See `CONTAINER.md` after upgrading.
 
+Git hooks are not migrated by `upgrade`. Repos generated before ADR-0024 still have
+`core.hooksPath=.beads/hooks` and Beads/Lefthook chained through `*.old` / `*.lefthook` files.
+Lefthook now owns `.git/hooks` and runs Beads as a `lefthook.yml` command. To migrate a repo by hand:
+
+```bash
+git config --unset core.hooksPath
+rm -f .beads/hooks/*.old .beads/hooks/*.lefthook
+# copy the `beads` commands (and the post-merge, post-checkout and prepare-commit-msg hooks)
+# from templates/golden/<stack>/.forge-overlay/lefthook.yml into your lefthook.yml
+lefthook install
+```
+
 ### Refresh A Maintained Snapshot
 
 `update` is a maintainer-only path for regenerating vendored stack snapshots from `sources.yaml`.

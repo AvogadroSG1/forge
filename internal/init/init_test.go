@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -630,22 +629,14 @@ func TestInitializerStopsAtTheFailedStepWithRecoveryText(t *testing.T) {
 	}
 }
 
-func TestInitializerRepairsBeadsHooksAfterForcedLefthookInstall(t *testing.T) {
+// ADR-0024: Lefthook is the sole owner of .git/hooks and Beads runs as a
+// Lefthook command, so bd must not install its own hooks (--skip-hooks) and
+// `lefthook install` must not need --force to take over core.hooksPath.
+func TestInitializerLetsLefthookOwnGitHooks(t *testing.T) {
 	t.Parallel()
 
 	tempDir := t.TempDir()
-	runner := &recordingRunner{
-		afterStep: func(dir string, step string, _ string, _ ...string) error {
-			switch step {
-			case "bd init":
-				return seedBeadsHooks(dir)
-			case "lefthook install":
-				return simulateForcedLefthookInstall(dir)
-			default:
-				return nil
-			}
-		},
-	}
+	runner := &recordingRunner{}
 	writer := scaffold.Writer{Assets: fstest.MapFS{
 		"templates/common/AGENTS.md.tmpl":              {Data: []byte("Project {{.ProjectName}}\n")},
 		"templates/common/gitignore.base":              {Data: []byte(".DS_Store\n")},
@@ -669,36 +660,10 @@ func TestInitializerRepairsBeadsHooksAfterForcedLefthookInstall(t *testing.T) {
 		t.Fatalf("Run() error = %v", err)
 	}
 
-	assertRecordedStepArgs(t, runner.steps, "lefthook install", "exec", "--", "lefthook", "install", "--force")
-
-	checks := []struct {
-		hook      string
-		wantLines []string
-	}{
-		{hook: "pre-commit", wantLines: []string{"beads pre-commit", "lefthook pre-commit"}},
-		{hook: "pre-push", wantLines: []string{"beads pre-push", "lefthook pre-push"}},
-	}
-
-	for _, check := range checks {
-		t.Run(check.hook, func(t *testing.T) {
-			hookPath := filepath.Join(tempDir, ".beads", "hooks", check.hook)
-			if _, err := os.Stat(hookPath + ".old"); err != nil {
-				t.Fatalf("Stat(%s.old) error = %v", hookPath, err)
-			}
-			if _, err := os.Stat(hookPath + ".lefthook"); err != nil {
-				t.Fatalf("Stat(%s.lefthook) error = %v", hookPath, err)
-			}
-
-			output := runHook(t, hookPath)
-			for _, want := range check.wantLines {
-				if !strings.Contains(output, want) {
-					t.Fatalf("%s output = %q, want %q", hookPath, output, want)
-				}
-			}
-			if strings.Index(output, check.wantLines[0]) > strings.Index(output, check.wantLines[1]) {
-				t.Fatalf("%s output order = %q, want beads hook before lefthook", hookPath, output)
-			}
-		})
+	assertRecordedStepArgs(t, runner.steps, "bd init", "init", "--skip-hooks")
+	assertRecordedStepArgs(t, runner.steps, "lefthook install", "exec", "--", "lefthook", "install")
+	if slices.Contains(runner.stepNames(), "lefthook chain repair") {
+		t.Fatal("init still runs the Beads/Lefthook chain repair; ADR-0024 removed it")
 	}
 }
 
@@ -710,7 +675,7 @@ func TestInitializerSecuresBeadsDirPermissions(t *testing.T) {
 		afterStep: func(dir string, step string, _ string, _ ...string) error {
 			if step == "bd init" {
 				// bd init creates .beads under the ambient umask → 0755.
-				if err := seedBeadsHooks(dir); err != nil {
+				if err := os.MkdirAll(filepath.Join(dir, ".beads"), 0o755); err != nil {
 					return err
 				}
 				return os.Chmod(filepath.Join(dir, ".beads"), 0o755)
@@ -748,53 +713,6 @@ func TestInitializerSecuresBeadsDirPermissions(t *testing.T) {
 	if info.Mode().Perm() != 0o700 {
 		t.Fatalf(".beads mode after init = %o, want 700 (bd requires owner-only)", info.Mode().Perm())
 	}
-}
-
-func seedBeadsHooks(dir string) error {
-	hooksDir := filepath.Join(dir, ".beads", "hooks")
-	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
-		return err
-	}
-
-	for _, hook := range []string{"pre-commit", "pre-push"} {
-		content := "#!/usr/bin/env bash\nset -euo pipefail\necho \"beads " + hook + "\"\n"
-		if err := os.WriteFile(filepath.Join(hooksDir, hook), []byte(content), 0o755); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func simulateForcedLefthookInstall(dir string) error {
-	hooksDir := filepath.Join(dir, ".beads", "hooks")
-	for _, hook := range []string{"pre-commit", "pre-push"} {
-		hookPath := filepath.Join(hooksDir, hook)
-		if err := os.Rename(hookPath, hookPath+".old"); err != nil {
-			return err
-		}
-
-		content := "#!/usr/bin/env bash\nset -euo pipefail\necho \"lefthook " + hook + "\"\n"
-		if err := os.WriteFile(hookPath, []byte(content), 0o755); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func runHook(t *testing.T, hookPath string) string {
-	t.Helper()
-
-	cmd := exec.Command(hookPath)
-	var output strings.Builder
-	cmd.Stdout = &output
-	cmd.Stderr = &output
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Run(%s) error = %v\n%s", hookPath, err, output.String())
-	}
-
-	return output.String()
 }
 
 func assertRecordedStepArgs(t *testing.T, steps []recordedStep, name string, wantArgs ...string) {

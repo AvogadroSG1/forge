@@ -1,10 +1,13 @@
 package scaffold
 
 import (
+	"bytes"
 	"io/fs"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 
 	"forge"
 )
@@ -219,5 +222,55 @@ func TestGoStacksDefineContainerImageGates(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// ADR-0024: Lefthook owns .git/hooks and Beads runs as a Lefthook command in
+// every hook it supports. All twelve overlays MUST stay byte-identical.
+func TestShippedLefthookConfigsRunBeadsHooksAndAreIdentical(t *testing.T) {
+	t.Parallel()
+
+	assets := forge.Assets()
+	beadsHooks := []string{"pre-commit", "pre-push", "post-merge", "post-checkout", "prepare-commit-msg"}
+
+	var reference []byte
+	for _, stack := range shippedStacks {
+		path := filepath.ToSlash(filepath.Join("templates/golden", stack, ".forge-overlay/lefthook.yml"))
+		data, err := fs.ReadFile(assets, path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+
+		var config map[string]struct {
+			Commands map[string]struct {
+				Run string `yaml:"run"`
+			} `yaml:"commands"`
+		}
+		if err := yaml.Unmarshal(data, &config); err != nil {
+			t.Fatalf("parse %s: %v", path, err)
+		}
+		for _, hook := range beadsHooks {
+			run := config[hook].Commands["beads"].Run
+			if !strings.Contains(run, "command -v bd") {
+				t.Errorf("%s: %s.beads must be guarded by `command -v bd`; got %q", path, hook, run)
+			}
+			if want := "bd hooks run " + hook + " {0}"; !strings.Contains(run, want) {
+				t.Errorf("%s: %s.beads run = %q, want it to contain %q", path, hook, run, want)
+			}
+		}
+		if _, ok := config["pre-commit"].Commands["secret-scan"]; !ok {
+			t.Errorf("%s: pre-commit lost the secret-scan command", path)
+		}
+		if _, ok := config["pre-push"].Commands["test"]; !ok {
+			t.Errorf("%s: pre-push lost the test command", path)
+		}
+
+		if reference == nil {
+			reference = data
+			continue
+		}
+		if !bytes.Equal(data, reference) {
+			t.Errorf("%s differs from %s; the lefthook.yml overlays MUST stay byte-identical", path, shippedStacks[0])
+		}
 	}
 }

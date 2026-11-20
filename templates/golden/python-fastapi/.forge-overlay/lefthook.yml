@@ -1,4 +1,11 @@
-# Extended from the minimal secret-scan hook contract; x2k adds lint/format/test gates here.
+# Lefthook owns .git/hooks (ADR-0024). Beads runs as a Lefthook command, so
+# `bd init --skip-hooks` plus plain `lefthook install` is the whole setup: no
+# core.hooksPath, no wrapper scripts, no chain repair. Extended from the minimal
+# secret-scan hook contract; x2k adds lint/format/test gates here.
+#
+# Each beads command mirrors bd's own hook shim: skipped when bd is absent, run
+# with BD_GIT_HOOK=1, and exit 3 (Beads database not initialized, e.g. a fresh
+# clone before `bd bootstrap`) does not block the git operation.
 pre-commit:
   parallel: true
   commands:
@@ -8,8 +15,42 @@ pre-commit:
       run: mise run lint
     fmt:
       run: mise run fmt
+    beads:
+      run: |
+        if command -v bd >/dev/null 2>&1; then
+          BD_GIT_HOOK=1 bd hooks run pre-commit {0} || { rc=$?; [ "$rc" -eq 3 ] || exit "$rc"; }
+        fi
 
 pre-push:
   commands:
     test:
       run: mise run test
+    beads:
+      run: |
+        if command -v bd >/dev/null 2>&1; then
+          BD_GIT_HOOK=1 bd hooks run pre-push {0} || { rc=$?; [ "$rc" -eq 3 ] || exit "$rc"; }
+        fi
+
+post-merge:
+  commands:
+    beads:
+      run: |
+        if command -v bd >/dev/null 2>&1; then
+          BD_GIT_HOOK=1 bd hooks run post-merge {0} || { rc=$?; [ "$rc" -eq 3 ] || exit "$rc"; }
+        fi
+
+post-checkout:
+  commands:
+    beads:
+      run: |
+        if command -v bd >/dev/null 2>&1; then
+          BD_GIT_HOOK=1 bd hooks run post-checkout {0} || { rc=$?; [ "$rc" -eq 3 ] || exit "$rc"; }
+        fi
+
+prepare-commit-msg:
+  commands:
+    beads:
+      run: |
+        if command -v bd >/dev/null 2>&1; then
+          BD_GIT_HOOK=1 bd hooks run prepare-commit-msg {0} || { rc=$?; [ "$rc" -eq 3 ] || exit "$rc"; }
+        fi

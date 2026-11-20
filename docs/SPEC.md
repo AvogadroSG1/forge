@@ -88,9 +88,9 @@ flowchart TD
         G --> H["Install guard hook (PreToolUse, Layer B)"]
     end
     subgraph P2["Phase 2 — Delegate"]
-        H --> I["bd init → .beads/, git hooks, AGENTS.md beads block"]
+        H --> I["bd init --skip-hooks → .beads/, AGENTS.md beads block (no git hooks)"]
         I --> J["instill bootstrap / init / sync → apm.yml + apm.lock.yaml + .apm/"]
-        J --> K["lefthook install (chain mode, after bd init)"]
+        J --> K["lefthook install (owns .git/hooks; runs bd hooks run)"]
     end
     subgraph P3["Phase 3 — Remote (optional, last)"]
         K --> L{"--remote?"}
@@ -139,9 +139,12 @@ ensures the `apm` CLI) is the one non-fatal step: if it fails, the skills phase 
 init continues — the repo self-heals later via `instill bootstrap && instill sync` (ADR-0012).
 Four orderings are load-bearing:
 
-- **Guard installs before `bd init`**, so beads' own git-hook install runs under the guard.
-- **`lefthook install` runs after `bd init`** in chain/non-clobber mode, preserving beads' hooks
-  (verification owned by `485`; cites ADR-0003).
+- **Guard installs before `bd init`**, so every `bd` invocation during init runs under the guard.
+- **`bd init --skip-hooks` runs before `lefthook install`, and Lefthook owns `.git/hooks`**
+  (**ADR-0024**, superseding ADR-0003's chain mode). `bd init` installs no git hooks and leaves
+  `core.hooksPath` unset; the shipped `lefthook.yml` runs `bd hooks run <hook>` as a `beads`
+  command in `pre-commit`, `pre-push`, `post-merge`, `post-checkout` and `prepare-commit-msg`, so a
+  plain `lefthook install` (no `--force`) is the whole hook setup and re-running it is a no-op.
 - **`upgrade.Stamp` writes `.forge/manifest.json` and `.forge-infra-version` immediately after
   the Phase 1 scaffold writer succeeds, before Phase 3's `git add`/`commit`** (**ADR-0017**), so a
   freshly scaffolded repo is born at the current infrastructure version — never v0 — and both
@@ -595,8 +598,9 @@ Owning tests: `TestGoStacksShipPinnedMultiStageDockerfile`,
 One gate definition, multiple callers — no local/CI drift. `mise.toml` holds `[tools]` (toolchain
 + lefthook) and `[tasks]` (`lint`/`fmt`/`test`/`ci`). **lefthook** runs fast checks
 (secret-scan + lint + format) on `pre-commit` and full tests on `pre-push`, calling the mise tasks.
-**GitHub Actions** calls the same `mise run ci` (§ below). lefthook installs in chain mode after
-`bd init`.
+**GitHub Actions** calls the same `mise run ci` (§ below). lefthook owns `.git/hooks` and also runs
+Beads (`bd hooks run <hook>`) as a `beads` command in five hooks; `bd init` is run with
+`--skip-hooks` (ADR-0024).
 
 ### 10.1 Overlay tool table (de-staled — xUnit, pyright, no NUnit/mypy)
 
@@ -1010,7 +1014,7 @@ Feature's `all-children` gate IS the seam test.)*
 | **CI resolves** | `ud1` (CI workflow) × `x2k` (mise `ci` task) | **Gate-pipeline Feature gate**: every shipped overlay's `mise.toml` defines a `ci` task that `mise run ci` resolves to, across all v1 stacks. | Feature `all-children` gate. |
 | **Update idempotence** | `369` (steps interpreter) × `cjl` (normalization/refresh) | **Maintainer-refresh Feature gate**: `forge update --stack <key>` run twice with no upstream change → `templates/golden/<key>/` byte-identical, overlay untouched, git diff empty. | Feature `all-children` gate. |
 | **Conformance fixture** | `zz8` (publish guidelines) → `ebp` (conformance test) | Precondition, not a composition seam: `ebp` reads the guideline files from the in-repo vendored snapshots (`test/testdata/guidelines/`, **ADR-0018**), refreshed from the canonical path by `cp -f` after `zz8` publishes. | Plain `blockedBy` edge (`ebp` blocked-by `zz8`). |
-| **Chain-mode hooks** | `485` (verify beads hooks survive `lefthook install`) → `x2k` (real multi-job lefthook) | `485` proves chain mode in isolation; the local smoke (§16.1) exercises pre-commit/pre-push at runtime without duplicating the `485` proof. | `x2k` blocked-by `485` (existing edge). |
+| **Chain-mode hooks** | `485` (verify beads hooks survive `lefthook install`) → `x2k` (real multi-job lefthook) | *Superseded in part by ADR-0024: Lefthook owns `.git/hooks` and runs Beads as a command; `TestLefthookOwnsGitHooksAndRunsBeadsOncePerHook` proves it in isolation.* `485` proved chain mode in isolation; the local smoke (§16.1) exercises pre-commit/pre-push at runtime without duplicating the `485` proof. | `x2k` blocked-by `485` (existing edge). |
 | **Telemetry bootstrap** | overlay telemetry module + test × stack manifest OpenTelemetry dependency (`agentic_template_start-6cf`, ADR-0020) | `TestGoldenStacksShipTelemetryBootstrap` (`test/golden_assets_test.go`): for every v1 stack, the manifest pins the OpenTelemetry dependency **and** the overlay ships the telemetry module and its test; `TestPythonStacksRunUnderOpentelemetryInstrument` pins the `serve`/`run-cli` wrapper task. | Epic `all-children` gate; each platform child (`.3`–`.6`) turns its rows green. |
 | **Container image** | Go overlay `Dockerfile` × overlay `mise.toml` tool pins and image tasks × Go `ci.yml` (ADR-0023) | `TestGoStackDockerfileToolVersionsMatchMise` (`test/go_container_assets_test.go`): the image's Go and golangci-lint versions equal the mise pins. `TestGoStacksDefineContainerImageGates` (`internal/scaffold/gate_assets_test.go`): `ci` lints without Docker and `ci.yml` reaches the scan only through mise. | Feature gate of the container-image epic (`agentic_template_start-ee5`) |
 
