@@ -171,6 +171,9 @@ func TestOtelTasksPathMetacharactersInert(t *testing.T) {
 	h := newOtelTaskHarness(t, filepath.Join(otelInjectionSegment, "repo"))
 
 	result := h.run(t, "otel")
+	if result.exitCode != 0 {
+		t.Errorf("mise run otel exit = %d, want 0\n%s", result.exitCode, result.output)
+	}
 
 	var injected []string
 	err := filepath.WalkDir(h.root, func(path string, d fs.DirEntry, err error) error {

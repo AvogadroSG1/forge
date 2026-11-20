@@ -1,6 +1,7 @@
 # forge-managed: OpenTelemetry env + tasks for the system-wide OTel stack.
 # mise merges every file under .config/mise/conf.d/ with this repo's own
-# mise.toml, so these apply on top of whatever the stack defines. See .otel/
+# mise.toml; for a key defined in both, mise.toml wins, so these are defaults
+# the stack's mise.toml and mise.local.toml can override. See .otel/
 # for the Collector + Aspire Dashboard stack, started with `mise run otel`.
 # Task bodies MUST stay POSIX sh (`set -eu`, no bashisms): mise's default
 # inline shell is `sh`, which is dash on Debian/Ubuntu.

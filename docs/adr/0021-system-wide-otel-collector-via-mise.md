@@ -2,7 +2,23 @@
 
 **Status:** accepted · 2026-09-25 · amended 2026-09-26 (infra v7): inherited vendor OTLP env
 neutralized under `mise`; gRPC `4317` no longer published · amended by ADR-0022 only for the prior
-“no UI” decision.
+“no UI” decision · amended 2026-11-20 (see note below).
+
+> **Amended 2026-11-20.** Three corrections to this ADR's wording and consequences.
+>
+> - **Precedence of `conf.d/otel.toml`.** "Merges on top of the repo's own `mise.toml`" in the Decision is
+>   inaccurate for a key defined in both files. Verified on `mise` 2026.11.9: `mise.toml` wins over
+>   `.config/mise/conf.d/*.toml`, and `mise.local.toml` wins over both. `otel.toml` therefore
+>   supplies defaults that the stack's `mise.toml` can override; the documented override path
+>   (`mise.local.toml`) is unchanged.
+> - **Existing Angular repos need a manual edit.** `forge upgrade` propagates the collector assets
+>   (`.config/mise/conf.d/otel.toml`, `.otel/*`) but not the Angular `dev`/`build` (fullstack
+>   `web-dev`/`web-build`) tasks, which are overlay-owned like the rest of `mise.toml`. An Angular
+>   repo generated before this ADR exports nothing to the browser bundle until its `mise.toml` is
+>   updated by hand with those tasks.
+> - **Browser endpoints are public.** Whatever endpoint is inlined into a browser bundle (Angular
+>   define bridge, `VITE_OTEL_EXPORTER_OTLP_ENDPOINT`) ships to every visitor, so the URL MUST NOT
+>   contain credentials.
 
 ## Context
 

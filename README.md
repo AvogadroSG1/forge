@@ -363,6 +363,8 @@ bats test/secret-scan.bats
 GOCACHE=$PWD/.cache/go-build go test -tags=integration -timeout 15m -run TestGeneratedGoStacksPassFitnessBaseline ./test/
 # Live Docker lifecycle test for the shared OTel Collector + Aspire viewer (requires Docker; skipped unless set)
 FORGE_DOCKER_TESTS=1 GOCACHE=$PWD/.cache/go-build go test ./test/ -run OtelLifecycle -count=1 -timeout 10m
+# Real `ng build` bundle checks for the Angular OTLP define bridge (requires npm, node and network; skipped unless set)
+FORGE_SMOKE_NETWORK=1 GOCACHE=$PWD/.cache/go-build go test ./test/ -run "TestOtelAngularStandaloneBundleInlinesEndpoint|TestOtelAngularFullstackBundleInlinesEndpoint" -count=1 -timeout 30m
 # Live build-and-run test for the Go stack container images (requires Docker and network; skipped unless set).
 # FORGE_DOCKER_BUILD_ARGS adds arguments to every `docker build`, e.g. for a registry mirror.
 FORGE_DOCKER_TESTS=1 GOCACHE=$PWD/.cache/go-build go test ./test/ -run "TestGoStackContainerImagesBuildAndRun|TestGoWebTemplImageServesTemplateOnlyEdits" -count=1 -timeout 40m

@@ -445,7 +445,8 @@ Every stack, common rather than golden, additionally ships three assets that giv
 bootstrap somewhere to send data and a local visual inspection surface:
 
 - `templates/common/mise/conf.d/otel.toml` → `.config/mise/conf.d/otel.toml`. `mise` merges every
-  file under a project's `.config/mise/conf.d/*.toml` on top of its own `mise.toml`, so this one
+  file under a project's `.config/mise/conf.d/*.toml` with its own `mise.toml` (for a key defined
+  in both, `mise.toml` wins, so this file supplies defaults), so this one
   forge-owned file applies to all twelve stacks with no per-stack `mise.toml` edit. It carries:
   - **`[env]`**, always set (not endpoint-gated): `OTEL_EXPORTER_OTLP_ENDPOINT`,
     `OTEL_EXPORTER_OTLP_PROTOCOL`, and per-signal
@@ -489,12 +490,18 @@ bootstrap somewhere to send data and a local visual inspection surface:
   `OTEL_EXPORTER_OTLP_ENDPOINT` (unset → `""`) and runs
   `npm run start|build -- --define "FORGE_OTLP_ENDPOINT=\"<endpoint>\""` (`npm --prefix web …`
   fullstack), passing the value as one argv entry with shell metacharacters inert. An endpoint
-  containing `"`, `\` or a control character (0x01–0x1f, 0x7f) fails before `npm` runs.
+  containing `"`, `\` or a control character (0x01–0x1f, 0x7f) fails before `npm` runs. Each of
+  the eight task copies pins `shell = "sh -c"` so the POSIX bracket expression never runs under a
+  user-configured inline shell such as zsh. Browser OTLP endpoints (the Angular define bridge and
+  the `VITE_` variables) are inlined into the public bundle, so the URL MUST NOT contain
+  credentials.
   `environment.ts` declares `FORGE_OTLP_ENDPOINT` and reads it through a `typeof` guard, so plain
   `npm start` / `ng build` compiles and stays silent. Owning tests:
   `TestOtelAngularTasksBridgeEndpointToDefine`, `TestOtelAngularEnvironmentReadsDefineWithTypeofGuard`,
   `TestOtelAngularBackendTaskBlocksIdentical`, `TestOtelAngularTasksAbsentForOtherFrontends`,
-  `TestOtelAngularTasksRejectUnsafeEndpoint`, and `TestOtelAngularTasksPassEndpointAsDefine`.
+  `TestOtelAngularTasksRejectUnsafeEndpoint`, `TestOtelAngularTasksPassEndpointAsDefine`,
+  `TestOtelAngularEndpointGuardCopiesIdenticalAndShellPinned`, and
+  `TestOtelAngularTasksRejectUnsafeEndpointUnderZshInlineShell`.
   Real-build checks are gated behind `FORGE_SMOKE_NETWORK=1`.
 - `templates/common/otel/compose.yaml` → `.otel/compose.yaml`: fixed Compose project
   `forge-otel` with:

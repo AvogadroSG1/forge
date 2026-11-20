@@ -16,7 +16,7 @@ import (
 	"forge/internal/hookcfg"
 )
 
-const Version = 9
+const Version = 10
 
 const versionFile = ".forge-infra-version"
 
