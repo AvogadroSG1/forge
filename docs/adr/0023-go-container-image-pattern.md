@@ -2,6 +2,19 @@
 
 **Status:** accepted · 2026-11-20
 
+> **Amended 2026-11-20 (agentic_template_start-49o).** `forge upgrade` now delivers the Go stacks'
+> `Dockerfile`, `.dockerignore` and `CONTAINER.md`, which replaces the "Deferred" alternative and
+> the consequence that repos "do not receive these files" below. They are added **only if
+> missing**, for a repo whose `.forge/manifest.json` names `go-cli-cobra`, `go-api-chi` or
+> `go-web-templ` (a repo with no manifest or an empty `stack` is skipped; the stack is never
+> guessed). If either `Dockerfile` or `.dockerignore` already exists nothing is added, because the
+> shipped `.dockerignore` is an allowlist starting with `*` that would break a hand-written
+> Dockerfile; an existing `CONTAINER.md` is never overwritten. Upgrade does **not** touch
+> stack-overlay content: the `image`, `image:lint` and `image:scan` tasks, the `hadolint` and
+> `trivy` pins, the CI scan step, and the `PORT`/`slog` application changes. It prints a notice
+> saying so, and the Dockerfile's Go, golangci-lint (and templ) versions must be aligned with the
+> repo's `mise.toml` by hand. Infrastructure version 10.
+
 ## Context
 
 The Go stacks shipped no container image definition. A generated repo could be built and tested, but anyone who wanted to run it in a container, or hand it to an agent running in a sandbox, had to write a Dockerfile from scratch. The examples people reach for break rules forge already enforces elsewhere: tools installed with `@latest`, a Go version different from the stack's, a hardcoded `GOARCH`, a single stage, and a root user.

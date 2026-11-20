@@ -3,12 +3,16 @@ package upgrade
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"forge"
 )
 
 func testAssets() fstest.MapFS {
@@ -574,5 +578,305 @@ func TestRunAddsOtelCollectorAssetsToLegacyRepo(t *testing.T) {
 	}
 	if len(status2.Updated) != 0 {
 		t.Fatalf("Run(2) updated %v, want none (idempotent)", status2.Updated)
+	}
+}
+
+// goContainerAssets extends testAssets with the Go stacks' container overlay
+// files, each stack carrying distinct content.
+func goContainerAssets() fstest.MapFS {
+	assets := testAssets()
+	for _, stack := range []string{"go-cli-cobra", "go-api-chi", "go-web-templ"} {
+		base := "templates/golden/" + stack + "/.forge-overlay/"
+		assets[base+"Dockerfile"] = &fstest.MapFile{Data: []byte("# Dockerfile " + stack + "\n")}
+		assets[base+".dockerignore"] = &fstest.MapFile{Data: []byte("*\n# dockerignore " + stack + "\n")}
+		assets[base+"CONTAINER.md"] = &fstest.MapFile{Data: []byte("# CONTAINER " + stack + "\n")}
+	}
+	return assets
+}
+
+// staleStackedRepo returns a forge repo at infra version 0 whose manifest
+// records stack ("" writes a manifest with no stack).
+func staleStackedRepo(t *testing.T, stack string) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".claude", "hooks"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".claude", "hooks", "guard"), []byte("old"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := Stamp(dir, Manifest{Language: "go", Stack: stack}); err != nil {
+		t.Fatalf("Stamp() error = %v", err)
+	}
+	m, err := ReadManifest(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.InfraVersion = 0
+	data, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".forge", "manifest.json"), append(data, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func containerFilePresent(t *testing.T, dir, name string) bool {
+	t.Helper()
+
+	_, err := os.Lstat(filepath.Join(dir, name))
+	if err == nil {
+		return true
+	}
+	if !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	return false
+}
+
+func TestRunAddsGoContainerFilesForEachGoStack(t *testing.T) {
+	t.Parallel()
+
+	for _, stack := range []string{"go-cli-cobra", "go-api-chi", "go-web-templ"} {
+		t.Run(stack, func(t *testing.T) {
+			t.Parallel()
+
+			dir := staleStackedRepo(t, stack)
+			status, err := Run(goContainerAssets(), dir, false)
+			if err != nil {
+				t.Fatalf("Run() error = %v", err)
+			}
+			for _, name := range goContainerFiles {
+				data, err := os.ReadFile(filepath.Join(dir, name))
+				if err != nil {
+					t.Fatalf("%s not added: %v", name, err)
+				}
+				if !strings.Contains(string(data), stack) {
+					t.Errorf("%s = %q, want content from the %s overlay", name, data, stack)
+				}
+				info, err := os.Stat(filepath.Join(dir, name))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if info.Mode().Perm() != 0o644 {
+					t.Errorf("%s mode = %o, want 644", name, info.Mode().Perm())
+				}
+				found := false
+				for _, updated := range status.Updated {
+					found = found || updated == name
+				}
+				if !found {
+					t.Errorf("Run() did not report %s as updated: %v", name, status.Updated)
+				}
+			}
+		})
+	}
+}
+
+func TestRunAddsRealGoContainerFilesFromEmbeddedAssets(t *testing.T) {
+	t.Parallel()
+
+	for _, stack := range []string{"go-cli-cobra", "go-api-chi", "go-web-templ"} {
+		t.Run(stack, func(t *testing.T) {
+			t.Parallel()
+
+			dir := staleStackedRepo(t, stack)
+			if _, err := Run(forge.Assets(), dir, false); err != nil {
+				t.Fatalf("Run() error = %v", err)
+			}
+			for _, name := range goContainerFiles {
+				want, err := fs.ReadFile(forge.Assets(), "templates/golden/"+stack+"/.forge-overlay/"+name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				got, err := os.ReadFile(filepath.Join(dir, name))
+				if err != nil {
+					t.Fatalf("%s not added: %v", name, err)
+				}
+				if string(got) != string(want) {
+					t.Errorf("%s differs from the embedded %s overlay", name, stack)
+				}
+			}
+		})
+	}
+}
+
+func TestRunSkipsGoContainerFilesForNonGoStack(t *testing.T) {
+	t.Parallel()
+
+	for _, stack := range []string{"python-cli-typer", "angular", ""} {
+		t.Run("stack="+stack, func(t *testing.T) {
+			t.Parallel()
+
+			dir := staleStackedRepo(t, stack)
+			if _, err := Run(goContainerAssets(), dir, false); err != nil {
+				t.Fatalf("Run() error = %v", err)
+			}
+			for _, name := range goContainerFiles {
+				if containerFilePresent(t, dir, name) {
+					t.Errorf("%s added to a %q repo", name, stack)
+				}
+			}
+		})
+	}
+}
+
+func TestRunSkipsGoContainerFilesWhenBuildPairHasOneFile(t *testing.T) {
+	t.Parallel()
+
+	for _, existing := range []string{"Dockerfile", ".dockerignore"} {
+		t.Run(existing, func(t *testing.T) {
+			t.Parallel()
+
+			dir := staleStackedRepo(t, "go-api-chi")
+			if err := os.WriteFile(filepath.Join(dir, existing), []byte("hand written\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			status, err := Run(goContainerAssets(), dir, false)
+			if err != nil {
+				t.Fatalf("Run() error = %v", err)
+			}
+			for _, name := range goContainerFiles {
+				if name == existing {
+					continue
+				}
+				if containerFilePresent(t, dir, name) {
+					t.Errorf("%s added although %s already exists", name, existing)
+				}
+			}
+			data, err := os.ReadFile(filepath.Join(dir, existing))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(data) != "hand written\n" {
+				t.Errorf("%s was modified: %q", existing, data)
+			}
+			for _, updated := range status.Updated {
+				for _, name := range goContainerFiles {
+					if updated == name {
+						t.Errorf("Run() reported %s as updated", updated)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestRunKeepsExistingContainerMd(t *testing.T) {
+	t.Parallel()
+
+	dir := staleStackedRepo(t, "go-cli-cobra")
+	if err := os.WriteFile(filepath.Join(dir, "CONTAINER.md"), []byte("my notes\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	status, err := Run(goContainerAssets(), dir, false)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "CONTAINER.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "my notes\n" {
+		t.Errorf("CONTAINER.md overwritten: %q", data)
+	}
+	for _, name := range []string{"Dockerfile", ".dockerignore"} {
+		if !containerFilePresent(t, dir, name) {
+			t.Errorf("%s not added", name)
+		}
+	}
+	for _, updated := range status.Updated {
+		if updated == "CONTAINER.md" {
+			t.Error("Run() reported the untouched CONTAINER.md as updated")
+		}
+	}
+}
+
+func TestRunSkipsGoContainerFilesWithoutManifest(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".claude", "hooks"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".claude", "hooks", "guard"), []byte("old"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Run(goContainerAssets(), dir, false); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	for _, name := range goContainerFiles {
+		if containerFilePresent(t, dir, name) {
+			t.Errorf("%s added to a legacy repo with no manifest", name)
+		}
+	}
+}
+
+func TestRunGoContainerFilesSecondRunIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	dir := staleStackedRepo(t, "go-web-templ")
+	if _, err := Run(goContainerAssets(), dir, false); err != nil {
+		t.Fatalf("first Run() error = %v", err)
+	}
+	// The user then edits the Dockerfile; a second upgrade must not touch it.
+	edited := []byte("# my edits\n")
+	if err := os.WriteFile(filepath.Join(dir, "Dockerfile"), edited, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	status, err := Run(goContainerAssets(), dir, false)
+	if err != nil {
+		t.Fatalf("second Run() error = %v", err)
+	}
+	if len(status.Updated) != 0 {
+		t.Errorf("second Run() updated %v, want nothing", status.Updated)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "Dockerfile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != string(edited) {
+		t.Errorf("Dockerfile changed on the second run: %q", data)
+	}
+}
+
+// Not parallel: it swaps os.Stderr to capture the notice.
+func TestRunPrintsGoContainerNoticeOnlyWhenFilesAdded(t *testing.T) {
+	capture := func(t *testing.T, dir string) string {
+		t.Helper()
+
+		r, w, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		orig := os.Stderr
+		os.Stderr = w
+		_, runErr := Run(goContainerAssets(), dir, false)
+		os.Stderr = orig
+		if err := w.Close(); err != nil {
+			t.Fatal(err)
+		}
+		out, err := io.ReadAll(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if runErr != nil {
+			t.Fatalf("Run() error = %v", runErr)
+		}
+		return string(out)
+	}
+
+	added := capture(t, staleStackedRepo(t, "go-api-chi"))
+	for _, want := range []string{"image:lint", "image:scan", "hadolint", "trivy", "PORT", "slog", "mise.toml", "CONTAINER.md"} {
+		if !strings.Contains(added, want) {
+			t.Errorf("notice missing %q:\n%s", want, added)
+		}
+	}
+
+	if out := capture(t, staleStackedRepo(t, "python-cli-typer")); strings.Contains(out, "container image") {
+		t.Errorf("notice printed for a non-Go stack:\n%s", out)
 	}
 }

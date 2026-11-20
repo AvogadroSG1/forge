@@ -133,6 +133,17 @@ func Run(assets fs.FS, targetDir string, checkOnly bool) (Status, error) {
 		}
 	}
 
+	if manifestErr == nil {
+		added, err := addGoContainerFilesIfMissing(assets, targetDir, m)
+		if err != nil {
+			return Status{}, err
+		}
+		if len(added) > 0 {
+			status.Updated = append(status.Updated, added...)
+			fmt.Fprintln(os.Stderr, goContainerNotice)
+		}
+	}
+
 	repaired, err := EnsureBeadsDirPerms(targetDir)
 	if err != nil {
 		return Status{}, err
@@ -346,4 +357,68 @@ func readOnDiskVersion(targetDir string) int {
 		return 0
 	}
 	return v
+}
+
+// goContainerFiles are the static container files the Go stacks ship in their
+// overlay (ADR-0023). upgrade delivers them add-if-missing; they are hand-
+// edited once present, so they are never part of managedFiles.
+var goContainerFiles = []string{"Dockerfile", ".dockerignore", "CONTAINER.md"}
+
+// goStacks are the stacks whose overlay carries goContainerFiles.
+var goStacks = map[string]bool{
+	"go-cli-cobra": true,
+	"go-api-chi":   true,
+	"go-web-templ": true,
+}
+
+const goContainerNotice = "forge upgrade: added Dockerfile, .dockerignore and CONTAINER.md for the Go container image pattern (ADR-0023).\n" +
+	"  Not touched by upgrade (stack overlay content): the `image`, `image:lint` and `image:scan` mise tasks, the hadolint and trivy tool pins,\n" +
+	"  the CI image scan step, and the PORT / slog changes in the application code.\n" +
+	"  Align the Go and golangci-lint (and templ) versions in the Dockerfile with this repo's mise.toml before building; see CONTAINER.md."
+
+// addGoContainerFilesIfMissing delivers the Go container files to an existing
+// Go-stack repo. It is all-or-nothing on the build pair: if either the
+// Dockerfile or .dockerignore already exists, nothing is added, because the
+// shipped .dockerignore is an allowlist (it starts with `*`) that would break a
+// hand-written Dockerfile. CONTAINER.md is never overwritten. A repo whose
+// manifest names no Go stack (including a legacy repo with no stack) is skipped:
+// the stack is never guessed.
+func addGoContainerFilesIfMissing(assets fs.FS, targetDir string, m Manifest) (added []string, err error) {
+	if !goStacks[m.Stack] {
+		return nil, nil
+	}
+	for _, name := range []string{"Dockerfile", ".dockerignore"} {
+		if _, err := os.Lstat(filepath.Join(targetDir, name)); err == nil {
+			return nil, nil
+		} else if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("stat %s: %w", name, err)
+		}
+	}
+
+	// Read every source first so a missing embedded file fails before any write.
+	contents := make(map[string][]byte, len(goContainerFiles))
+	for _, name := range goContainerFiles {
+		src := "templates/golden/" + m.Stack + "/.forge-overlay/" + name
+		data, err := fs.ReadFile(assets, src)
+		if err != nil {
+			return nil, fmt.Errorf("read embedded %s: %w", src, err)
+		}
+		contents[name] = data
+	}
+
+	for _, name := range goContainerFiles {
+		dest := filepath.Join(targetDir, name)
+		if name == "CONTAINER.md" {
+			if _, err := os.Lstat(dest); err == nil {
+				continue
+			} else if !os.IsNotExist(err) {
+				return added, fmt.Errorf("stat %s: %w", name, err)
+			}
+		}
+		if err := os.WriteFile(dest, contents[name], 0o644); err != nil {
+			return added, fmt.Errorf("write %s: %w", name, err)
+		}
+		added = append(added, name)
+	}
+	return added, nil
 }
