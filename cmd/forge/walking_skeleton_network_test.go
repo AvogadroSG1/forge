@@ -36,6 +36,7 @@ func writeNetworkStubs(t *testing.T, stubDir string) {
 	writeExecutable(t, filepath.Join(stubDir, "lefthook"), "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n")
 	writeExecutable(t, filepath.Join(stubDir, "golangci-lint"), "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n")
 	writeExecutable(t, filepath.Join(stubDir, "govulncheck"), "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n")
+	writeExecutable(t, filepath.Join(stubDir, "hadolint"), "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n")
 	writeExecutable(t, filepath.Join(stubDir, "mise"), miseStubScript)
 }
 

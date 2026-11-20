@@ -34,6 +34,7 @@ func TestWalkingSkeletonGoCLIInitRunsThroughMiseCI(t *testing.T) {
 	writeExecutable(t, filepath.Join(stubDir, "lefthook"), "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n")
 	writeExecutable(t, filepath.Join(stubDir, "golangci-lint"), "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n")
 	writeExecutable(t, filepath.Join(stubDir, "govulncheck"), "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n")
+	writeExecutable(t, filepath.Join(stubDir, "hadolint"), "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n")
 	writeExecutable(t, filepath.Join(stubDir, "mise"), `#!/usr/bin/env bash
 set -euo pipefail
 case "${1:-}" in
@@ -61,7 +62,7 @@ import sys
 
 task = sys.argv[1]
 text = pathlib.Path("mise.toml").read_text()
-pattern = rf"(?ms)^\[tasks\.{re.escape(task)}\]\s*\nrun = \"([^\"]+)\""
+pattern = rf"(?m)^\[tasks\.\"?{re.escape(task)}\"?\]\s*\n(?:description = .*\n)?run = \"([^\"]+)\""
 match = re.search(pattern, text)
 if not match:
     raise SystemExit(1)
@@ -136,7 +137,7 @@ func TestWalkingSkeletonFixtureDefinesGoGateTasks(t *testing.T) {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
 	text := string(data)
-	for _, snippet := range []string{"[tasks.fmt]", "[tasks.lint]", "[tasks.test]", "[tasks.ci]", "govulncheck ./..."} {
+	for _, snippet := range []string{"[tasks.fmt]", "[tasks.lint]", "[tasks.test]", "[tasks.ci]", "govulncheck ./...", "mise run image:lint"} {
 		if !strings.Contains(text, snippet) {
 			t.Fatalf("go-cli-cobra mise.toml missing %q", snippet)
 		}

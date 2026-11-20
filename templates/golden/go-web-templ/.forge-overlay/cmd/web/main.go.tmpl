@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -19,27 +19,30 @@ import (
 const shutdownTimeout = 10 * time.Second
 
 func main() {
-	logger := log.New(os.Stdout, "web ", log.LstdFlags)
+	// Logs are an event stream: one JSON object per line on stdout, left for
+	// the execution environment to collect and route.
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	shutdown, err := telemetry.Setup(ctx, telemetry.Options{})
 	if err != nil {
-		logger.Fatal(err)
+		logger.Error("telemetry setup", "error", err)
+		os.Exit(1)
 	}
 
 	srv := &http.Server{
-		Addr:              ":8080",
+		Addr:              listenAddr(),
 		Handler:           web.NewServer("{{.ProjectName}}", logger),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	// A listen failure is delivered here rather than through logger.Fatal so
+	// A listen failure is delivered here rather than through an immediate exit so
 	// telemetry still gets flushed before the process exits non-zero.
 	listenErr := make(chan error, 1)
 	go func() {
-		logger.Println("listening on :8080")
+		logger.Info("listening", "addr", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			listenErr <- err
 		}
@@ -51,7 +54,7 @@ func main() {
 		stop()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		if err := srv.Shutdown(shutdownCtx); err != nil {
-			logger.Printf("http shutdown: %v", err)
+			logger.Error("http shutdown", "error", err)
 		}
 		cancel()
 	case exitErr = <-listenErr:
@@ -60,11 +63,24 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	if err := shutdown(shutdownCtx); err != nil {
-		logger.Printf("telemetry shutdown: %v", err)
+		logger.Error("telemetry shutdown", "error", err)
 	}
 
 	if exitErr != nil {
-		logger.Printf("listen: %v", exitErr)
+		logger.Error("listen", "error", exitErr)
 		os.Exit(1)
 	}
+}
+
+// defaultPort is used when PORT is unset, which is the local-development case.
+const defaultPort = "8080"
+
+// listenAddr takes the port from the PORT environment variable so the same
+// build runs unchanged wherever it is deployed.
+func listenAddr() string {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = defaultPort
+	}
+	return ":" + port
 }

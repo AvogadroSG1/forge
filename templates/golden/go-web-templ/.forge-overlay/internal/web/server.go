@@ -3,7 +3,7 @@ package web
 import (
 	"embed"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net/http"
 
 	// Explicit alias works around AFF analyzer bug where /v5 is parsed as package name (aff-13k).
@@ -18,18 +18,18 @@ var staticFiles embed.FS
 // contract consumed by HTMX, and the locally vendored static assets. The
 // router is wrapped in OpenTelemetry server instrumentation so every request
 // produces a span on the global tracer provider installed by the entrypoint.
-func NewServer(title string, logger *log.Logger) http.Handler {
+func NewServer(title string, logger *slog.Logger) http.Handler {
 	router := chi.NewRouter()
 
 	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := Index(title, "checking…").Render(r.Context(), w); err != nil {
-			logger.Printf("render index: %v", err)
+			logger.Error("render index", "error", err)
 		}
 	})
 
 	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		logger.Println("health endpoint served")
+		logger.Info("health endpoint served")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
@@ -38,7 +38,7 @@ func NewServer(title string, logger *log.Logger) http.Handler {
 	router.Get("/health/fragment", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := StatusFragment("ok").Render(r.Context(), w); err != nil {
-			logger.Printf("render status fragment: %v", err)
+			logger.Error("render status fragment", "error", err)
 		}
 	})
 

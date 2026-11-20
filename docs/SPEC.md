@@ -42,7 +42,8 @@ ADR-0003 (one shared gate pipeline) · ADR-0004 (init fail-fast, no rollback) ·
 (remote default gh, Phase-3-last, never auto-delete) · ADR-0010 (guideline is the conformance
 floor, not the ceiling) · ADR-0012 (skill provisioning via APM-backed instill) · ADR-0013
 (frontend dimension: fragments under web/) · ADR-0014 (typescript toolchain) · ADR-0020 (env-gated
-OpenTelemetry bootstrap in every stack).
+OpenTelemetry bootstrap in every stack) · ADR-0023 (pinned two-target container image pattern for
+the Go stacks).
 
 ---
 
@@ -536,6 +537,41 @@ viewer HTTP reachability, Collector recreation, dashboard-container stability, a
 trace exporter path. These three assets are wholly owned members of the managed upgrade set
 (§19).
 
+### 9.6 Container image pattern — Go stacks
+
+*(Authoritative: ADR-0023.)*
+
+Each Go stack's overlay root ships `Dockerfile`, `.dockerignore`, and `CONTAINER.md`. They are
+plain files (no template variables): the main package is fixed per stack (`.`, `./cmd/api`,
+`./cmd/web`). The pattern defines images only; registries and deployment are out of scope.
+
+| Target | Base | User | Contents |
+|---|---|---|---|
+| `runtime` (default, last stage) | `gcr.io/distroless/static-debian13:nonroot` | 65532 | Static binary at `/app`, exec-form `ENTRYPOINT`; server stacks add `ENV PORT=8080` + `EXPOSE 8080` |
+| `sandbox` | the pinned `golang` Alpine image | 10001 | Go, gopls, golangci-lint, bash, coreutils, curl, git, jq; `WORKDIR /workspace`, `CGO_ENABLED=0` |
+
+- **Pinning.** Every image and the `# syntax=` frontend MUST be `tag@sha256:<digest>`, declared as
+  an `ARG *_IMAGE`; every stage's `FROM` MUST reference one of those ARGs. The Go and
+  golangci-lint versions MUST equal the stack's `mise.toml` pins. gopls is an exact version.
+  apk packages are deliberately not version-pinned (ADR-0023).
+- **Platform.** The Dockerfile MUST NOT hardcode `GOARCH`. The build stage runs on
+  `BUILDPLATFORM` and cross-compiles to `TARGETOS`/`TARGETARCH`.
+- **Runtime stage.** No `RUN`, no `HEALTHCHECK`, numeric non-root `USER`.
+- **Build context.** `.dockerignore` starts with `*` and re-includes only `go.mod`, `go.sum`, Go
+  sources, and embedded assets.
+- **Twelve-Factor code.** The server stacks (`go-api-chi`, `go-web-templ`) read the listen port
+  from `PORT` (default `8080`, matching the backend port in §6) and log JSON lines to stdout with
+  `log/slog`. `CONTAINER.md` maps all twelve factors.
+- **Gates.** See §10.4.
+- **Not propagated.** These files are stack overlay files, not members of the managed upgrade
+  set (§19).
+
+Owning tests: `TestGoStacksShipPinnedMultiStageDockerfile`,
+`TestGoStackDockerfileToolVersionsMatchMise`, `TestGoStacksShipAllowlistDockerignore`,
+`TestGoStacksDocumentTheContainerPattern`, `TestGoServerStacksReadPortFromEnvironmentAndLogJSON`
+(`test/go_container_assets_test.go`), and the opt-in live build
+`TestGoStackContainerImagesBuildAndRun` (`FORGE_DOCKER_TESTS=1`).
+
 ---
 
 ## 10. Enforced gate pipeline
@@ -579,8 +615,9 @@ to the vendored path.
 
 ### 10.3 CI workflow shape
 
-One **language-agnostic** `ci.yml`, identical across all stacks: checkout → install mise →
-`mise install` → `mise run ci`. No inline lint/test/format. Triggers `on: [push, pull_request]`;
+One **language-agnostic** `ci.yml` shape across all stacks: checkout → install mise →
+`mise install` → `mise run ci`. No inline lint/test/format. The Go stacks append one further
+mise-only step, `mise run image:scan` (§10.4). Triggers `on: [push, pull_request]`;
 no scheduled run in v1. Verification asserts every shipped overlay's `mise.toml` defines a `ci`
 task that `mise run ci` resolves to — the contract coupling `ud1` to `x2k` (see Seam Inventory §18).
 
@@ -598,6 +635,20 @@ Scenario: One CI workflow calls mise run ci and references a real task
   Then it checks out, installs mise, runs `mise install`, then `mise run ci`,
        contains no inline lint/test/format, and the stack's mise.toml defines a resolvable `ci` task
 ```
+
+### 10.4 Container image gates — Go stacks
+
+*(Authoritative: ADR-0023; pattern §9.6.)*
+
+| Task | Runs | Needs Docker | Caller |
+|---|---|---|---|
+| `image:lint` | `hadolint Dockerfile` | No | part of `mise run ci` |
+| `image` | builds the `runtime` and `sandbox` targets (`IMAGE`, `PLATFORM` env) | Yes | on demand; dependency of `image:scan` |
+| `image:scan` | `trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed` on the runtime image | Yes | second step of the Go `ci.yml` |
+
+`mise run ci` MUST stay runnable without a Docker daemon: it calls `image:lint` and MUST NOT call
+`image` or `image:scan`. `hadolint` and `trivy` are exact-pinned `[tools]` entries. Owning test:
+`TestGoStacksDefineContainerImageGates` (`internal/scaffold/gate_assets_test.go`).
 
 ---
 
@@ -926,6 +977,7 @@ myproject/
 ├── .forge/manifest.json   [render]     ├── .forge-infra-version   [render, legacy fallback]
 ├── mise.toml, lefthook.yml, .github/workflows/ci.yml
 ├── .config/mise/conf.d/otel.toml       ├── .otel/{compose.yaml, collector.yaml}
+├── Dockerfile, .dockerignore, CONTAINER.md   [verbatim, Go stacks only; §9.6]
 └── <composed golden tree>  vanilla + overlay, rendered
 ```
 
@@ -946,6 +998,7 @@ Feature's `all-children` gate IS the seam test.)*
 | **Conformance fixture** | `zz8` (publish guidelines) → `ebp` (conformance test) | Precondition, not a composition seam: `ebp` reads the guideline files from the in-repo vendored snapshots (`test/testdata/guidelines/`, **ADR-0018**), refreshed from the canonical path by `cp -f` after `zz8` publishes. | Plain `blockedBy` edge (`ebp` blocked-by `zz8`). |
 | **Chain-mode hooks** | `485` (verify beads hooks survive `lefthook install`) → `x2k` (real multi-job lefthook) | `485` proves chain mode in isolation; the local smoke (§16.1) exercises pre-commit/pre-push at runtime without duplicating the `485` proof. | `x2k` blocked-by `485` (existing edge). |
 | **Telemetry bootstrap** | overlay telemetry module + test × stack manifest OpenTelemetry dependency (`agentic_template_start-6cf`, ADR-0020) | `TestGoldenStacksShipTelemetryBootstrap` (`test/golden_assets_test.go`): for every v1 stack, the manifest pins the OpenTelemetry dependency **and** the overlay ships the telemetry module and its test; `TestPythonStacksRunUnderOpentelemetryInstrument` pins the `serve`/`run-cli` wrapper task. | Epic `all-children` gate; each platform child (`.3`–`.6`) turns its rows green. |
+| **Container image** | Go overlay `Dockerfile` × overlay `mise.toml` tool pins and image tasks × Go `ci.yml` (ADR-0023) | `TestGoStackDockerfileToolVersionsMatchMise` (`test/go_container_assets_test.go`): the image's Go and golangci-lint versions equal the mise pins. `TestGoStacksDefineContainerImageGates` (`internal/scaffold/gate_assets_test.go`): `ci` lints without Docker and `ci.yml` reaches the scan only through mise. | Feature gate of the container-image epic (`agentic_template_start-ee5`) |
 
 ### 18.1 Work hierarchy (Epic → Feature → Story)
 
