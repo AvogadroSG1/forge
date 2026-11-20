@@ -58,3 +58,40 @@ func TestVerifyTemplatesWorkflowIsValidYAML(t *testing.T) {
 		t.Fatalf("parse %s: %v", workflowPath, err)
 	}
 }
+
+func TestVerifyTemplatesUnitTestsJobChecksGoModTidy(t *testing.T) {
+	repoRoot := repoRoot(t)
+	workflowPath := filepath.Join(repoRoot, ".github", "workflows", "verify-templates.yml")
+
+	contentBytes, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", workflowPath, err)
+	}
+
+	var workflow struct {
+		Jobs map[string]struct {
+			Steps []struct {
+				Name string            `yaml:"name"`
+				Run  string            `yaml:"run"`
+				Env  map[string]string `yaml:"env"`
+			} `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal(contentBytes, &workflow); err != nil {
+		t.Fatalf("parse %s: %v", workflowPath, err)
+	}
+
+	job, ok := workflow.Jobs["unit-tests"]
+	if !ok {
+		t.Fatal("workflow missing unit-tests job")
+	}
+	for _, step := range job.Steps {
+		if strings.TrimSpace(step.Run) == "go mod tidy -diff" {
+			if step.Env["GOTOOLCHAIN"] != "auto" {
+				t.Fatalf("go mod tidy -diff step GOTOOLCHAIN = %q, want auto", step.Env["GOTOOLCHAIN"])
+			}
+			return
+		}
+	}
+	t.Fatal("unit-tests job has no `go mod tidy -diff` step")
+}

@@ -17,6 +17,12 @@ jobs:
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
+      # setup-go exports GOTOOLCHAIN=local to later steps; keep the same
+      # override the go test step below uses.
+      - name: go mod tidy -diff
+        env:
+          GOTOOLCHAIN: auto
+        run: go mod tidy -diff
       # The otel task tests (test/otel_tasks_test.go) run `mise run otel*`
       # under the runner's dash and skip when mise is absent. Only the mise
       # binary is needed, so skip `mise install` of the root mise.toml.
