@@ -21,9 +21,11 @@ run = "mise run fmt && mise run lint && mise run test && npm audit --audit-level
 # src/environments/environment.ts. esbuild parses the define value as a JS
 # literal, so the guard refuses characters that would need escaping. The
 # control-character set is spelled out byte by byte (0x01-0x1f, 0x7f) because
-# [[:cntrl:]] varies by locale. Bodies stay POSIX sh (dash on Debian/Ubuntu).
+# [[:cntrl:]] varies by locale. Bodies are POSIX sh (dash on Debian/Ubuntu); the
+# task-level `shell = "sh -c"` pins that even when mise's inline shell is zsh.
 [tasks.dev]
 description = "Serve the app; inlines OTEL_EXPORTER_OTLP_ENDPOINT for the browser OTel exporter"
+shell = "sh -c"
 run = '''
 set -eu
 endpoint="${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
@@ -39,6 +41,7 @@ exec npm run start -- --define "FORGE_OTLP_ENDPOINT=\"$endpoint\""
 
 [tasks.build]
 description = "Build the app; inlines OTEL_EXPORTER_OTLP_ENDPOINT for the browser OTel exporter"
+shell = "sh -c"
 run = '''
 set -eu
 endpoint="${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
