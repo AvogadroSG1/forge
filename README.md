@@ -275,8 +275,8 @@ go run ./cmd/forge upgrade
 
 For a repo whose manifest names a Go stack (`go-cli-cobra`, `go-api-chi`, `go-web-templ`),
 upgrade also adds the container pattern's `Dockerfile`, `.dockerignore` and `CONTAINER.md` when
-they are missing. If a `Dockerfile` or `.dockerignore` already exists nothing is added, and an
-existing `CONTAINER.md` is kept. Upgrade does not add the `image*` mise tasks, the `hadolint` and
+they are missing. If a `Dockerfile` or `.dockerignore` of your own already exists nothing is added, and an
+existing `CONTAINER.md` is kept; an upgrade interrupted partway is completed on the next run. Upgrade does not add the `image*` mise tasks, the `hadolint` and
 `trivy` pins, the CI scan step or the `PORT`/`slog` code changes; it prints a notice listing them.
 See `CONTAINER.md` after upgrading.
 

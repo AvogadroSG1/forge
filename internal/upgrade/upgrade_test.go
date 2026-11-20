@@ -880,3 +880,114 @@ func TestRunPrintsGoContainerNoticeOnlyWhenFilesAdded(t *testing.T) {
 		t.Errorf("notice printed for a non-Go stack:\n%s", out)
 	}
 }
+
+// An upgrade interrupted partway through the container files must complete on
+// retry. Each case seeds the exact on-disk state after some of forge's own
+// writes landed (byte-identical to the embedded files) and then runs upgrade:
+// the full set must exist, with forge's content, before the version advances.
+func TestRunCompletesInterruptedGoContainerInstall(t *testing.T) {
+	t.Parallel()
+
+	const stack = "go-api-chi"
+	cases := map[string][]string{
+		"after .dockerignore":            {".dockerignore"},
+		"after .dockerignore and README": {".dockerignore", "CONTAINER.md"},
+		"after Dockerfile only":          {"Dockerfile"},
+		"after Dockerfile and README":    {"Dockerfile", "CONTAINER.md"},
+		"after CONTAINER.md only":        {"CONTAINER.md"},
+		"after both build files":         {".dockerignore", "Dockerfile"},
+	}
+	for name, present := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			assets := goContainerAssets()
+			embedded := func(file string) []byte {
+				return assets["templates/golden/"+stack+"/.forge-overlay/"+file].Data
+			}
+			dir := staleStackedRepo(t, stack)
+			for _, file := range present {
+				if err := os.WriteFile(filepath.Join(dir, file), embedded(file), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			status, err := Run(assets, dir, false)
+			if err != nil {
+				t.Fatalf("Run() error = %v", err)
+			}
+			for _, file := range goContainerFiles {
+				data, err := os.ReadFile(filepath.Join(dir, file))
+				if err != nil {
+					t.Fatalf("%s missing after the retry: %v", file, err)
+				}
+				if string(data) != string(embedded(file)) {
+					t.Errorf("%s = %q, want the embedded content", file, data)
+				}
+			}
+			wantAdded := len(goContainerFiles) - len(present)
+			gotAdded := 0
+			for _, updated := range status.Updated {
+				for _, file := range goContainerFiles {
+					if updated == file {
+						gotAdded++
+						for _, already := range present {
+							if already == file {
+								t.Errorf("Run() reported %s as added although it was already in place", file)
+							}
+						}
+					}
+				}
+			}
+			if gotAdded != wantAdded {
+				t.Errorf("Run() added %d container files, want %d (updated: %v)", gotAdded, wantAdded, status.Updated)
+			}
+			if got := readOnDiskVersion(dir); got != Version {
+				t.Errorf("infra version = %d after a completed retry, want %d", got, Version)
+			}
+			leftovers, err := filepath.Glob(filepath.Join(dir, ".forge-upgrade-*"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(leftovers) != 0 {
+				t.Errorf("temporary files left behind: %v", leftovers)
+			}
+		})
+	}
+}
+
+// A failure while delivering the container files must leave the repo stale, so
+// the next upgrade retries instead of returning early as "current".
+func TestRunDoesNotStampVersionWhenGoContainerWriteFails(t *testing.T) {
+	t.Parallel()
+
+	assets := goContainerAssets()
+	dir := staleStackedRepo(t, "go-cli-cobra")
+	// Force the failure through a missing embedded source.
+	delete(assets, "templates/golden/go-cli-cobra/.forge-overlay/CONTAINER.md")
+
+	if _, err := Run(assets, dir, false); err == nil {
+		t.Fatal("Run() error = nil, want a failure reading the embedded CONTAINER.md")
+	}
+	if got := readOnDiskVersion(dir); got == Version {
+		t.Errorf("infra version advanced to %d although the container files were not delivered", got)
+	}
+	for _, file := range goContainerFiles {
+		if containerFilePresent(t, dir, file) {
+			t.Errorf("%s written although the set could not be completed", file)
+		}
+	}
+
+	// With the asset restored the same repo upgrades fully.
+	if _, err := Run(goContainerAssets(), dir, false); err != nil {
+		t.Fatalf("retry Run() error = %v", err)
+	}
+	for _, file := range goContainerFiles {
+		if !containerFilePresent(t, dir, file) {
+			t.Errorf("%s missing after the retry", file)
+		}
+	}
+	if got := readOnDiskVersion(dir); got != Version {
+		t.Errorf("infra version = %d after the retry, want %d", got, Version)
+	}
+}

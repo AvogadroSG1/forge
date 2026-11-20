@@ -377,22 +377,25 @@ const goContainerNotice = "forge upgrade: added Dockerfile, .dockerignore and CO
 	"  Align the Go and golangci-lint (and templ) versions in the Dockerfile with this repo's mise.toml before building; see CONTAINER.md."
 
 // addGoContainerFilesIfMissing delivers the Go container files to an existing
-// Go-stack repo. It is all-or-nothing on the build pair: if either the
-// Dockerfile or .dockerignore already exists, nothing is added, because the
-// shipped .dockerignore is an allowlist (it starts with `*`) that would break a
-// hand-written Dockerfile. CONTAINER.md is never overwritten. A repo whose
-// manifest names no Go stack (including a legacy repo with no stack) is skipped:
-// the stack is never guessed.
+// Go-stack repo. A repo whose manifest names no Go stack (including a legacy
+// repo with no stack) is skipped: the stack is never guessed.
+//
+// The build pair (Dockerfile, .dockerignore) is all-or-nothing against a
+// custom setup: if either exists with content that is not forge's, nothing is
+// added, because the shipped .dockerignore is an allowlist (it starts with
+// `*`) that would break a hand-written Dockerfile. CONTAINER.md is never
+// overwritten.
+//
+// An interrupted run is recoverable without any progress record: ownership is
+// decided by content. A build-pair file that is byte-identical to the embedded
+// one was written by forge, so a retry treats it as already delivered and
+// writes whatever is still missing. Each file is written to a temporary name
+// and renamed into place, so a partial write can never be mistaken for a
+// hand-written file. The Dockerfile goes last: without the allowlist
+// .dockerignore its `COPY . .` would take the whole checkout.
 func addGoContainerFilesIfMissing(assets fs.FS, targetDir string, m Manifest) (added []string, err error) {
 	if !goStacks[m.Stack] {
 		return nil, nil
-	}
-	for _, name := range []string{"Dockerfile", ".dockerignore"} {
-		if _, err := os.Lstat(filepath.Join(targetDir, name)); err == nil {
-			return nil, nil
-		} else if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("stat %s: %w", name, err)
-		}
 	}
 
 	// Read every source first so a missing embedded file fails before any write.
@@ -406,19 +409,88 @@ func addGoContainerFilesIfMissing(assets fs.FS, targetDir string, m Manifest) (a
 		contents[name] = data
 	}
 
-	for _, name := range goContainerFiles {
-		dest := filepath.Join(targetDir, name)
-		if name == "CONTAINER.md" {
-			if _, err := os.Lstat(dest); err == nil {
-				continue
-			} else if !os.IsNotExist(err) {
-				return added, fmt.Errorf("stat %s: %w", name, err)
-			}
+	missing := map[string]bool{}
+	for _, name := range []string{".dockerignore", "Dockerfile"} {
+		state, err := containerFileState(filepath.Join(targetDir, name), contents[name])
+		if err != nil {
+			return nil, fmt.Errorf("inspect %s: %w", name, err)
 		}
-		if err := os.WriteFile(dest, contents[name], 0o644); err != nil {
+		switch state {
+		case containerFileCustom:
+			return nil, nil
+		case containerFileMissing:
+			missing[name] = true
+		}
+	}
+	state, err := containerFileState(filepath.Join(targetDir, "CONTAINER.md"), contents["CONTAINER.md"])
+	if err != nil {
+		return nil, fmt.Errorf("inspect CONTAINER.md: %w", err)
+	}
+	if state == containerFileMissing {
+		missing["CONTAINER.md"] = true
+	}
+
+	for _, name := range []string{".dockerignore", "CONTAINER.md", "Dockerfile"} {
+		if !missing[name] {
+			continue
+		}
+		if err := writeFileViaRename(filepath.Join(targetDir, name), contents[name], 0o644); err != nil {
 			return added, fmt.Errorf("write %s: %w", name, err)
 		}
 		added = append(added, name)
 	}
 	return added, nil
+}
+
+type containerFileKind int
+
+const (
+	containerFileMissing containerFileKind = iota
+	// containerFileOurs is byte-identical to the embedded file.
+	containerFileOurs
+	// containerFileCustom is anything else: other content, a symlink, a directory.
+	containerFileCustom
+)
+
+func containerFileState(path string, embedded []byte) (containerFileKind, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return containerFileMissing, nil
+		}
+		return containerFileMissing, err
+	}
+	if !info.Mode().IsRegular() {
+		return containerFileCustom, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return containerFileMissing, err
+	}
+	if bytes.Equal(data, embedded) {
+		return containerFileOurs, nil
+	}
+	return containerFileCustom, nil
+}
+
+// writeFileViaRename writes data to a temporary file next to path and renames
+// it into place, so path either does not exist or holds the complete content.
+func writeFileViaRename(path string, data []byte, mode os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".forge-upgrade-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpName, mode); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }

@@ -113,7 +113,7 @@ reverse; ownership is declared once, per file, not inferred at write time.
 | **Wholly-owned** | `.claude/hooks/guard`, `.claude/hooks/secret-scan.sh`, `.opencode/plugins/forge-hooks.js` | Nothing else ever writes to these. Blind byte-copy from the embedded template, unconditionally. |
 | **Co-owned (hook config)** | `.claude/settings.json`, `.codex/hooks.json` | Other tools (`bd`, notably) append their own entries into the same top-level `hooks` object. Reconciled by owned-entry identity (`internal/hookcfg.Reconcile`, **ADR-0016**) — never blind-overwritten. |
 | **Co-owned (init-rendered)** | `opencode.jsonc` | Templated with init-time parameters that only exist in memory during `forge init`. `forge upgrade` renders it from `.forge/manifest.json`'s persisted params **only when the file is missing**; once present, upgrade never touches it again (**ADR-0017**). |
-| **Add-if-missing (Go container files)** | `Dockerfile`, `.dockerignore`, `CONTAINER.md` for `go-cli-cobra`, `go-api-chi`, `go-web-templ` | Hand-edited once present. `forge upgrade` writes them from the stack's overlay only when the manifest names a Go stack and neither `Dockerfile` nor `.dockerignore` exists (**ADR-0023**); see **§19**. |
+| **Add-if-missing (Go container files)** | `Dockerfile`, `.dockerignore`, `CONTAINER.md` for `go-cli-cobra`, `go-api-chi`, `go-web-templ` | Hand-edited once present. `forge upgrade` writes them from the stack's overlay only when the manifest names a Go stack and neither `Dockerfile` nor `.dockerignore` exists with content that is not forge's (**ADR-0023**); see **§19**. |
 | **Delegated** | `.beads/` (via `bd`), `.apm/` (via `instill`) | Owned entirely by the delegate tool. `forge` does not write their contents; it only repairs directory permissions it is responsible for (`.beads` 0700) and detects drift. |
 
 Co-owned files are the load-bearing case: a blind overwrite of either co-owned class is the exact
@@ -1074,10 +1074,14 @@ allow-block (kept in sync via `forge sync-allowlist`) both survive. A repo with 
 The Go stacks' container files (`Dockerfile`, `.dockerignore`, `CONTAINER.md`; ADR-0023) are
 delivered **add-if-missing**, only for a repo whose `.forge/manifest.json` names `go-cli-cobra`,
 `go-api-chi` or `go-web-templ`; a repo with no manifest, or an empty `stack`, is skipped silently
-because the stack is never guessed. The build pair is all-or-nothing: if either `Dockerfile` or
-`.dockerignore` already exists, nothing is added, because the shipped `.dockerignore` is an
-allowlist (it starts with `*`) that would break a hand-written Dockerfile. An existing
-`CONTAINER.md` is never overwritten. Added files are reported in the upgrade's updated list and
+because the stack is never guessed. The build pair is all-or-nothing against a custom setup: if either
+`Dockerfile` or `.dockerignore` exists with content that differs from the embedded file, nothing
+is added, because the shipped `.dockerignore` is an allowlist (it starts with `*`) that would
+break a hand-written Dockerfile. An existing `CONTAINER.md` is never overwritten. Ownership is
+decided by content, with no progress record: a build-pair file byte-identical to the embedded
+one was written by forge, so an upgrade interrupted partway is completed on retry instead of
+being mistaken for a custom setup. Each file is written under a temporary name and renamed into
+place, `.dockerignore` first and `Dockerfile` last, and the version is stamped only afterwards. Added files are reported in the upgrade's updated list and
 one stderr notice says what upgrade did *not* deliver: the `image`, `image:lint` and `image:scan`
 mise tasks, the `hadolint` and `trivy` pins, the CI scan step, and the `PORT`/`slog` application
 changes are stack-overlay content, and the Dockerfile's Go, golangci-lint (and templ) versions

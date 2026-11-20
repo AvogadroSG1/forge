@@ -7,9 +7,11 @@
 > the consequence that repos "do not receive these files" below. They are added **only if
 > missing**, for a repo whose `.forge/manifest.json` names `go-cli-cobra`, `go-api-chi` or
 > `go-web-templ` (a repo with no manifest or an empty `stack` is skipped; the stack is never
-> guessed). If either `Dockerfile` or `.dockerignore` already exists nothing is added, because the
-> shipped `.dockerignore` is an allowlist starting with `*` that would break a hand-written
-> Dockerfile; an existing `CONTAINER.md` is never overwritten. Upgrade does **not** touch
+> guessed). If either `Dockerfile` or `.dockerignore` exists with content that is not forge's,
+> nothing is added, because the shipped `.dockerignore` is an allowlist starting with `*` that
+> would break a hand-written Dockerfile; an existing `CONTAINER.md` is never overwritten. A
+> build-pair file byte-identical to the embedded one counts as forge's, so an upgrade interrupted
+> partway is completed on retry; files are written by rename, `Dockerfile` last. Upgrade does **not** touch
 > stack-overlay content: the `image`, `image:lint` and `image:scan` tasks, the `hadolint` and
 > `trivy` pins, the CI scan step, and the `PORT`/`slog` application changes. It prints a notice
 > saying so, and the Dockerfile's Go, golangci-lint (and templ) versions must be aligned with the
