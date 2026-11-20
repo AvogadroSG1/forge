@@ -37,6 +37,13 @@ flowchart LR
 
 This departs from the position recorded in Beads issue `agentic_template_start-3xw.23`, which left image digests unpinned. That position still stands for the OTel Compose images; a tag can be re-pointed, and an image we ship as a pattern for production use should not depend on that.
 
+> **Amended 2026-11-20 (agentic_template_start-1w3).** The OTel Compose images are now digest-pinned
+> too, so the sentence above that this position "still stands for the OTel Compose images" no
+> longer holds. `templates/common/otel/compose.yaml` writes `busybox`, the Aspire dashboard and the
+> Collector as `tag@sha256:<multi-platform index digest>`, and `TestOtelComposeImagesPinnedByDigest`
+> enforces the shape. Moving a Compose image is now a deliberate digest change plus an infra
+> version bump (the file is upgrade-managed), the same as any other pin.
+
 **Alpine packages are not version-pinned.** Alpine removes superseded package versions from its repositories, so exact pins make a Dockerfile unbuildable within weeks. The digest-pinned base fixes the Alpine release, which bounds the drift. hadolint rule `DL3018` is ignored inline, with this reason.
 
 **Platform is never hardcoded.** The build stage uses `--platform=${BUILDPLATFORM}` and sets `GOOS`/`GOARCH` from `TARGETOS`/`TARGETARCH`.

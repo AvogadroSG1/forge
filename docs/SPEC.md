@@ -505,13 +505,14 @@ bootstrap somewhere to send data and a local visual inspection surface:
   Real-build checks are gated behind `FORGE_SMOKE_NETWORK=1`.
 - `templates/common/otel/compose.yaml` → `.otel/compose.yaml`: fixed Compose project
   `forge-otel` with:
-  - Collector service `otel-collector`, image `otel/opentelemetry-collector-contrib:0.165.0`,
+  - Collector service `otel-collector`, image `otel/opentelemetry-collector-contrib:0.165.0@sha256:e40d61f10c9a617cca1ffd1be4d7e2b3a4b0f0001798ff07e58cabe82e618cea`,
     container `forge-otel-collector`, `restart: unless-stopped`, and loopback-only host mappings
     `4318` (OTLP/HTTP) and `13133` (health). Port `4317` is not published. The unchanged
     `otel-data-init` one-shot service owns the named `forge-otel-data` volume for Collector uid
-    10001.
+    10001. Every service image (including the `busybox` image behind `otel-data-init`) is
+    written `tag@sha256:<multi-platform index digest>`, as in ADR-0023; a test enforces the shape.
   - Viewer service `otel-dashboard`, image
-    `mcr.microsoft.com/dotnet/aspire-dashboard:13.6.5`, container
+    `mcr.microsoft.com/dotnet/aspire-dashboard:13.6.5@sha256:e2b7cf9a4ead932de46c6fa2a289c7d6159cfcf06a51aa65f38253a8fae75407`, container
     `forge-otel-dashboard`, and `restart: unless-stopped`. Anonymous access is enabled by
     `DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"` and bounded by the sole loopback host
     mapping `127.0.0.1:18888:18888`. Aspire's OTLP/gRPC `18889` and OTLP/HTTP `18890` ports are

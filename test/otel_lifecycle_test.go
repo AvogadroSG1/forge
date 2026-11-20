@@ -23,7 +23,7 @@ const (
 	otelDashboardContainer = "forge-otel-dashboard"
 	otelDataVolume         = "forge-otel_forge-otel-data"
 	otelNetwork            = "forge-otel_default"
-	otelVolumeReaderImage  = "busybox:1.36.1"
+	otelVolumeReaderImage  = "busybox:1.36.1@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662"
 	otelTracesURL          = "http://127.0.0.1:4318/v1/traces"
 	otelMetricsURL         = "http://127.0.0.1:4318/v1/metrics"
 	otelLogsURL            = "http://127.0.0.1:4318/v1/logs"
