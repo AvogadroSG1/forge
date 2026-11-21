@@ -269,12 +269,13 @@ func runUpdate(args []string, assets fs.FS) error {
 }
 
 // upgradeFlagSet builds the flag.FlagSet for "forge upgrade".
-func upgradeFlagSet() (*flag.FlagSet, *bool) {
+func upgradeFlagSet() (*flag.FlagSet, *upgradepkg.Options) {
 	flags := flag.NewFlagSet("forge upgrade", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
-	var checkOnly bool
-	flags.BoolVar(&checkOnly, "check", false, "Only report staleness")
-	return flags, &checkOnly
+	opts := &upgradepkg.Options{}
+	flags.BoolVar(&opts.CheckOnly, "check", false, "Only report staleness")
+	flags.StringVar(&opts.Agent, "agent", "", "Add the agent add-on to this repo (pi) for go-api-chi and go-cli-cobra")
+	return flags, opts
 }
 
 func runUpgrade(args []string, assets fs.FS) error {
@@ -283,18 +284,17 @@ func runUpgrade(args []string, assets fs.FS) error {
 		return err
 	}
 
-	flags, checkOnlyPtr := upgradeFlagSet()
+	flags, opts := upgradeFlagSet()
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	checkOnly := *checkOnlyPtr
 
-	status, err := upgradepkg.Run(assets, cwd, checkOnly)
+	status, err := upgradepkg.RunWith(assets, cwd, *opts)
 	if err != nil {
 		return err
 	}
 
-	if checkOnly {
+	if opts.CheckOnly {
 		exitNonZero := false
 		if status.Stale {
 			fmt.Printf("forge upgrade: infrastructure is at v%d, current is v%d; run `forge upgrade`\n", status.OnDisk, status.Version)

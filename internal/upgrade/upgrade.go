@@ -16,7 +16,7 @@ import (
 	"forge/internal/hookcfg"
 )
 
-const Version = 11
+const Version = 12
 
 const versionFile = ".forge-infra-version"
 
@@ -80,9 +80,24 @@ type Status struct {
 	PermsRepaired bool
 }
 
+// Run is RunWith without an add-on request.
 func Run(assets fs.FS, targetDir string, checkOnly bool) (Status, error) {
+	return RunWith(assets, targetDir, Options{CheckOnly: checkOnly})
+}
+
+// RunWith upgrades targetDir. An opts.Agent request is validated before any
+// write; see ADR-0028.
+func RunWith(assets fs.FS, targetDir string, opts Options) (Status, error) {
 	if err := validateForgeRepo(targetDir); err != nil {
 		return Status{}, err
+	}
+
+	var optIn *addonOptIn
+	if opts.Agent != "" {
+		var err error
+		if optIn, err = prepareAddonOptIn(assets, targetDir, opts); err != nil {
+			return Status{}, err
+		}
 	}
 
 	onDisk := readOnDiskVersion(targetDir)
@@ -92,29 +107,31 @@ func Run(assets fs.FS, targetDir string, checkOnly bool) (Status, error) {
 		Stale:   onDisk < Version,
 	}
 
-	if checkOnly {
+	if opts.CheckOnly {
 		status.PermsDrift = beadsPermsDrifted(targetDir)
 		return status, nil
 	}
 
-	if !status.Stale {
+	if !status.Stale && optIn == nil {
 		return status, nil
 	}
 
-	for _, mf := range whollyOwnedFiles {
-		if err := writeManagedFile(assets, targetDir, mf); err != nil {
-			return Status{}, err
-		}
-		status.Updated = append(status.Updated, mf.dest)
-	}
-
-	for _, mf := range coOwnedFiles {
-		changed, err := reconcileOrWriteCoOwned(assets, targetDir, mf)
-		if err != nil {
-			return Status{}, err
-		}
-		if changed {
+	if status.Stale {
+		for _, mf := range whollyOwnedFiles {
+			if err := writeManagedFile(assets, targetDir, mf); err != nil {
+				return Status{}, err
+			}
 			status.Updated = append(status.Updated, mf.dest)
+		}
+
+		for _, mf := range coOwnedFiles {
+			changed, err := reconcileOrWriteCoOwned(assets, targetDir, mf)
+			if err != nil {
+				return Status{}, err
+			}
+			if changed {
+				status.Updated = append(status.Updated, mf.dest)
+			}
 		}
 	}
 
@@ -123,7 +140,7 @@ func Run(assets fs.FS, targetDir string, checkOnly bool) (Status, error) {
 	// Errors here are informational only — a missing/unreadable manifest is
 	// the ordinary legacy-repo case, not a failure.
 	m, manifestErr := ReadManifest(targetDir)
-	if manifestErr == nil {
+	if status.Stale && manifestErr == nil {
 		rendered, err := renderOpencodeIfMissing(assets, targetDir, m)
 		if err != nil {
 			return Status{}, err
@@ -131,9 +148,7 @@ func Run(assets fs.FS, targetDir string, checkOnly bool) (Status, error) {
 		if rendered {
 			status.Updated = append(status.Updated, "opencode.jsonc")
 		}
-	}
 
-	if manifestErr == nil {
 		added, err := addContainerFilesIfMissing(assets, targetDir, m)
 		if err != nil {
 			return Status{}, err
@@ -144,11 +159,21 @@ func Run(assets fs.FS, targetDir string, checkOnly bool) (Status, error) {
 		}
 	}
 
-	repaired, err := EnsureBeadsDirPerms(targetDir)
-	if err != nil {
-		return Status{}, err
+	// The add-on step (ADR-0028) runs before Stamp, so a failure leaves the
+	// manifest unchanged and a re-run completes it.
+	if manifestErr == nil {
+		if err := applyAddon(assets, targetDir, m, optIn, &status); err != nil {
+			return Status{}, err
+		}
 	}
-	status.PermsRepaired = repaired
+
+	if status.Stale {
+		repaired, err := EnsureBeadsDirPerms(targetDir)
+		if err != nil {
+			return Status{}, err
+		}
+		status.PermsRepaired = repaired
+	}
 
 	// Version stamping happens last so an interrupted upgrade re-applies.
 	// A repo with an existing manifest carries its params forward unchanged
@@ -172,6 +197,9 @@ func Run(assets fs.FS, targetDir string, checkOnly bool) (Status, error) {
 		return status, nil
 	}
 
+	if optIn != nil {
+		m.Agent = optIn.agent
+	}
 	if err := Stamp(targetDir, m); err != nil {
 		return Status{}, err
 	}
@@ -424,22 +452,22 @@ func addContainerFilesIfMissing(assets fs.FS, targetDir string, m Manifest) (add
 
 	missing := map[string]bool{}
 	for _, name := range []string{".dockerignore", "Dockerfile"} {
-		state, err := containerFileState(filepath.Join(targetDir, name), contents[name])
+		state, err := classifyFile(filepath.Join(targetDir, name), contents[name])
 		if err != nil {
 			return nil, fmt.Errorf("inspect %s: %w", name, err)
 		}
 		switch state {
-		case containerFileCustom:
+		case fileCustom:
 			return nil, nil
-		case containerFileMissing:
+		case fileMissing:
 			missing[name] = true
 		}
 	}
-	state, err := containerFileState(filepath.Join(targetDir, "CONTAINER.md"), contents["CONTAINER.md"])
+	state, err := classifyFile(filepath.Join(targetDir, "CONTAINER.md"), contents["CONTAINER.md"])
 	if err != nil {
 		return nil, fmt.Errorf("inspect CONTAINER.md: %w", err)
 	}
-	if state == containerFileMissing {
+	if state == fileMissing {
 		missing["CONTAINER.md"] = true
 	}
 
@@ -455,35 +483,35 @@ func addContainerFilesIfMissing(assets fs.FS, targetDir string, m Manifest) (add
 	return added, nil
 }
 
-type containerFileKind int
+type fileKind int
 
 const (
-	containerFileMissing containerFileKind = iota
-	// containerFileOurs is byte-identical to the embedded file.
-	containerFileOurs
-	// containerFileCustom is anything else: other content, a symlink, a directory.
-	containerFileCustom
+	fileMissing fileKind = iota
+	// fileOurs is byte-identical to the embedded file.
+	fileOurs
+	// fileCustom is anything else: other content, a symlink, a directory.
+	fileCustom
 )
 
-func containerFileState(path string, embedded []byte) (containerFileKind, error) {
+func classifyFile(path string, embedded []byte) (fileKind, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return containerFileMissing, nil
+			return fileMissing, nil
 		}
-		return containerFileMissing, err
+		return fileMissing, err
 	}
 	if !info.Mode().IsRegular() {
-		return containerFileCustom, nil
+		return fileCustom, nil
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return containerFileMissing, err
+		return fileMissing, err
 	}
 	if bytes.Equal(data, embedded) {
-		return containerFileOurs, nil
+		return fileOurs, nil
 	}
-	return containerFileCustom, nil
+	return fileCustom, nil
 }
 
 // writeFileViaRename writes data to a temporary file next to path and renames

@@ -49,8 +49,9 @@ An opt-in layer some repos of a stack ask for at init, selected with a flag (`--
 composed after the overlay from its own root, `templates/addons/<name>/`. It is not a second
 overlay: the overlay is what every repo of a stack receives, so "one overlay per stack" still
 holds. `forge update` never touches an add-on, and the forge manifest records which one a repo
-was scaffolded with. An add-on is embedded and vetted like the rest of the templates; it is not
-a plugin. See ADR-0027.
+has. `forge upgrade` refreshes the add-on's wholly-owned files in a repo that records it, and
+`forge upgrade --agent <name>` adds the add-on to an existing repo. An add-on is embedded and vetted like the rest of the templates; it is not
+a plugin. See ADR-0027 and ADR-0028.
 
 ### Telemetry bootstrap
 The observability slice of every shipped stack's overlay: one telemetry module that installs
@@ -181,7 +182,7 @@ The declaration of who may write a given managed file, fixed per file, never inf
 time: **wholly-owned** (nothing else writes it; `forge upgrade` blind byte-copies it),
 **co-owned** (another tool or `forge init` itself also has a legitimate claim on part of the
 file; `forge upgrade` reconciles rather than overwrites), or **delegated** (owned entirely by
-another tool — `bd`, `instill` — and never written by `forge` at all). See SPEC §3.1.
+another tool — `bd`, `instill` — and never written by `forge` at all). An add-on's files fall in the wholly-owned class (refreshed by upgrade) or are delivered once at opt-in and then belong to the user. See SPEC §3.1.
 
 ### Co-owned file
 A managed file where more than one writer has a legitimate claim: `.claude/settings.json` and
@@ -199,7 +200,7 @@ forge-owned entry and a third-party entry side by side, and only the former is e
 
 ### Forge manifest
 `.forge/manifest.json`, a committed JSON record (`schemaVersion`, `infraVersion`, and the init
-params `language`/`frontend`/`includePersonal`/`stack`) written by `forge init` and kept current
+params `language`/`frontend`/`includePersonal`/`stack`, plus `agent` when an add-on is chosen) written by `forge init` and kept current
 by `forge upgrade`. Lets `forge upgrade` re-render init-time-parameterized files (`opencode.jsonc`)
 using the params a repo was actually scaffolded with, instead of only knowing a bare version
 integer (ADR-0017).

@@ -5,7 +5,10 @@
 #                           application can run agentic flows through Pi
 #   --target agent-sandbox  the sandbox toolchain image plus Node and Pi
 # Build the base images first (`mise run image`); `mise run image:agent` does
-# both. See AGENT.md for usage and for how to refresh the pins below.
+# both. See AGENT.md for usage.
+#
+# forge-managed: `forge upgrade` overwrites this file, so local edits are lost.
+# Override NODE_IMAGE and PI_VERSION with --build-arg instead.
 #
 # The Node image is pinned as tag@digest, like every image in the Dockerfile,
 # and is Alpine like the sandbox so one Node binary serves both targets.

@@ -1,5 +1,6 @@
-# forge-managed: image tasks for the Pi agent add-on (see AGENT.md). mise
-# merges every file under .config/mise/conf.d/ with this repo's mise.toml.
+# forge-managed: image tasks for the Pi agent add-on (see AGENT.md);
+# `forge upgrade` overwrites this file. mise merges every file under
+# .config/mise/conf.d/ with this repo's mise.toml.
 # Both tasks need a running Docker daemon, so neither is part of `ci`;
 # Dockerfile.agent is linted by `image:lint`, which is. Task bodies MUST stay
 # POSIX sh (`set -eu`, no bashisms).

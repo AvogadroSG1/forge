@@ -4,6 +4,10 @@
 // for every other language: `pi --mode rpc`, a long-lived child process that
 // reads JSON commands on stdin and writes JSON responses and events on stdout,
 // one record per line. The package depends only on the standard library.
+//
+// This package is forge-managed: `forge upgrade` overwrites client.go and
+// client_test.go, so local edits are lost. Extend it from your own packages
+// instead of editing it.
 package piagent
 
 import (
