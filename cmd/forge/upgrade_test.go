@@ -36,6 +36,13 @@ func TestRunUpgradeAgentOptInWritesAddonAndListsFiles(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/x/y\n\ngo 1.27\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// The root command forge's cmd/agent.go registers on.
+	if err := os.MkdirAll(filepath.Join(dir, "cmd"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "cmd", "root.go"), []byte("package cmd\n\nvar rootCmd = 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if err := upgradepkg.Stamp(dir, upgradepkg.Manifest{Language: "go", Stack: "go-cli-cobra"}); err != nil {
 		t.Fatal(err)
 	}

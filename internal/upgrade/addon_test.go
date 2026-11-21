@@ -44,11 +44,17 @@ func addonAssets() fstest.MapFS {
 	set("templates/addons/pi/common/internal/piagent/client.go", "package piagent // v1\n")
 	set("templates/addons/pi/common/internal/piagent/client_test.go", "package piagent // test v1\n")
 	set("templates/addons/pi/common/AGENT.md.tmpl", "# AGENT {{.Stack}}\n")
-	set("templates/addons/pi/go-api-chi/internal/httpapi/agent.go.tmpl", "import \"{{.ModulePath}}/internal/piagent\"\n")
+	set("templates/addons/pi/go-api-chi/internal/httpapi/agent.go.tmpl", "package x\n\nimport _ \"{{.ModulePath}}/internal/piagent\"\n")
 	set("templates/addons/pi/go-api-chi/internal/httpapi/agent_test.go.tmpl", "// test for {{.ModulePath}}\n")
-	set("templates/addons/pi/go-cli-cobra/cmd/agent.go.tmpl", "import \"{{.ModulePath}}/internal/piagent\"\n")
+	set("templates/addons/pi/go-cli-cobra/cmd/agent.go.tmpl", "package x\n\nimport _ \"{{.ModulePath}}/internal/piagent\"\n")
 	set("templates/addons/pi/go-cli-cobra/cmd/agent_test.go.tmpl", "// test for {{.ModulePath}}\n")
 	return assets
+}
+
+// stackFixtures are the minimal files that satisfy each stack's requirement.
+var stackFixtures = map[string]struct{ path, data string }{
+	"go-api-chi":   {"internal/httpapi/router.go", "package httpapi\n\nimport \"log/slog\"\n\nfunc NewRouter(logger *slog.Logger) {}\n"},
+	"go-cli-cobra": {"cmd/root.go", "package cmd\n\nvar rootCmd = 1\n"},
 }
 
 // addonRepo returns a forge repo whose manifest records stack and agent, at
@@ -59,6 +65,10 @@ func addonRepo(t *testing.T, stack, agent string, stale bool) string {
 	dir := t.TempDir()
 	mustWriteFile(t, filepath.Join(dir, ".claude", "hooks", "guard"), "sentinel guard\n", 0o755)
 	mustWriteFile(t, filepath.Join(dir, "go.mod"), "module "+testModule+"\n\ngo 1.27\n", 0o644)
+	// The stack API forge's wiring needs (addonRequirements).
+	if fixture, ok := stackFixtures[stack]; ok {
+		mustWriteFile(t, filepath.Join(dir, fixture.path), fixture.data, 0o644)
+	}
 	if err := Stamp(dir, Manifest{Language: "go", Stack: stack, Agent: agent}); err != nil {
 		t.Fatalf("Stamp() error = %v", err)
 	}
@@ -520,17 +530,22 @@ func TestRunWithOptInWhenManifestAlreadyRecordsAddonRefreshesWhenStale(t *testin
 }
 
 func TestRunWithInterruptedOptInIsFinishedByRerun(t *testing.T) {
+	// The fake add-on also renders docs/agent.md, so the second case fails
+	// after the owned files and the wiring are already written; the re-run
+	// treats those as delivered ("ours") and finishes the rest.
 	cases := []struct{ name, blocker string }{
-		{"owned stage", "internal"},
-		{"wiring stage", "internal/httpapi"},
+		{"owned stage", "internal/piagent"},
+		{"later write stage", "docs"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := addonRepo(t, "go-api-chi", "", false)
 			blocker := filepath.Join(dir, filepath.FromSlash(tc.blocker))
 			mustWriteFile(t, blocker, "a file where a directory must go\n", 0o644)
+			assets := addonAssets()
+			assets["templates/addons/pi/common/docs/agent.md"] = &fstest.MapFile{Data: []byte("# docs\n")}
 
-			if _, err := RunWith(addonAssets(), dir, Options{Agent: "pi"}); err == nil {
+			if _, err := RunWith(assets, dir, Options{Agent: "pi"}); err == nil {
 				t.Fatal("RunWith() succeeded despite the blocked directory")
 			}
 			if m, _ := ReadManifest(dir); m.Agent != "" {
@@ -538,10 +553,10 @@ func TestRunWithInterruptedOptInIsFinishedByRerun(t *testing.T) {
 			}
 
 			mustRemove(t, blocker)
-			if _, err := RunWith(addonAssets(), dir, Options{Agent: "pi"}); err != nil {
+			if _, err := RunWith(assets, dir, Options{Agent: "pi"}); err != nil {
 				t.Fatalf("re-run error = %v", err)
 			}
-			for _, rel := range addonPaths("go-api-chi") {
+			for _, rel := range append(addonPaths("go-api-chi"), "docs/agent.md") {
 				if !exists(t, dir, rel) {
 					t.Errorf("%s missing after re-run", rel)
 				}
@@ -677,4 +692,282 @@ func TestAddonOwnedFilesMatchRenderedAddon(t *testing.T) {
 			})
 		}
 	}
+}
+
+// renderedWiring returns what the fake add-on renders for stack, by path.
+func renderedWiring(t *testing.T, stack string) map[string]string {
+	t.Helper()
+
+	files, err := scaffold.RenderAddon(addonAssets(), project.Variables{
+		Agent: "pi", Stack: stack, Language: "go", ModulePath: testModule, GoModule: testModule,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := map[string]string{}
+	for _, f := range files {
+		out[f.Path] = string(f.Data)
+	}
+	return out
+}
+
+func TestRunWithOptInKeepsCustomSourceAndItsTestIsNotInstalled(t *testing.T) {
+	for _, stack := range []string{"go-api-chi", "go-cli-cobra"} {
+		t.Run(stack, func(t *testing.T) {
+			dir := addonRepo(t, stack, "", false)
+			src, test := addonWiring[stack][0], addonWiring[stack][1]
+			mustWriteFile(t, filepath.Join(dir, src), "package mine\n", 0o644)
+
+			status, stderr, err := runCapturingStderr(t, addonAssets(), dir, Options{Agent: "pi"})
+			if err != nil {
+				t.Fatalf("RunWith() error = %v", err)
+			}
+			if got := readFile(t, dir, src); got != "package mine\n" {
+				t.Errorf("%s = %q, want it kept", src, got)
+			}
+			if exists(t, dir, test) {
+				t.Errorf("%s installed although it tests forge's implementation of a file the repo replaced", test)
+			}
+			for _, p := range []string{src, test} {
+				if slices.Contains(status.Updated, p) {
+					t.Errorf("Updated lists %s", p)
+				}
+			}
+			want := "kept your `" + src + "`; `" + test + "` was not installed because it tests forge's implementation"
+			if !strings.Contains(stderr, want) {
+				t.Errorf("notice lacks %q:\n%s", want, stderr)
+			}
+			if !exists(t, dir, "AGENT.md") {
+				t.Error("AGENT.md not written: a kept group must not hold back other groups")
+			}
+			if m, _ := ReadManifest(dir); m.Agent != "pi" {
+				t.Errorf("manifest agent = %q, want pi", m.Agent)
+			}
+		})
+	}
+}
+
+func TestRunWithOptInKeepsCustomTestAndInstallsNeitherFile(t *testing.T) {
+	dir := addonRepo(t, "go-cli-cobra", "", false)
+	mustWriteFile(t, filepath.Join(dir, "cmd/agent_test.go"), "package mine\n", 0o644)
+
+	_, stderr, err := runCapturingStderr(t, addonAssets(), dir, Options{Agent: "pi"})
+	if err != nil {
+		t.Fatalf("RunWith() error = %v", err)
+	}
+	if exists(t, dir, "cmd/agent.go") {
+		t.Error("cmd/agent.go installed next to a custom test")
+	}
+	if got := readFile(t, dir, "cmd/agent_test.go"); got != "package mine\n" {
+		t.Errorf("agent_test.go = %q, want it kept", got)
+	}
+	if !strings.Contains(stderr, "kept your `cmd/agent_test.go`; `cmd/agent.go` was not installed") {
+		t.Errorf("notice lacks the kept line:\n%s", stderr)
+	}
+}
+
+func TestRunWithOptInCompletesAnInterruptedWiringGroup(t *testing.T) {
+	dir := addonRepo(t, "go-cli-cobra", "", false)
+	want := renderedWiring(t, "go-cli-cobra")
+	mustWriteFile(t, filepath.Join(dir, "cmd/agent.go"), want["cmd/agent.go"], 0o644)
+
+	status, stderr, err := runCapturingStderr(t, addonAssets(), dir, Options{Agent: "pi"})
+	if err != nil {
+		t.Fatalf("RunWith() error = %v", err)
+	}
+	if got := readFile(t, dir, "cmd/agent_test.go"); got != want["cmd/agent_test.go"] {
+		t.Errorf("agent_test.go = %q, want forge's bytes", got)
+	}
+	if !slices.Contains(status.Updated, "cmd/agent_test.go") || slices.Contains(status.Updated, "cmd/agent.go") {
+		t.Errorf("Updated = %v, want only the missing member of the group", status.Updated)
+	}
+	if strings.Contains(stderr, "kept your") {
+		t.Errorf("unexpected kept line:\n%s", stderr)
+	}
+}
+
+func TestRunWithOptInWritesNothingFromAGroupAlreadyDelivered(t *testing.T) {
+	dir := addonRepo(t, "go-cli-cobra", "", false)
+	want := renderedWiring(t, "go-cli-cobra")
+	for _, rel := range addonWiring["go-cli-cobra"] {
+		mustWriteFile(t, filepath.Join(dir, rel), want[rel], 0o644)
+	}
+
+	status, stderr, err := runCapturingStderr(t, addonAssets(), dir, Options{Agent: "pi"})
+	if err != nil {
+		t.Fatalf("RunWith() error = %v", err)
+	}
+	for _, rel := range addonWiring["go-cli-cobra"] {
+		if slices.Contains(status.Updated, rel) {
+			t.Errorf("Updated lists %s although it was already forge's", rel)
+		}
+	}
+	if strings.Contains(stderr, "kept your") {
+		t.Errorf("unexpected kept line:\n%s", stderr)
+	}
+}
+
+func TestRunWithOptInKeepsCustomAgentMDAndStillWritesWiring(t *testing.T) {
+	dir := addonRepo(t, "go-cli-cobra", "", false)
+	mustWriteFile(t, filepath.Join(dir, "AGENT.md"), "mine\n", 0o644)
+
+	_, stderr, err := runCapturingStderr(t, addonAssets(), dir, Options{Agent: "pi"})
+	if err != nil {
+		t.Fatalf("RunWith() error = %v", err)
+	}
+	if got := readFile(t, dir, "AGENT.md"); got != "mine\n" {
+		t.Errorf("AGENT.md = %q, want it kept", got)
+	}
+	for _, rel := range addonWiring["go-cli-cobra"] {
+		if !exists(t, dir, rel) {
+			t.Errorf("%s not written", rel)
+		}
+	}
+	if !strings.Contains(stderr, "kept your `AGENT.md`") {
+		t.Errorf("notice lacks the kept line:\n%s", stderr)
+	}
+}
+
+func TestRunWithOptInNoticeSkipsMountAgentWhenAgentGoIsTheUsers(t *testing.T) {
+	dir := addonRepo(t, "go-api-chi", "", false)
+	mustWriteFile(t, filepath.Join(dir, "internal/httpapi/agent.go"), "package mine\n", 0o644)
+
+	_, stderr, err := runCapturingStderr(t, addonAssets(), dir, Options{Agent: "pi"})
+	if err != nil {
+		t.Fatalf("RunWith() error = %v", err)
+	}
+	if strings.Contains(stderr, "mountAgent") {
+		t.Errorf("notice prescribes mountAgent for a repo with its own agent.go:\n%s", stderr)
+	}
+	if !strings.Contains(stderr, "hadolint Dockerfile*") {
+		t.Errorf("notice lost the other manual steps:\n%s", stderr)
+	}
+}
+
+func TestRunWithOptInRequirementFailureWritesNothing(t *testing.T) {
+	cases := []struct {
+		name   string
+		stack  string
+		setup  func(t *testing.T, dir string)
+		wanted []string
+	}{
+		{
+			name: "api router takes *log.Logger", stack: "go-api-chi",
+			setup: func(t *testing.T, dir string) {
+				mustWriteFile(t, filepath.Join(dir, "internal/httpapi/router.go"),
+					"package httpapi\n\nimport \"log\"\n\nfunc NewRouter(logger *log.Logger) {}\n", 0o644)
+			},
+			wanted: []string{"NewRouter", "*slog.Logger", "log/slog", "forge upgrade --agent pi"},
+		},
+		{
+			name: "cobra has no rootCmd", stack: "go-cli-cobra",
+			setup: func(t *testing.T, dir string) {
+				mustWriteFile(t, filepath.Join(dir, "cmd/root.go"), "package cmd\n\nvar root = 1\n", 0o644)
+			},
+			wanted: []string{"rootCmd", "write your own cmd/agent.go"},
+		},
+	}
+	for _, tc := range cases {
+		for _, stale := range []bool{false, true} {
+			name := tc.name + map[bool]string{false: "", true: " on a stale repo"}[stale]
+			t.Run(name, func(t *testing.T) {
+				dir := addonRepo(t, tc.stack, "", stale)
+				tc.setup(t, dir)
+				before := snapshot(t, dir)
+
+				_, err := RunWith(addonAssets(), dir, Options{Agent: "pi"})
+				if err == nil {
+					t.Fatal("RunWith() succeeded although the wiring cannot compile in this repo")
+				}
+				for _, want := range tc.wanted {
+					if !strings.Contains(err.Error(), want) {
+						t.Errorf("error lacks %q: %v", want, err)
+					}
+				}
+				assertSnapshotsEqual(t, before, snapshot(t, dir))
+				if m, _ := ReadManifest(dir); m.Agent != "" {
+					t.Errorf("manifest records agent %q after a refused opt-in", m.Agent)
+				}
+			})
+		}
+	}
+}
+
+func TestRunWithOptInDoesNotCheckRequirementsForKeptOrDeliveredWiring(t *testing.T) {
+	brokenRouter := "package httpapi\n\nimport \"log\"\n\nfunc NewRouter(logger *log.Logger) {}\n"
+	t.Run("custom wiring", func(t *testing.T) {
+		dir := addonRepo(t, "go-api-chi", "", false)
+		mustWriteFile(t, filepath.Join(dir, "internal/httpapi/router.go"), brokenRouter, 0o644)
+		mustWriteFile(t, filepath.Join(dir, "internal/httpapi/agent.go"), "package mine\n", 0o644)
+		if _, err := RunWith(addonAssets(), dir, Options{Agent: "pi"}); err != nil {
+			t.Fatalf("RunWith() error = %v", err)
+		}
+	})
+	t.Run("already forge's bytes", func(t *testing.T) {
+		dir := addonRepo(t, "go-api-chi", "", false)
+		mustWriteFile(t, filepath.Join(dir, "internal/httpapi/router.go"), brokenRouter, 0o644)
+		for rel, data := range renderedWiring(t, "go-api-chi") {
+			if slices.Contains(addonWiring["go-api-chi"], rel) {
+				mustWriteFile(t, filepath.Join(dir, rel), data, 0o644)
+			}
+		}
+		if _, err := RunWith(addonAssets(), dir, Options{Agent: "pi"}); err != nil {
+			t.Fatalf("RunWith() error = %v", err)
+		}
+	})
+}
+
+func TestRunWithOptInRequirementChecks(t *testing.T) {
+	const (
+		slogRouter = "package httpapi\n\nimport \"log/slog\"\n\nfunc NewRouter(l *slog.Logger, extra int) {}\n"
+		apiPath    = "internal/httpapi/router.go"
+	)
+	cases := []struct {
+		name    string
+		stack   string
+		files   map[string]string // replaces the fixture
+		wantErr string            // "" means the opt-in must succeed
+	}{
+		{"aliased log/slog passes", "go-api-chi", map[string]string{apiPath: "package httpapi\n\nimport sl \"log/slog\"\n\nfunc NewRouter(l *sl.Logger) {}\n"}, ""},
+		{"first parameter among several", "go-api-chi", map[string]string{apiPath: slogRouter}, ""},
+		{"declared in another file", "go-api-chi", map[string]string{apiPath: "package httpapi\n", "internal/httpapi/other.go": slogRouter}, ""},
+		{"*log.Logger fails", "go-api-chi", map[string]string{apiPath: "package httpapi\n\nimport \"log\"\n\nfunc NewRouter(l *log.Logger) {}\n"}, "*slog.Logger"},
+		{"another package named slog fails", "go-api-chi", map[string]string{apiPath: "package httpapi\n\nimport \"example.com/slog\"\n\nfunc NewRouter(l *slog.Logger) {}\n"}, "*slog.Logger"},
+		{"slog without the import fails", "go-api-chi", map[string]string{apiPath: "package httpapi\n\nfunc NewRouter(l *slog.Logger) {}\n"}, "*slog.Logger"},
+		{"value slog.Logger fails", "go-api-chi", map[string]string{apiPath: "package httpapi\n\nimport \"log/slog\"\n\nfunc NewRouter(l slog.Logger) {}\n"}, "*slog.Logger"},
+		{"NewRouter missing fails", "go-api-chi", map[string]string{apiPath: "package httpapi\n"}, "NewRouter"},
+		{"NewRouter as a method fails", "go-api-chi", map[string]string{apiPath: "package httpapi\n\nimport \"log/slog\"\n\ntype T int\n\nfunc (T) NewRouter(l *slog.Logger) {}\n"}, "NewRouter"},
+		{"unparsable file is reported", "go-api-chi", map[string]string{"internal/httpapi/broken.go": "package httpapi\nfunc {\n"}, "broken.go"},
+		{"test files are ignored", "go-api-chi", map[string]string{apiPath: "package httpapi\n", "internal/httpapi/x_test.go": slogRouter}, "NewRouter"},
+		{"rootCmd var passes", "go-cli-cobra", map[string]string{"cmd/root.go": "package cmd\n\nvar (\n\ta       = 1\n\trootCmd = 2\n)\n"}, ""},
+		{"rootCmd missing fails", "go-cli-cobra", map[string]string{"cmd/root.go": "package cmd\n\nvar root = 1\n"}, "rootCmd"},
+		{"rootCmd as a func fails", "go-cli-cobra", map[string]string{"cmd/root.go": "package cmd\n\nfunc rootCmd() {}\n"}, "rootCmd"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := addonRepo(t, tc.stack, "", false)
+			if _, ok := tc.files[stackFixtures[tc.stack].path]; ok {
+				mustWriteFile(t, filepath.Join(dir, stackFixtures[tc.stack].path), "", 0o644)
+			}
+			for rel, data := range tc.files {
+				mustWriteFile(t, filepath.Join(dir, rel), data, 0o644)
+			}
+			_, err := RunWith(addonAssets(), dir, Options{Agent: "pi"})
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Fatalf("RunWith() error = %v", err)
+			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+				t.Fatalf("RunWith() error = %v, want it to mention %q", err, tc.wantErr)
+			}
+		})
+	}
+
+	t.Run("package directory missing fails", func(t *testing.T) {
+		dir := addonRepo(t, "go-cli-cobra", "", false)
+		mustRemove(t, filepath.Join(dir, "cmd/root.go"))
+		mustRemove(t, filepath.Join(dir, "cmd"))
+		if _, err := RunWith(addonAssets(), dir, Options{Agent: "pi"}); err == nil || !strings.Contains(err.Error(), "cmd") {
+			t.Fatalf("RunWith() error = %v, want a missing-directory failure", err)
+		}
+	})
 }

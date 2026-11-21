@@ -95,7 +95,7 @@ func RunWith(assets fs.FS, targetDir string, opts Options) (Status, error) {
 	var optIn *addonOptIn
 	if opts.Agent != "" {
 		var err error
-		if optIn, err = prepareAddonOptIn(targetDir, opts); err != nil {
+		if optIn, err = prepareAddonOptIn(assets, targetDir, opts); err != nil {
 			return Status{}, err
 		}
 	}
@@ -452,22 +452,22 @@ func addContainerFilesIfMissing(assets fs.FS, targetDir string, m Manifest) (add
 
 	missing := map[string]bool{}
 	for _, name := range []string{".dockerignore", "Dockerfile"} {
-		state, err := containerFileState(filepath.Join(targetDir, name), contents[name])
+		state, err := classifyFile(filepath.Join(targetDir, name), contents[name])
 		if err != nil {
 			return nil, fmt.Errorf("inspect %s: %w", name, err)
 		}
 		switch state {
-		case containerFileCustom:
+		case fileCustom:
 			return nil, nil
-		case containerFileMissing:
+		case fileMissing:
 			missing[name] = true
 		}
 	}
-	state, err := containerFileState(filepath.Join(targetDir, "CONTAINER.md"), contents["CONTAINER.md"])
+	state, err := classifyFile(filepath.Join(targetDir, "CONTAINER.md"), contents["CONTAINER.md"])
 	if err != nil {
 		return nil, fmt.Errorf("inspect CONTAINER.md: %w", err)
 	}
-	if state == containerFileMissing {
+	if state == fileMissing {
 		missing["CONTAINER.md"] = true
 	}
 
@@ -483,35 +483,35 @@ func addContainerFilesIfMissing(assets fs.FS, targetDir string, m Manifest) (add
 	return added, nil
 }
 
-type containerFileKind int
+type fileKind int
 
 const (
-	containerFileMissing containerFileKind = iota
-	// containerFileOurs is byte-identical to the embedded file.
-	containerFileOurs
-	// containerFileCustom is anything else: other content, a symlink, a directory.
-	containerFileCustom
+	fileMissing fileKind = iota
+	// fileOurs is byte-identical to the embedded file.
+	fileOurs
+	// fileCustom is anything else: other content, a symlink, a directory.
+	fileCustom
 )
 
-func containerFileState(path string, embedded []byte) (containerFileKind, error) {
+func classifyFile(path string, embedded []byte) (fileKind, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return containerFileMissing, nil
+			return fileMissing, nil
 		}
-		return containerFileMissing, err
+		return fileMissing, err
 	}
 	if !info.Mode().IsRegular() {
-		return containerFileCustom, nil
+		return fileCustom, nil
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return containerFileMissing, err
+		return fileMissing, err
 	}
 	if bytes.Equal(data, embedded) {
-		return containerFileOurs, nil
+		return fileOurs, nil
 	}
-	return containerFileCustom, nil
+	return fileCustom, nil
 }
 
 // writeFileViaRename writes data to a temporary file next to path and renames

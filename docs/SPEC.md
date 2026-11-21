@@ -118,7 +118,7 @@ reverse; ownership is declared once, per file, not inferred at write time.
 | **Co-owned (init-rendered)** | `opencode.jsonc` | Templated with init-time parameters that only exist in memory during `forge init`. `forge upgrade` renders it from `.forge/manifest.json`'s persisted params **only when the file is missing**; once present, upgrade never touches it again (**ADR-0017**). |
 | **Add-if-missing (container files)** | `Dockerfile`, `.dockerignore`, `CONTAINER.md` for the three Go stacks (`go-cli-cobra`, `go-api-chi`, `go-web-templ`) and the three Python stacks (`python-cli-typer`, `python-fastapi`, `python-web-jinja`) | Hand-edited once present. `forge upgrade` writes them from the stack's overlay only when the manifest names one of those six stacks and neither `Dockerfile` nor `.dockerignore` exists with content that is not forge's (**ADR-0023**, **ADR-0026**); see **§19**. |
 | **Wholly-owned (add-on)** | `Dockerfile.agent`, `.config/mise/conf.d/pi.toml`, `internal/piagent/client.go`, `internal/piagent/client_test.go`, for a repo whose manifest records `agent: pi` | Blind byte-copy from the embedded add-on on every stale upgrade, and at opt-in. Overwrites local edits and restores a deleted file (**ADR-0028**); see **§19**. |
-| **Add-on, delivered at opt-in** | `AGENT.md`, and the stack wiring: `internal/httpapi/agent.go` and `agent_test.go` (`go-api-chi`), `cmd/agent.go` and `agent_test.go` (`go-cli-cobra`) | Written by `forge upgrade --agent pi` only if missing. After opt-in they are the user's code and later upgrades never write them. |
+| **Add-on, delivered at opt-in** | `AGENT.md`, and the stack wiring: `internal/httpapi/agent.go` and `agent_test.go` (`go-api-chi`), `cmd/agent.go` and `agent_test.go` (`go-cli-cobra`) | Written by `forge upgrade --agent pi`. A Go source file and its `_test.go` sibling are a group: both are written when neither is custom, neither when either is; `AGENT.md` is a group of one. After opt-in they are the user's code and later upgrades never write them. |
 | **Not delivered, named in the notice** | `mountAgent(router, logger)` in `internal/httpapi/router.go`, `image:lint` in `mise.toml`, the `image:agent:scan` step in `.github/workflows/ci.yml` | Stack overlay content that upgrade never edits. The opt-in notice on stderr lists the manual steps. |
 | **Delegated** | `.beads/` (via `bd`), `.apm/` (via `instill`) | Owned entirely by the delegate tool. `forge` does not write their contents; it only repairs directory permissions it is responsible for (`.beads` 0700) and detects drift. |
 
@@ -444,8 +444,8 @@ cannot fix, so a team may remove the step.
 `forge upgrade` delivers the add-on (ADR-0028, §19): `Dockerfile.agent`,
 `.config/mise/conf.d/pi.toml` and `internal/piagent/client.go` + `client_test.go` are wholly-owned
 and refreshed on every stale upgrade of a repo that records `agent: pi`. `forge upgrade --agent pi`
-opts an existing repo in and also adds `AGENT.md` and the stack wiring if missing, rendered by the
-same renderer as init (`scaffold.RenderAddon`).
+opts an existing repo in and also adds `AGENT.md` and the stack wiring, the wiring and its test as a
+pair, rendered by the same renderer as init (`scaffold.RenderAddon`).
 
 ### 9.4 Observability baseline
 
@@ -1237,15 +1237,34 @@ the infrastructure version to 12.
   scope.
 - The run does not need a stale version. If the repo is stale, the ordinary managed-file steps run
   too.
-- It writes the four wholly-owned files, then adds `AGENT.md` (rendered with the stack) and the
-  stack wiring (`internal/httpapi/agent.go` + `agent_test.go` for `go-api-chi`, `cmd/agent.go` +
-  `agent_test.go` for `go-cli-cobra`, rendered with the module path) **only if missing**. An
-  existing file at any of those paths is kept. After opt-in these are the user's code; later
-  upgrades never write them, even if deleted.
+- It writes the four wholly-owned files, then `AGENT.md` (rendered with the stack) and the stack
+  wiring (`internal/httpapi/agent.go` + `agent_test.go` for `go-api-chi`, `cmd/agent.go` +
+  `agent_test.go` for `go-cli-cobra`, rendered with the module path), under the group rule below.
+  After opt-in these are the user's code; later upgrades never write them, even if deleted.
+- **Wiring and its tests travel as a pair.** Among the files delivered at opt-in, a Go source file
+  and its `_test.go` sibling in the same directory form a group. Any other file (`AGENT.md`) is a
+  group of one. Each file is classified as missing, forge's bytes (byte-identical to what forge
+  renders for this repo) or custom (other content, a symlink, a directory). If any member of a
+  group is custom, nothing from that group is written. Otherwise the missing members are written.
+  Forge's bytes count as already delivered. Reason: forge's `agent_test.go` references forge's own
+  identifiers, so installing it beside a custom `agent.go` would break `go test ./...`. This is
+  the all-or-nothing stance upgrade takes for `Dockerfile` + `.dockerignore` (ADR-0023).
+- **Compatibility preflight.** Each add-on stack declares what its wiring needs from the repo's own
+  Go code. Upgrade checks it by parsing the source, before any write:
+
+  | Stack | Requirement | Guidance |
+  |---|---|---|
+  | `go-api-chi` | `internal/httpapi` declares `NewRouter` taking a `*slog.Logger` | Move the router and handlers to `log/slog`, then re-run |
+  | `go-cli-cobra` | package `cmd` declares `rootCmd` | Name the root command `rootCmd`, or write your own `cmd/agent.go` |
+
+  A requirement is checked only when forge's wiring for that stack would be installed; a repo that
+  keeps its own wiring is not held to it. A failed requirement is an error naming the requirement
+  and what to change. Nothing is written, including the ordinary managed files of a stale repo, and
+  the manifest is unchanged.
 - `scaffold.RenderAddon` serves init and upgrade, so the delivered bytes equal what
   `forge init --agent pi` writes.
 - `Stamp` runs last and records `agent: pi`, so an interrupted opt-in is finished by re-running
-  the same command.
+  the same command: files that already hold forge's bytes count as delivered.
 - Opt-in on a repo whose manifest already records the add-on behaves as a plain upgrade: on a
   current repo it writes nothing and reports the infrastructure as current. `go.mod` is not read.
 - A manifest that records a different add-on is an error: upgrade does not switch add-ons.
@@ -1260,12 +1279,15 @@ flowchart TD
     P -->|"no"| E["error, nothing written"]
     P -->|"yes"| R{"manifest records agent: pi?"}
     R -->|"yes"| PL["plain upgrade"]
-    R -->|"no"| ST{"stale?"}
+    R -->|"no"| PF["plan: classify each add-on file as missing,<br/>forge's bytes or custom, and group wiring with its test"]
+    PF --> Q{"forge's wiring to be installed<br/>and a requirement unmet?"}
+    Q -->|"yes"| E2["error naming the requirement, nothing written"]
+    Q -->|"no"| ST{"stale?"}
     F -->|"no"| PL
     ST -->|"yes"| M["ordinary managed-file steps"]
     ST -->|"no"| O
     M --> O["write the four wholly-owned files"]
-    O --> W["add AGENT.md and wiring if missing, print notice"]
+    O --> W["write the missing files of each group with no custom member, print notice"]
     W --> Z["Stamp records agent: pi"]
     PL --> PA{"stale and manifest records agent: pi?"}
     PA -->|"yes"| PO["managed steps, then the four wholly-owned files"]
@@ -1274,10 +1296,12 @@ flowchart TD
     PZ --> PS
 ```
 
-Opt-in prints a notice on stderr naming what upgrade did not do, because it is stack overlay
-content upgrade never edits. For `go-api-chi`: the `mountAgent(router, logger)` line in
-`internal/httpapi/router.go`; until it is added the route is not mounted and lint reports
-`mountAgent` as unused. For both stacks: `image:lint` should be `hadolint Dockerfile*` in
+Opt-in prints a notice on stderr built from what the run did: what was added; for each kept group,
+that the user's file was kept and which companion was not installed; then the stack's manual
+steps, which are stack overlay content upgrade never edits. For `go-api-chi`: the
+`mountAgent(router, logger)` line in `internal/httpapi/router.go`, listed only when forge's
+`internal/httpapi/agent.go` is in place; until it is added the route is not mounted and lint
+reports `mountAgent` as unused. For both stacks: `image:lint` should be `hadolint Dockerfile*` in
 `mise.toml` so `Dockerfile.agent` is linted, and the CI step `mise run image:agent:scan` belongs
 in `.github/workflows/ci.yml`.
 
@@ -1386,11 +1410,26 @@ Scenario: Opt-in on a current repo
   And the manifest records agent pi
   And a stderr notice names mountAgent, image:lint and image:agent:scan
 
-Scenario: Opt-in keeps an existing wiring file
+Scenario: Opt-in keeps an existing wiring file and does not install its test
   Given a go-cli-cobra repo with no add-on and a hand-written cmd/agent.go
   When the user runs `forge upgrade --agent pi`
   Then cmd/agent.go is unchanged
-  And the four wholly-owned files and the missing wiring and AGENT.md files are written
+  And cmd/agent_test.go is not written
+  And the four wholly-owned files and AGENT.md are written
+  And the stderr notice says cmd/agent.go was kept and cmd/agent_test.go was not installed
+
+Scenario: Opt-in completes an interrupted run
+  Given a go-cli-cobra repo with no add-on, a cmd/agent.go holding forge's bytes, and no
+    cmd/agent_test.go
+  When the user runs `forge upgrade --agent pi`
+  Then cmd/agent.go is unchanged and cmd/agent_test.go is written
+  And the manifest records agent pi
+
+Scenario: Opt-in skips the requirement when the repo keeps its own wiring
+  Given a go-cli-cobra repo with no add-on, a hand-written cmd/agent.go, and no rootCmd
+  When the user runs `forge upgrade --agent pi`
+  Then the command succeeds
+  And cmd/agent.go is unchanged and cmd/agent_test.go is not written
 
 Scenario Outline: Opt-in is refused with nothing written
   Given <repo>
@@ -1404,11 +1443,13 @@ Scenario Outline: Opt-in is refused with nothing written
     | a go-api-chi repo whose go.mod has no module line | forge upgrade --agent pi |
     | a go-api-chi repo with no add-on | forge upgrade --agent pi --check |
     | a repo whose manifest records agent pi | forge upgrade --agent none |
+    | a go-api-chi repo whose internal/httpapi NewRouter takes a *log.Logger | forge upgrade --agent pi |
+    | a go-cli-cobra repo with no rootCmd and no cmd/agent.go | forge upgrade --agent pi |
 
 Scenario: Interrupted opt-in is completed by re-running
   Given an opt-in run that wrote the four wholly-owned files and stopped before Stamp
   When the user runs `forge upgrade --agent pi` again
-  Then the missing add-on files are written, existing ones are kept
+  Then the missing add-on files are written, and files holding forge's bytes are kept
   And the manifest records agent pi
 ```
 

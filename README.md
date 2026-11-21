@@ -301,7 +301,7 @@ Add the Pi agent add-on to an existing `go-api-chi` or `go-cli-cobra` repo:
 go run ./cmd/forge upgrade --agent pi
 ```
 
-This needs `.forge/manifest.json` and a `module` line in `go.mod`; otherwise it fails and writes nothing. It cannot be combined with `--check`, and `--agent none` is an error. The run works on a repo that is already current. It writes the four files above, then `AGENT.md` and the stack wiring (`internal/httpapi/agent.go` and `agent_test.go`, or `cmd/agent.go` and `agent_test.go`) only if they are missing. Those files are yours after opt-in: later upgrades never write them. Re-running an interrupted opt-in finishes it.
+This needs `.forge/manifest.json` and a `module` line in `go.mod`; otherwise it fails and writes nothing. It cannot be combined with `--check`, and `--agent none` is an error. The run works on a repo that is already current. It writes the four files above, then `AGENT.md` and the stack wiring (`internal/httpapi/agent.go` and `agent_test.go`, or `cmd/agent.go` and `agent_test.go`). The wiring and its test travel as a pair: if either file already exists with your own content, neither is written, because forge's test checks forge's implementation. Before writing anything, upgrade checks that the repo has what forge's wiring needs: `go-api-chi` needs `NewRouter` in `internal/httpapi` to take a `*slog.Logger`, and `go-cli-cobra` needs a `rootCmd` in package `cmd`. A repo that keeps its own wiring is not held to this. If a requirement is not met, upgrade fails, says what to change, and writes nothing. These files are yours after opt-in: later upgrades never write them. Re-running an interrupted opt-in finishes it.
 
 Upgrade does not edit stack overlay files, so a stderr notice lists the manual steps:
 
