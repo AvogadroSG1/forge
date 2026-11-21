@@ -1246,7 +1246,12 @@ the infrastructure version to 12.
   `forge init --agent pi` writes.
 - `Stamp` runs last and records `agent: pi`, so an interrupted opt-in is finished by re-running
   the same command.
-- Opt-in on a repo whose manifest already records the add-on behaves as a plain upgrade.
+- Opt-in on a repo whose manifest already records the add-on behaves as a plain upgrade: on a
+  current repo it writes nothing and reports the infrastructure as current. `go.mod` is not read.
+- A manifest that records a different add-on is an error: upgrade does not switch add-ons.
+- A repo with no manifest is refused; opt-in does not backfill one.
+- On a plain upgrade, a manifest that records an add-on this forge does not know, or one its
+  stack no longer offers, is skipped silently and the field is kept.
 
 ```mermaid
 flowchart TD

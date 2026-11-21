@@ -20,7 +20,7 @@ flowchart TD
     S["forge upgrade"] --> F{"--agent pi given?"}
     F -->|"yes"| P{"preconditions hold?<br/>no --check, not none, manifest stack offers it, go.mod has a module line"}
     P -->|"no"| E["error, nothing written"]
-    P -->|"yes"| R{"manifest already records agent: pi?"}
+    P -->|"yes"| R{"manifest already records agent: pi?<br/>(go.mod is read only if not)"}
     R -->|"yes"| PL["plain upgrade"]
     R -->|"no"| ST{"stale?"}
     F -->|"no"| PL
@@ -40,7 +40,7 @@ flowchart TD
 
 **Four files are wholly-owned by the add-on.** `Dockerfile.agent`, `.config/mise/conf.d/pi.toml`, `internal/piagent/client.go` and `internal/piagent/client_test.go` are byte-copied from the embedded add-on, unconditionally, like the other wholly-owned files (SPEC §3.1). The copy overwrites local edits and restores a deleted file. The four files are hash-pinned alongside the existing managed files, so any change to them forces an `upgrade.Version` bump. That bump is how new Pi and Node pins and client fixes reach existing repos. A team that needs different pins sets the Docker build args `NODE_IMAGE` and `PI_VERSION` instead of editing the file.
 
-**Refresh runs on every stale upgrade of a repo that records the add-on.** It needs no flag. A repo that does not record the add-on gets none of these files.
+**Refresh runs on every stale upgrade of a repo that records the add-on.** It needs no flag. A repo that does not record the add-on gets none of these files. A manifest that records an add-on this forge does not know, or one its stack no longer offers, is skipped silently and the field is kept, so a routine upgrade never fails on it.
 
 **`--agent pi` opts a repo in.** Preconditions are checked before any write, and failing one is an error that writes nothing:
 
@@ -48,8 +48,9 @@ flowchart TD
 - `go.mod` has a `module` line. The module path is read from there because the manifest does not record it.
 - `--agent` is not combined with `--check`.
 - The value is not `none`. Removing an add-on is out of scope.
+- The manifest does not record a different add-on. Upgrade does not switch add-ons.
 
-An opt-in run works on a repo that is already current. If the repo is stale, the ordinary managed-file steps run too. It writes the four wholly-owned files, then adds `AGENT.md` (rendered with the stack) and the stack wiring (rendered with the module path) **only if missing**. An existing file at any of those paths is kept. After opt-in these files are the user's code: later upgrades never write them, even if deleted. `scaffold.RenderAddon` serves both init and upgrade, so the delivered bytes equal what `forge init --agent pi` writes. `Stamp` runs last and records `agent: pi`, so an interrupted opt-in is finished by re-running the same command. Opt-in on a repo whose manifest already records the add-on behaves as a plain upgrade.
+An opt-in run works on a repo that is already current. If the repo is stale, the ordinary managed-file steps run too. It writes the four wholly-owned files, then adds `AGENT.md` (rendered with the stack) and the stack wiring (rendered with the module path) **only if missing**. An existing file at any of those paths is kept. After opt-in these files are the user's code: later upgrades never write them, even if deleted. `scaffold.RenderAddon` serves both init and upgrade, so the delivered bytes equal what `forge init --agent pi` writes. `Stamp` runs last and records `agent: pi`, so an interrupted opt-in is finished by re-running the same command. Opt-in on a repo whose manifest already records the add-on behaves as a plain upgrade, and `go.mod` is not read. A repo with no manifest is refused; opt-in does not backfill one.
 
 | Add-on file | Class | Written by upgrade |
 |---|---|---|
@@ -63,7 +64,7 @@ An opt-in run works on a repo that is already current. If the repo is stale, the
 **A notice names what upgrade did not do.** Opt-in prints it on stderr, because these files are stack overlay content that upgrade never edits (the stance of the container notice in ADR-0023):
 
 - `go-api-chi`: add `mountAgent(router, logger)` to `internal/httpapi/router.go`. Until it is added the route is not mounted and lint reports `mountAgent` as unused.
-- Both stacks: set `image:lint` to `hadolint Dockerfile*` in `mise.toml`, so `Dockerfile.agent` is linted.
+- Both stacks: make sure `image:lint` runs `hadolint Dockerfile*` in `mise.toml`, so `Dockerfile.agent` is linted. Repos scaffolded since ADR-0027 already have it.
 - Both stacks: add the CI step `mise run image:agent:scan` to `.github/workflows/ci.yml`.
 
 **`image:agent:scan` is a CI step for repos scaffolded with the add-on.** The two stacks' overlay `ci.yml` became `ci.yml.tmpl` with a `{{ if .Agent }}` step. A repo without the add-on gets a `ci.yml` byte-identical to before. The trade-off from ADR-0027 stays true: Node base images can carry findings a Go team cannot fix. A team may remove the step.

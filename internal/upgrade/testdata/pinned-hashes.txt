@@ -1,4 +1,4 @@
-version: 11
+version: 12
 templates/common/claude/hooks/guard cbb9a8051bbae8642065fcc952dacd818c03884c276f2f9dc13ba56c70bffc70
 templates/common/claude/hooks/secret-scan.sh 5bcacad216038526a573bdf6394466cddfde58a027b235a70d107dc86c51d0f6
 templates/common/claude/settings.json 89add3015d704fe1b30a18bc39f7396c3c41416beb9a70f3b64d1c018345f753
@@ -7,3 +7,7 @@ templates/common/opencode/plugins/forge-hooks.js c542984a312b52af913c1ab4044fce0
 templates/common/mise/conf.d/otel.toml 58260d3df14d8fc7ebfb058b5f1cc98b7088e6d6085b46d79c11dc1bc330a774
 templates/common/otel/compose.yaml 3032aa12d3663fb8aa13f3504ed6c5ec12060f11681aeef9484b0d34207a612b
 templates/common/otel/collector.yaml 6d202ed1c17d9cdf4f46c4514ba6a524e798318db372dd177284f82a07b2767f
+templates/addons/pi/common/Dockerfile.agent d6f717718cbd6da329e259f8ea43200835cb1b13f9a616ab7d2d89c7e3cb1dd1
+templates/addons/pi/common/mise/conf.d/pi.toml 99754d4f970e5ec70cdb16ede289977059a28f600217f14b46e035e84f6941d4
+templates/addons/pi/common/internal/piagent/client.go 682850a2f596bd5816a7e1384dbd850cfd8385aec99a9c169329a72bee119d3a
+templates/addons/pi/common/internal/piagent/client_test.go a4e6fda25afa44db23b9c7353d448003b1ff8cdc8741cdb6008c496aa803c834

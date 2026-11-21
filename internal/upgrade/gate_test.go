@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -46,7 +47,12 @@ func generatePinnedHashes(t *testing.T, assets fs.FS) string {
 	t.Helper()
 	var lines []string
 	lines = append(lines, fmt.Sprintf("version: %d", Version))
-	for _, mf := range managedFiles {
+	// Add-on owned files follow the managed files, add-ons in name order.
+	files := slices.Clone(managedFiles)
+	for _, name := range addonNames() {
+		files = append(files, addonOwnedFiles[name]...)
+	}
+	for _, mf := range files {
 		data, err := fs.ReadFile(assets, mf.src)
 		if err != nil {
 			t.Fatalf("read %s: %v", mf.src, err)

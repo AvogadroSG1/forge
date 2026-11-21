@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"forge/internal/upgrade"
 )
 
 // TestUpgradePreservesCoOwnedConfigEndToEnd exercises the released binary
@@ -207,5 +209,41 @@ func mustWrite(t *testing.T, path string, content string, mode os.FileMode) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), mode); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestUpgradeAgentFlagEndToEnd runs the built binary: --agent pi opts a
+// go-cli-cobra repo in (ADR-0028), and --agent with --check is refused.
+func TestUpgradeAgentFlagEndToEnd(t *testing.T) {
+	t.Parallel()
+
+	repoDir := scaffoldPiAddonStack(t, "go-cli-cobra", "cli", "")
+	if err := upgrade.Stamp(repoDir, upgrade.Manifest{Language: "go", Stack: "go-cli-cobra"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if out, err := runForge(t, repoDir, "upgrade", "--agent", "pi", "--check"); err == nil {
+		t.Fatalf("upgrade --agent pi --check succeeded, want failure:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(repoDir, "Dockerfile.agent")); err == nil {
+		t.Fatal("refused run wrote Dockerfile.agent")
+	}
+
+	out, err := runForge(t, repoDir, "upgrade", "--agent", "pi")
+	if err != nil {
+		t.Fatalf("upgrade --agent pi failed: %v\n%s", err, out)
+	}
+	for _, want := range []string{"Dockerfile.agent", "cmd/agent.go", "image:agent:scan"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q:\n%s", want, out)
+		}
+	}
+	for _, rel := range []string{"Dockerfile.agent", "AGENT.md", "cmd/agent.go", "internal/piagent/client.go"} {
+		if _, err := os.Stat(filepath.Join(repoDir, filepath.FromSlash(rel))); err != nil {
+			t.Errorf("%s not written: %v", rel, err)
+		}
+	}
+	if out, err := runForge(t, repoDir, "upgrade", "--check"); err != nil {
+		t.Fatalf("upgrade --check non-zero after opt-in: %v\n%s", err, out)
 	}
 }
