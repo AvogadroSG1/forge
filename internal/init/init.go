@@ -108,8 +108,8 @@ func (i Initializer) Run(ctx context.Context, targetDir string, vars project.Var
 					return failWithRecovery(targetDir, "go mod tidy", err)
 				}
 			case "python":
-				if err := i.Runner.Run(ctx, targetDir, "pip install", "mise", "exec", "--", "pip", "install", "-e", ".[dev]"); err != nil {
-					return failWithRecovery(targetDir, "pip install", err)
+				if err := i.Runner.Run(ctx, targetDir, "uv sync", "mise", "exec", "--", "uv", "sync"); err != nil {
+					return failWithRecovery(targetDir, "uv sync", err)
 				}
 			case "typescript":
 				if err := i.Runner.Run(ctx, targetDir, "npm install", "mise", "exec", "--", "npm", "install"); err != nil {
