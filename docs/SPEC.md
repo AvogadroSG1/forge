@@ -44,7 +44,8 @@ floor, not the ceiling) · ADR-0012 (skill provisioning via APM-backed instill) 
 (frontend dimension: fragments under web/) · ADR-0014 (typescript toolchain) · ADR-0020 (env-gated
 OpenTelemetry bootstrap in every stack) · ADR-0023 (pinned two-target container image pattern for
 the Go stacks) · ADR-0025 (Python stacks use uv with a committed `uv.lock`) · ADR-0026 (pinned
-two-target container image pattern for the Python stacks).
+two-target container image pattern for the Python stacks) · ADR-0027 (agent add-on dimension:
+opt-in Pi layer for the Go api and cli stacks).
 
 ---
 
@@ -217,7 +218,8 @@ Scenario: Bare invocation defaults to init
 *(Authoritative: CLI/render contract §1, §3.)*
 
 **Seed (prompted/flagged, un-derivable):** project name, language, type, stack, frontend
-(fullstack on an api backend only), api-base-url (frontend-only projects), remote choice.
+(fullstack on an api backend only), api-base-url (frontend-only projects), agent add-on (stacks
+that offer one only; opt-in, see below), remote choice.
 **Author identity** auto-defaults from `git config --global user.{name,email}`, prompted only if
 absent.
 
@@ -236,7 +238,9 @@ absent.
 `fullstack` and the stack is a FullstackBackend api stack; a native fullstack stack IS the
 fullstack, so the question is skipped) → api-base-url (only when type is `frontend`; TTY
 default `http://localhost:8080`; for fullstack it is derived from the backend port and
-`--api-base-url` is a silent override) → author identity (confirm-or-edit the git-config
+`--api-base-url` is a silent override) → agent add-on (only when the stack's catalog entry
+lists one: `go-api-chi` and `go-cli-cobra` offer `pi`; choices `none`, `pi`; TTY default
+`none`) → author identity (confirm-or-edit the git-config
 default) → remote (last; the one outward-facing action). Type is filtered to what exists for
 the chosen language; stack to language × type. **When a question has exactly one valid
 choice** (typescript → `frontend`), it auto-selects silently — even without a TTY — rather
@@ -245,6 +249,11 @@ than demanding a flag with only one legal value. Only shipped v1 stacks appear (
 **Three-state precedence (per input):** (1) flag present → use it, skip the prompt silently; (2)
 flag absent + TTY → prompt; (3) flag absent + no TTY → **error naming the missing flag** (never a
 default). Invalid flag value → fail immediately listing valid choices, never drop to a prompt.
+
+**The one exception is `--agent` (ADR-0027).** An add-on is opt-in, so flag absent + no TTY
+resolves to `none` instead of erroring: a script written before the flag existed gets exactly
+what it got before. `--agent none` is accepted on every stack; any other value on a stack that
+does not offer it fails, naming the stacks that do.
 
 ```gherkin
 Scenario: Derivations from a single project-name seed
@@ -408,6 +417,20 @@ files** (`mise.toml`, `lefthook.yml`, `.github/`) — the backend overlay's temp
 `mise.toml` owns the whole repo's gates, adding node tools and `web-*` tasks via its
 `{{if .Frontend}}` half. The `.gitignore` merge appends a `Node` section after the backend
 language section.
+
+**Agent add-on composition (ADR-0027):** when `--agent <name>` is set, two more trees compose
+after the stack overlay (and the frontend fragment), **add-on-wins**:
+`templates/addons/<name>/common/` (every stack that offers the add-on) then
+`templates/addons/<name>/<stack>/` (that stack's wiring; may be absent). They follow the same
+`.tmpl`/verbatim and path-mapping rules as every other tree. An add-on is not an overlay: the
+overlay is what every repo of a stack receives, the add-on is a layer some ask for, and its
+root sits outside `templates/golden/` so `forge update` never touches it. The `pi` add-on ships
+`Dockerfile.agent` (targets `agent` and `agent-sandbox`, built on the stack's `runtime` and
+`sandbox` images), `.config/mise/conf.d/pi.toml` (`image:agent`, `image:agent:scan`),
+`internal/piagent/` (a stdlib-only Go client for `pi --mode rpc`, with tests that need no Pi),
+`AGENT.md`, and one wired example per stack: `POST /agent/prompt` gated by `PI_AGENT_ENABLED=1`
+on `go-api-chi`, an `agent` subcommand on `go-cli-cobra`. Without `--agent`, scaffold output is
+unchanged. The manifest records the choice as `agent`, omitted when empty.
 
 ### 9.4 Observability baseline
 
@@ -1061,6 +1084,7 @@ forge/                              # source repo
 │   │   └── otel/{compose.yaml, collector.yaml}  # [verbatim] → .otel/ (§9.5)
 │   ├── seed/skills.json.tmpl        # [embed] default skill list, rendered in memory at init
 │   ├── gitignore/                   # [embed] vendored github/gitignore per language (Go, Python, VisualStudio, Node)
+│   ├── addons/<name>/{common,<key>}/ # [embed] opt-in add-on trees, composed last (ADR-0027)
 │   └── golden/<key>/                # [embed] pinned snapshots + .forge-overlay/ per v1 stack
 │                                    #   typescript keys double as fullstack web/ fragments (ADR-0013)
 └── docs/                            # PRD.md, SPEC.md, adr/, handoffs/, superpowers/

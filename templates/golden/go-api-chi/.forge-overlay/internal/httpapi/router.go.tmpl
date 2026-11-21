@@ -15,6 +15,9 @@ import (
 func NewRouter(logger *slog.Logger) http.Handler {
 	router := chi.NewRouter()
 	router.Get("/health", Health(logger))
+{{- if .Agent }}
+	mountAgent(router, logger)
+{{- end }}
 
 	// The span name uses the raw request path rather than the chi route
 	// pattern: otelhttp names the span before chi routes the request, so

@@ -34,6 +34,17 @@ Every stack's overlay also ships an env-gated OpenTelemetry bootstrap (traces + 
 
 The three Go stacks and the three Python stacks also ship a container image pattern: one digest-pinned, multi-stage `Dockerfile` with a non-root `runtime` target and a `sandbox` toolchain target for agents, plus `mise run image:lint`, `mise run image`, and `mise run image:scan`. The generated `CONTAINER.md` explains usage and Twelve-Factor compliance; see [ADR-0023](./docs/adr/0023-go-container-image-pattern.md) for Go and [ADR-0026](./docs/adr/0026-python-container-image-pattern.md) for Python. The Python stacks install with `uv` and commit a `uv.lock` generated at init, which the image build requires; see [ADR-0025](./docs/adr/0025-python-stacks-use-uv-with-a-committed-lock.md).
 
+`go-api-chi` and `go-cli-cobra` can also be scaffolded with the Pi agent add-on (`--agent pi`, or answer the question in interactive mode). It lets the generated Go code run agentic flows through the [Pi coding agent](https://pi.dev):
+
+| Added to the repo | What it is |
+|---|---|
+| `internal/piagent/` | A standard-library Go client for `pi --mode rpc`, with tests that need no Pi |
+| `POST /agent/prompt` (api) or the `agent` subcommand (cli) | One wired example; the HTTP route is off unless `PI_AGENT_ENABLED=1` |
+| `Dockerfile.agent` | `agent` (the application binary plus Node and Pi) and `agent-sandbox` (the sandbox plus Node and Pi), built by `mise run image:agent` |
+| `AGENT.md` | Usage, credentials, and how to refresh the Pi and Node pins |
+
+Without the flag nothing changes: the `runtime` and `sandbox` images stay as they are. See [ADR-0027](./docs/adr/0027-agent-addon-dimension.md).
+
 ## How It Works
 
 ```mermaid
@@ -231,6 +242,7 @@ Key flags:
 - `--stack`
 - `--frontend vite-ts|sveltekit|angular` for fullstack projects on an api backend stack
 - `--api-base-url` for frontend projects (fullstack derives it from the backend port)
+- `--agent pi|none` to add the Pi agent add-on to `go-api-chi` or `go-cli-cobra` (default `none`)
 - `--author-name`
 - `--author-email`
 - `--remote gh|url|none`
@@ -317,6 +329,7 @@ GOCACHE=$PWD/.cache/go-build go test ./... -count=1
 - `internal/catalog/`: shipped v1 stack boundary
 - `templates/common/`: shared generated assets for every scaffolded repo
 - `templates/golden/`: per-stack vanilla snapshot plus overlay
+- `templates/addons/`: opt-in add-on trees composed after the overlay (`pi`)
 - `sources.yaml`: pinned upstream recipes for maintainer refresh
 - `docs/PRD.md`: product intent
 - `docs/SPEC.md`: implementation truth
@@ -387,7 +400,7 @@ FORGE_DOCKER_TESTS=1 GOCACHE=$PWD/.cache/go-build go test ./test/ -run OtelLifec
 FORGE_SMOKE_NETWORK=1 GOCACHE=$PWD/.cache/go-build go test ./test/ -run "TestOtelAngularStandaloneBundleInlinesEndpoint|TestOtelAngularFullstackBundleInlinesEndpoint" -count=1 -timeout 30m
 # Live build-and-run tests for the Go and Python stack container images (requires Docker and network; skipped unless set).
 # FORGE_DOCKER_BUILD_ARGS adds arguments to every `docker build`, e.g. for a registry mirror.
-FORGE_DOCKER_TESTS=1 GOCACHE=$PWD/.cache/go-build go test ./test/ -run "TestGoStackContainerImagesBuildAndRun|TestGoWebTemplImageServesTemplateOnlyEdits|TestPythonStackContainerImagesBuildAndRun|TestPythonWebJinjaImageServesTemplateOnlyEdits" -count=1 -timeout 40m
+FORGE_DOCKER_TESTS=1 GOCACHE=$PWD/.cache/go-build go test ./test/ -run "TestGoStackContainerImagesBuildAndRun|TestPiAddonImagesBuildAndRun|TestGoWebTemplImageServesTemplateOnlyEdits|TestPythonStackContainerImagesBuildAndRun|TestPythonWebJinjaImageServesTemplateOnlyEdits" -count=1 -timeout 40m
 ```
 
 ### BDD And Review Expectations

@@ -4,8 +4,8 @@ package catalog
 import "strings"
 
 var v1Stacks = []Stack{
-	{Key: "go-cli-cobra", Language: "go", ProjectType: "cli"},
-	{Key: "go-api-chi", Language: "go", ProjectType: "api", FullstackBackend: true},
+	{Key: "go-cli-cobra", Language: "go", ProjectType: "cli", AgentAddons: []string{"pi"}},
+	{Key: "go-api-chi", Language: "go", ProjectType: "api", FullstackBackend: true, AgentAddons: []string{"pi"}},
 	{Key: "python-cli-typer", Language: "python", ProjectType: "cli"},
 	{Key: "python-fastapi", Language: "python", ProjectType: "api", FullstackBackend: true},
 	{Key: "csharp-cli", Language: "csharp", ProjectType: "cli"},
@@ -26,6 +26,10 @@ type Stack struct {
 	// FullstackBackend marks api stacks that can host a JS frontend
 	// fragment under web/ when the user picks the fullstack project type.
 	FullstackBackend bool
+	// AgentAddons lists the opt-in agent add-ons (templates/addons/<name>)
+	// that can be layered onto this stack with --agent. Empty means the
+	// stack offers none and the question is never asked.
+	AgentAddons []string
 }
 
 // V1Stacks returns the shipped v1 catalog in stable picker order.
@@ -107,6 +111,23 @@ func SelectableStacks(language, projectType string) []Stack {
 // as a fullstack frontend fragment under web/.
 func FrontendStacks() []Stack {
 	return SelectableStacks("typescript", "frontend")
+}
+
+// AgentAddonStacks returns the keys of the stacks that offer the named agent
+// add-on, in stable picker order.
+func AgentAddonStacks(addon string) []string {
+	addon = normalize(addon)
+
+	var keys []string
+	for _, stack := range v1Stacks {
+		for _, candidate := range stack.AgentAddons {
+			if candidate == addon {
+				keys = append(keys, stack.Key)
+			}
+		}
+	}
+
+	return keys
 }
 
 // Get looks a stack up by key.

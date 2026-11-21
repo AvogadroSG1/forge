@@ -1,0 +1,99 @@
+package httpapi
+
+import (
+	"context"
+	"encoding/json"
+	"log/slog"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
+	// Explicit alias works around AFF analyzer bug where /v5 is parsed as package name (aff-13k).
+	chi "github.com/go-chi/chi/v5"
+
+	"{{.ModulePath}}/internal/piagent"
+)
+
+const (
+	// agentEnabledEnv gates the agent route. It is off unless set to "1":
+	// the route is unauthenticated and lets a caller drive an agent that
+	// can run commands, so exposing it is a deliberate deployment choice.
+	agentEnabledEnv = "PI_AGENT_ENABLED"
+	// agentArgsEnv holds extra, space-separated Pi arguments, for example
+	// "--model sonnet --tools read,grep".
+	agentArgsEnv = "PI_AGENT_ARGS"
+
+	agentPromptLimit = 1 << 20
+	agentRunTimeout  = 10 * time.Minute
+)
+
+// AgentRunner runs one prompt to completion and returns the agent's answer.
+type AgentRunner func(ctx context.Context, prompt string) (string, error)
+
+// mountAgent adds POST /agent/prompt when the deployment enabled it.
+func mountAgent(router chi.Router, logger *slog.Logger) {
+	if os.Getenv(agentEnabledEnv) != "1" {
+		return
+	}
+	logger.Info("agent endpoint enabled")
+	router.Post("/agent/prompt", AgentPrompt(logger, RunPi))
+}
+
+// RunPi answers one prompt with a fresh Pi process, so requests share no
+// conversation state. It needs the `pi` binary on PATH (the `agent` image
+// target) and a provider key such as ANTHROPIC_API_KEY in the environment.
+func RunPi(ctx context.Context, prompt string) (string, error) {
+	client, err := piagent.Start(piagent.Options{Args: strings.Fields(os.Getenv(agentArgsEnv))})
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = client.Close() }()
+
+	result, err := client.Prompt(ctx, prompt, nil)
+	if err != nil {
+		return "", err
+	}
+	return result.Text, nil
+}
+
+type agentPromptRequest struct {
+	Prompt string `json:"prompt"`
+}
+
+type agentPromptResponse struct {
+	Text string `json:"text"`
+}
+
+// AgentPrompt handles {"prompt": "..."} and replies {"text": "..."}.
+func AgentPrompt(logger *slog.Logger, run AgentRunner) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var request agentPromptRequest
+		body := http.MaxBytesReader(w, r.Body, agentPromptLimit)
+		if err := json.NewDecoder(body).Decode(&request); err != nil || strings.TrimSpace(request.Prompt) == "" {
+			writeAgentJSON(w, http.StatusBadRequest, map[string]string{"error": `body must be JSON with a non-empty "prompt"`})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), agentRunTimeout)
+		defer cancel()
+
+		text, err := run(ctx, request.Prompt)
+		if err != nil {
+			// The cause can name credentials or paths; log it, do not
+			// return it to the caller.
+			logger.Error("agent run failed", "error", err)
+			writeAgentJSON(w, http.StatusBadGateway, map[string]string{"error": "agent run failed"})
+			return
+		}
+
+		logger.Info("agent prompt served")
+		writeAgentJSON(w, http.StatusOK, agentPromptResponse{Text: text})
+	}
+}
+
+func writeAgentJSON(w http.ResponseWriter, status int, payload any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
+}

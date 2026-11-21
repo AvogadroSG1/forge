@@ -28,6 +28,10 @@ type Manifest struct {
 	Frontend        string `json:"frontend"`
 	IncludePersonal bool   `json:"includePersonal"`
 	Stack           string `json:"stack"`
+	// Agent is the opt-in agent add-on the repo was scaffolded with. It is
+	// omitted when empty so manifests of repos without an add-on stay
+	// byte-identical to those written before the field existed.
+	Agent string `json:"agent,omitempty"`
 }
 
 // ReadManifest reads .forge/manifest.json from targetDir.
@@ -46,7 +50,7 @@ func ReadManifest(targetDir string) (Manifest, error) {
 // Stamp writes both the committed manifest and the legacy bare-integer
 // marker, forcing SchemaVersion to manifestSchemaVersion and InfraVersion to
 // the current Version regardless of what the caller passed in m. Params
-// (Language, Frontend, IncludePersonal, Stack) are carried through as given.
+// (Language, Frontend, IncludePersonal, Stack, Agent) are carried through as given.
 //
 // Stamp MUST be called last, after all other managed files are written, so
 // an interrupted init or upgrade re-applies on retry.

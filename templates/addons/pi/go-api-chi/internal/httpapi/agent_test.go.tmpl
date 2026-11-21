@@ -1,0 +1,85 @@
+package httpapi
+
+import (
+	"context"
+	"errors"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/google/go-cmp/cmp"
+)
+
+func discardLogger() *slog.Logger {
+	return slog.New(slog.NewJSONHandler(io.Discard, nil))
+}
+
+func postAgentPrompt(handler http.Handler, body string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(http.MethodPost, "/agent/prompt", strings.NewReader(body))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	return response
+}
+
+func TestAgentPromptReturnsTheAgentAnswer(t *testing.T) {
+	var got string
+	handler := AgentPrompt(discardLogger(), func(_ context.Context, prompt string) (string, error) {
+		got = prompt
+		return "four", nil
+	})
+
+	response := postAgentPrompt(handler, `{"prompt":"two plus two?"}`)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if diff := cmp.Diff("two plus two?", got); diff != "" {
+		t.Fatalf("prompt passed to the agent (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff("{\"text\":\"four\"}\n", response.Body.String()); diff != "" {
+		t.Fatalf("body mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestAgentPromptRejectsAMissingPrompt(t *testing.T) {
+	handler := AgentPrompt(discardLogger(), func(context.Context, string) (string, error) {
+		t.Fatal("agent must not run for an invalid request")
+		return "", nil
+	})
+
+	for _, body := range []string{``, `not json`, `{"prompt":"  "}`} {
+		if response := postAgentPrompt(handler, body); response.Code != http.StatusBadRequest {
+			t.Fatalf("body %q: status = %d, want %d", body, response.Code, http.StatusBadRequest)
+		}
+	}
+}
+
+func TestAgentPromptHidesTheFailureCause(t *testing.T) {
+	handler := AgentPrompt(discardLogger(), func(context.Context, string) (string, error) {
+		return "", errors.New("secret detail")
+	})
+
+	response := postAgentPrompt(handler, `{"prompt":"hello"}`)
+
+	if response.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadGateway)
+	}
+	if strings.Contains(response.Body.String(), "secret detail") {
+		t.Fatalf("body leaks the failure cause: %s", response.Body.String())
+	}
+}
+
+func TestAgentRouteIsMountedOnlyWhenEnabled(t *testing.T) {
+	t.Setenv(agentEnabledEnv, "")
+	if response := postAgentPrompt(NewRouter(discardLogger()), `{}`); response.Code != http.StatusNotFound {
+		t.Fatalf("disabled: status = %d, want %d", response.Code, http.StatusNotFound)
+	}
+
+	t.Setenv(agentEnabledEnv, "1")
+	if response := postAgentPrompt(NewRouter(discardLogger()), `{}`); response.Code != http.StatusBadRequest {
+		t.Fatalf("enabled: status = %d, want %d", response.Code, http.StatusBadRequest)
+	}
+}

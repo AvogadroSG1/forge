@@ -1,0 +1,60 @@
+# syntax=docker/dockerfile:1.29.0@sha256:572cebbc2b15e6f84c077742952674889cb63cd5e9b80abdffcbe587b6f19183
+
+# The Pi agent add-on: two images layered on the ones the Dockerfile builds.
+#   --target agent          the application binary plus Node and Pi, so the
+#                           application can run agentic flows through Pi
+#   --target agent-sandbox  the sandbox toolchain image plus Node and Pi
+# Build the base images first (`mise run image`); `mise run image:agent` does
+# both. See AGENT.md for usage and for how to refresh the pins below.
+#
+# The Node image is pinned as tag@digest, like every image in the Dockerfile,
+# and is Alpine like the sandbox so one Node binary serves both targets.
+# APP_IMAGE and SANDBOX_IMAGE are this repository's own locally built images,
+# so they are named by tag and passed in by the mise task.
+ARG NODE_IMAGE=node:26.13.1-alpine3.24@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5
+ARG APP_IMAGE=app:runtime
+ARG SANDBOX_IMAGE=app:sandbox
+
+# --- app: source of the application binary -----------------------------------
+FROM ${APP_IMAGE} AS app
+
+# --- pi: pinned Pi, installed from npm into a copyable prefix ----------------
+# --ignore-scripts: Pi needs no dependency lifecycle scripts, so none run.
+FROM ${NODE_IMAGE} AS pi
+ARG PI_VERSION=1.6.0
+RUN --mount=type=cache,target=/root/.npm \
+    npm install --global --prefix /out --ignore-scripts "@earendil-works/pi-coding-agent@${PI_VERSION}"
+
+# --- agent-sandbox: the sandbox toolchain image with Pi added ----------------
+FROM ${SANDBOX_IMAGE} AS agent-sandbox
+USER 0:0
+# libatomic, libgcc and libstdc++ are the shared libraries the copied Node
+# binary links against; ripgrep is the search tool Pi shells out to. Not
+# version-pinned, for the reason given in the Dockerfile.
+# hadolint ignore=DL3018
+RUN apk add --no-cache libatomic libgcc libstdc++ ripgrep
+COPY --from=pi /usr/local/bin/node /usr/local/bin/node
+COPY --from=pi /out/ /usr/local/pi/
+ENV PATH=/usr/local/pi/bin:$PATH \
+    PI_SKIP_VERSION_CHECK=1
+USER 10001:10001
+WORKDIR /workspace
+CMD ["bash"]
+
+# --- agent: the application with Pi beside it --------------------------------
+FROM ${NODE_IMAGE} AS agent
+# The tools Pi shells out to. Not version-pinned, for the reason given in
+# the Dockerfile.
+# hadolint ignore=DL3018
+RUN apk add --no-cache bash ca-certificates git ripgrep \
+    && addgroup -g 10001 agent \
+    && adduser -D -u 10001 -G agent -h /home/agent -s /bin/bash agent \
+    && mkdir -p /workspace \
+    && chown agent:agent /workspace
+COPY --from=pi /out/ /usr/local/pi/
+COPY --from=app /app /app
+ENV PATH=/usr/local/pi/bin:$PATH \
+    PI_SKIP_VERSION_CHECK=1
+USER 10001:10001
+WORKDIR /workspace
+ENTRYPOINT ["/app"]

@@ -1,0 +1,70 @@
+package cmd
+
+import (
+	"bytes"
+	"context"
+	"io"
+	"testing"
+
+	"github.com/google/go-cmp/cmp"
+)
+
+type agentCall struct {
+	Prompt string
+	PiArgs []string
+}
+
+func runAgentCommand(t *testing.T, args ...string) (agentCall, string, error) {
+	t.Helper()
+
+	var call agentCall
+	original := agentRun
+	agentRun = func(_ context.Context, prompt string, piArgs []string, out io.Writer) error {
+		call = agentCall{Prompt: prompt, PiArgs: piArgs}
+		_, err := io.WriteString(out, "answer\n")
+		return err
+	}
+	t.Cleanup(func() { agentRun = original })
+
+	var out bytes.Buffer
+	command := RootCommand()
+	command.SetOut(&out)
+	command.SetErr(io.Discard)
+	command.SetArgs(append([]string{"agent"}, args...))
+	t.Cleanup(func() { command.SetArgs(nil) })
+
+	err := command.ExecuteContext(context.Background())
+	return call, out.String(), err
+}
+
+func TestAgentCommandSendsThePromptAndPrintsTheAnswer(t *testing.T) {
+	call, out, err := runAgentCommand(t, "review", "this", "repo")
+	if err != nil {
+		t.Fatalf("agent command error = %v", err)
+	}
+
+	if diff := cmp.Diff(agentCall{Prompt: "review this repo"}, call); diff != "" {
+		t.Fatalf("agent call (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff("answer\n", out); diff != "" {
+		t.Fatalf("output (-want +got):\n%s", diff)
+	}
+}
+
+func TestAgentCommandPassesArgumentsAfterDashToPi(t *testing.T) {
+	call, _, err := runAgentCommand(t, "hello", "--", "--model", "sonnet")
+	if err != nil {
+		t.Fatalf("agent command error = %v", err)
+	}
+
+	want := agentCall{Prompt: "hello", PiArgs: []string{"--model", "sonnet"}}
+	if diff := cmp.Diff(want, call); diff != "" {
+		t.Fatalf("agent call (-want +got):\n%s", diff)
+	}
+}
+
+func TestAgentCommandRequiresAPrompt(t *testing.T) {
+	if _, _, err := runAgentCommand(t); err == nil {
+		t.Fatal("agent command error = nil, want a missing prompt error")
+	}
+}
