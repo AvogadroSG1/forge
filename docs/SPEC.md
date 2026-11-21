@@ -88,9 +88,9 @@ flowchart TD
         G --> H["Install guard hook (PreToolUse, Layer B)"]
     end
     subgraph P2["Phase 2 — Delegate"]
-        H --> I["bd init → .beads/, git hooks, AGENTS.md beads block"]
+        H --> I["bd init --skip-hooks → .beads/, AGENTS.md beads block (no git hooks)"]
         I --> J["instill bootstrap / init / sync → apm.yml + apm.lock.yaml + .apm/"]
-        J --> K["lefthook install (chain mode, after bd init)"]
+        J --> K["lefthook install (owns .git/hooks; runs bd hooks run)"]
     end
     subgraph P3["Phase 3 — Remote (optional, last)"]
         K --> L{"--remote?"}
@@ -113,6 +113,7 @@ reverse; ownership is declared once, per file, not inferred at write time.
 | **Wholly-owned** | `.claude/hooks/guard`, `.claude/hooks/secret-scan.sh`, `.opencode/plugins/forge-hooks.js` | Nothing else ever writes to these. Blind byte-copy from the embedded template, unconditionally. |
 | **Co-owned (hook config)** | `.claude/settings.json`, `.codex/hooks.json` | Other tools (`bd`, notably) append their own entries into the same top-level `hooks` object. Reconciled by owned-entry identity (`internal/hookcfg.Reconcile`, **ADR-0016**) — never blind-overwritten. |
 | **Co-owned (init-rendered)** | `opencode.jsonc` | Templated with init-time parameters that only exist in memory during `forge init`. `forge upgrade` renders it from `.forge/manifest.json`'s persisted params **only when the file is missing**; once present, upgrade never touches it again (**ADR-0017**). |
+| **Add-if-missing (Go container files)** | `Dockerfile`, `.dockerignore`, `CONTAINER.md` for `go-cli-cobra`, `go-api-chi`, `go-web-templ` | Hand-edited once present. `forge upgrade` writes them from the stack's overlay only when the manifest names a Go stack and neither `Dockerfile` nor `.dockerignore` exists with content that is not forge's (**ADR-0023**); see **§19**. |
 | **Delegated** | `.beads/` (via `bd`), `.apm/` (via `instill`) | Owned entirely by the delegate tool. `forge` does not write their contents; it only repairs directory permissions it is responsible for (`.beads` 0700) and detects drift. |
 
 Co-owned files are the load-bearing case: a blind overwrite of either co-owned class is the exact
@@ -138,9 +139,12 @@ ensures the `apm` CLI) is the one non-fatal step: if it fails, the skills phase 
 init continues — the repo self-heals later via `instill bootstrap && instill sync` (ADR-0012).
 Four orderings are load-bearing:
 
-- **Guard installs before `bd init`**, so beads' own git-hook install runs under the guard.
-- **`lefthook install` runs after `bd init`** in chain/non-clobber mode, preserving beads' hooks
-  (verification owned by `485`; cites ADR-0003).
+- **Guard installs before `bd init`**, so every `bd` invocation during init runs under the guard.
+- **`bd init --skip-hooks` runs before `lefthook install`, and Lefthook owns `.git/hooks`**
+  (**ADR-0024**, superseding ADR-0003's chain mode). `bd init` installs no git hooks and leaves
+  `core.hooksPath` unset; the shipped `lefthook.yml` runs `bd hooks run <hook>` as a `beads`
+  command in `pre-commit`, `pre-push`, `post-merge`, `post-checkout` and `prepare-commit-msg`, so a
+  plain `lefthook install` (no `--force`) is the whole hook setup and re-running it is a no-op.
 - **`upgrade.Stamp` writes `.forge/manifest.json` and `.forge-infra-version` immediately after
   the Phase 1 scaffold writer succeeds, before Phase 3's `git add`/`commit`** (**ADR-0017**), so a
   freshly scaffolded repo is born at the current infrastructure version — never v0 — and both
@@ -445,7 +449,8 @@ Every stack, common rather than golden, additionally ships three assets that giv
 bootstrap somewhere to send data and a local visual inspection surface:
 
 - `templates/common/mise/conf.d/otel.toml` → `.config/mise/conf.d/otel.toml`. `mise` merges every
-  file under a project's `.config/mise/conf.d/*.toml` on top of its own `mise.toml`, so this one
+  file under a project's `.config/mise/conf.d/*.toml` with its own `mise.toml` (for a key defined
+  in both, `mise.toml` wins, so this file supplies defaults), so this one
   forge-owned file applies to all twelve stacks with no per-stack `mise.toml` edit. It carries:
   - **`[env]`**, always set (not endpoint-gated): `OTEL_EXPORTER_OTLP_ENDPOINT`,
     `OTEL_EXPORTER_OTLP_PROTOCOL`, and per-signal
@@ -489,22 +494,29 @@ bootstrap somewhere to send data and a local visual inspection surface:
   `OTEL_EXPORTER_OTLP_ENDPOINT` (unset → `""`) and runs
   `npm run start|build -- --define "FORGE_OTLP_ENDPOINT=\"<endpoint>\""` (`npm --prefix web …`
   fullstack), passing the value as one argv entry with shell metacharacters inert. An endpoint
-  containing `"`, `\` or a control character (0x01–0x1f, 0x7f) fails before `npm` runs.
+  containing `"`, `\` or a control character (0x01–0x1f, 0x7f) fails before `npm` runs. Each of
+  the eight task copies pins `shell = "sh -c"` so the POSIX bracket expression never runs under a
+  user-configured inline shell such as zsh. Browser OTLP endpoints (the Angular define bridge and
+  the `VITE_` variables) are inlined into the public bundle, so the URL MUST NOT contain
+  credentials.
   `environment.ts` declares `FORGE_OTLP_ENDPOINT` and reads it through a `typeof` guard, so plain
   `npm start` / `ng build` compiles and stays silent. Owning tests:
   `TestOtelAngularTasksBridgeEndpointToDefine`, `TestOtelAngularEnvironmentReadsDefineWithTypeofGuard`,
   `TestOtelAngularBackendTaskBlocksIdentical`, `TestOtelAngularTasksAbsentForOtherFrontends`,
-  `TestOtelAngularTasksRejectUnsafeEndpoint`, and `TestOtelAngularTasksPassEndpointAsDefine`.
+  `TestOtelAngularTasksRejectUnsafeEndpoint`, `TestOtelAngularTasksPassEndpointAsDefine`,
+  `TestOtelAngularEndpointGuardCopiesIdenticalAndShellPinned`, and
+  `TestOtelAngularTasksRejectUnsafeEndpointUnderZshInlineShell`.
   Real-build checks are gated behind `FORGE_SMOKE_NETWORK=1`.
 - `templates/common/otel/compose.yaml` → `.otel/compose.yaml`: fixed Compose project
   `forge-otel` with:
-  - Collector service `otel-collector`, image `otel/opentelemetry-collector-contrib:0.165.0`,
+  - Collector service `otel-collector`, image `otel/opentelemetry-collector-contrib:0.165.0@sha256:e40d61f10c9a617cca1ffd1be4d7e2b3a4b0f0001798ff07e58cabe82e618cea`,
     container `forge-otel-collector`, `restart: unless-stopped`, and loopback-only host mappings
     `4318` (OTLP/HTTP) and `13133` (health). Port `4317` is not published. The unchanged
     `otel-data-init` one-shot service owns the named `forge-otel-data` volume for Collector uid
-    10001.
+    10001. Every service image (including the `busybox` image behind `otel-data-init`) is
+    written `tag@sha256:<multi-platform index digest>`, as in ADR-0023; a test enforces the shape.
   - Viewer service `otel-dashboard`, image
-    `mcr.microsoft.com/dotnet/aspire-dashboard:13.6.5`, container
+    `mcr.microsoft.com/dotnet/aspire-dashboard:13.6.5@sha256:e2b7cf9a4ead932de46c6fa2a289c7d6159cfcf06a51aa65f38253a8fae75407`, container
     `forge-otel-dashboard`, and `restart: unless-stopped`. Anonymous access is enabled by
     `DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"` and bounded by the sole loopback host
     mapping `127.0.0.1:18888:18888`. Aspire's OTLP/gRPC `18889` and OTLP/HTTP `18890` ports are
@@ -586,8 +598,9 @@ Owning tests: `TestGoStacksShipPinnedMultiStageDockerfile`,
 One gate definition, multiple callers — no local/CI drift. `mise.toml` holds `[tools]` (toolchain
 + lefthook) and `[tasks]` (`lint`/`fmt`/`test`/`ci`). **lefthook** runs fast checks
 (secret-scan + lint + format) on `pre-commit` and full tests on `pre-push`, calling the mise tasks.
-**GitHub Actions** calls the same `mise run ci` (§ below). lefthook installs in chain mode after
-`bd init`.
+**GitHub Actions** calls the same `mise run ci` (§ below). lefthook owns `.git/hooks` and also runs
+Beads (`bd hooks run <hook>`) as a `beads` command in five hooks; `bd init` is run with
+`--skip-hooks` (ADR-0024).
 
 ### 10.1 Overlay tool table (de-staled — xUnit, pyright, no NUnit/mypy)
 
@@ -1001,7 +1014,7 @@ Feature's `all-children` gate IS the seam test.)*
 | **CI resolves** | `ud1` (CI workflow) × `x2k` (mise `ci` task) | **Gate-pipeline Feature gate**: every shipped overlay's `mise.toml` defines a `ci` task that `mise run ci` resolves to, across all v1 stacks. | Feature `all-children` gate. |
 | **Update idempotence** | `369` (steps interpreter) × `cjl` (normalization/refresh) | **Maintainer-refresh Feature gate**: `forge update --stack <key>` run twice with no upstream change → `templates/golden/<key>/` byte-identical, overlay untouched, git diff empty. | Feature `all-children` gate. |
 | **Conformance fixture** | `zz8` (publish guidelines) → `ebp` (conformance test) | Precondition, not a composition seam: `ebp` reads the guideline files from the in-repo vendored snapshots (`test/testdata/guidelines/`, **ADR-0018**), refreshed from the canonical path by `cp -f` after `zz8` publishes. | Plain `blockedBy` edge (`ebp` blocked-by `zz8`). |
-| **Chain-mode hooks** | `485` (verify beads hooks survive `lefthook install`) → `x2k` (real multi-job lefthook) | `485` proves chain mode in isolation; the local smoke (§16.1) exercises pre-commit/pre-push at runtime without duplicating the `485` proof. | `x2k` blocked-by `485` (existing edge). |
+| **Chain-mode hooks** | `485` (verify beads hooks survive `lefthook install`) → `x2k` (real multi-job lefthook) | *Superseded in part by ADR-0024: Lefthook owns `.git/hooks` and runs Beads as a command; `TestLefthookOwnsGitHooksAndRunsBeadsOncePerHook` proves it in isolation.* `485` proved chain mode in isolation; the local smoke (§16.1) exercises pre-commit/pre-push at runtime without duplicating the `485` proof. | `x2k` blocked-by `485` (existing edge). |
 | **Telemetry bootstrap** | overlay telemetry module + test × stack manifest OpenTelemetry dependency (`agentic_template_start-6cf`, ADR-0020) | `TestGoldenStacksShipTelemetryBootstrap` (`test/golden_assets_test.go`): for every v1 stack, the manifest pins the OpenTelemetry dependency **and** the overlay ships the telemetry module and its test; `TestPythonStacksRunUnderOpentelemetryInstrument` pins the `serve`/`run-cli` wrapper task. | Epic `all-children` gate; each platform child (`.3`–`.6`) turns its rows green. |
 | **Container image** | Go overlay `Dockerfile` × overlay `mise.toml` tool pins and image tasks × Go `ci.yml` (ADR-0023) | `TestGoStackDockerfileToolVersionsMatchMise` (`test/go_container_assets_test.go`): the image's Go and golangci-lint versions equal the mise pins. `TestGoStacksDefineContainerImageGates` (`internal/scaffold/gate_assets_test.go`): `ci` lints without Docker and `ci.yml` reaches the scan only through mise. | Feature gate of the container-image epic (`agentic_template_start-ee5`) |
 
@@ -1057,6 +1070,23 @@ parameters, so blind-copying the raw template would write unrendered `{{ }}` syn
 `missingkey=error`); once it exists, upgrade never touches it again — hand edits and its managed
 allow-block (kept in sync via `forge sync-allowlist`) both survive. A repo with no manifest yet
 (uninferable params) skips the render silently rather than guessing.
+
+The Go stacks' container files (`Dockerfile`, `.dockerignore`, `CONTAINER.md`; ADR-0023) are
+delivered **add-if-missing**, only for a repo whose `.forge/manifest.json` names `go-cli-cobra`,
+`go-api-chi` or `go-web-templ`; a repo with no manifest, or an empty `stack`, is skipped silently
+because the stack is never guessed. The build pair is all-or-nothing against a custom setup: if either
+`Dockerfile` or `.dockerignore` exists with content that differs from the embedded file, nothing
+is added, because the shipped `.dockerignore` is an allowlist (it starts with `*`) that would
+break a hand-written Dockerfile. An existing `CONTAINER.md` is never overwritten. Ownership is
+decided by content, with no progress record: a build-pair file byte-identical to the embedded
+one was written by forge, so an upgrade interrupted partway is completed on retry instead of
+being mistaken for a custom setup. Each file is written under a temporary name and renamed into
+place, `.dockerignore` first and `Dockerfile` last, and the version is stamped only afterwards. Added files are reported in the upgrade's updated list and
+one stderr notice says what upgrade did *not* deliver: the `image`, `image:lint` and `image:scan`
+mise tasks, the `hadolint` and `trivy` pins, the CI scan step, and the `PORT`/`slog` application
+changes are stack-overlay content, and the Dockerfile's Go, golangci-lint (and templ) versions
+must be aligned with the repo's `mise.toml`. Owning tests: `TestRunAddsGoContainerFilesForEachGoStack`
+and its siblings in `internal/upgrade/upgrade_test.go`.
 
 Version state lives in `.forge-infra-version` (repo root). Missing file → version 0 → always stale.
 Managed writes happen first; the version marker and manifest are written last so interrupted

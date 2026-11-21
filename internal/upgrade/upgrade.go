@@ -16,7 +16,7 @@ import (
 	"forge/internal/hookcfg"
 )
 
-const Version = 9
+const Version = 10
 
 const versionFile = ".forge-infra-version"
 
@@ -130,6 +130,17 @@ func Run(assets fs.FS, targetDir string, checkOnly bool) (Status, error) {
 		}
 		if rendered {
 			status.Updated = append(status.Updated, "opencode.jsonc")
+		}
+	}
+
+	if manifestErr == nil {
+		added, err := addGoContainerFilesIfMissing(assets, targetDir, m)
+		if err != nil {
+			return Status{}, err
+		}
+		if len(added) > 0 {
+			status.Updated = append(status.Updated, added...)
+			fmt.Fprintln(os.Stderr, goContainerNotice)
 		}
 	}
 
@@ -346,4 +357,140 @@ func readOnDiskVersion(targetDir string) int {
 		return 0
 	}
 	return v
+}
+
+// goContainerFiles are the static container files the Go stacks ship in their
+// overlay (ADR-0023). upgrade delivers them add-if-missing; they are hand-
+// edited once present, so they are never part of managedFiles.
+var goContainerFiles = []string{"Dockerfile", ".dockerignore", "CONTAINER.md"}
+
+// goStacks are the stacks whose overlay carries goContainerFiles.
+var goStacks = map[string]bool{
+	"go-cli-cobra": true,
+	"go-api-chi":   true,
+	"go-web-templ": true,
+}
+
+const goContainerNotice = "forge upgrade: added Dockerfile, .dockerignore and CONTAINER.md for the Go container image pattern (ADR-0023).\n" +
+	"  Not touched by upgrade (stack overlay content): the `image`, `image:lint` and `image:scan` mise tasks, the hadolint and trivy tool pins,\n" +
+	"  the CI image scan step, and the PORT / slog changes in the application code.\n" +
+	"  Align the Go and golangci-lint (and templ) versions in the Dockerfile with this repo's mise.toml before building; see CONTAINER.md."
+
+// addGoContainerFilesIfMissing delivers the Go container files to an existing
+// Go-stack repo. A repo whose manifest names no Go stack (including a legacy
+// repo with no stack) is skipped: the stack is never guessed.
+//
+// The build pair (Dockerfile, .dockerignore) is all-or-nothing against a
+// custom setup: if either exists with content that is not forge's, nothing is
+// added, because the shipped .dockerignore is an allowlist (it starts with
+// `*`) that would break a hand-written Dockerfile. CONTAINER.md is never
+// overwritten.
+//
+// An interrupted run is recoverable without any progress record: ownership is
+// decided by content. A build-pair file that is byte-identical to the embedded
+// one was written by forge, so a retry treats it as already delivered and
+// writes whatever is still missing. Each file is written to a temporary name
+// and renamed into place, so a partial write can never be mistaken for a
+// hand-written file. The Dockerfile goes last: without the allowlist
+// .dockerignore its `COPY . .` would take the whole checkout.
+func addGoContainerFilesIfMissing(assets fs.FS, targetDir string, m Manifest) (added []string, err error) {
+	if !goStacks[m.Stack] {
+		return nil, nil
+	}
+
+	// Read every source first so a missing embedded file fails before any write.
+	contents := make(map[string][]byte, len(goContainerFiles))
+	for _, name := range goContainerFiles {
+		src := "templates/golden/" + m.Stack + "/.forge-overlay/" + name
+		data, err := fs.ReadFile(assets, src)
+		if err != nil {
+			return nil, fmt.Errorf("read embedded %s: %w", src, err)
+		}
+		contents[name] = data
+	}
+
+	missing := map[string]bool{}
+	for _, name := range []string{".dockerignore", "Dockerfile"} {
+		state, err := containerFileState(filepath.Join(targetDir, name), contents[name])
+		if err != nil {
+			return nil, fmt.Errorf("inspect %s: %w", name, err)
+		}
+		switch state {
+		case containerFileCustom:
+			return nil, nil
+		case containerFileMissing:
+			missing[name] = true
+		}
+	}
+	state, err := containerFileState(filepath.Join(targetDir, "CONTAINER.md"), contents["CONTAINER.md"])
+	if err != nil {
+		return nil, fmt.Errorf("inspect CONTAINER.md: %w", err)
+	}
+	if state == containerFileMissing {
+		missing["CONTAINER.md"] = true
+	}
+
+	for _, name := range []string{".dockerignore", "CONTAINER.md", "Dockerfile"} {
+		if !missing[name] {
+			continue
+		}
+		if err := writeFileViaRename(filepath.Join(targetDir, name), contents[name], 0o644); err != nil {
+			return added, fmt.Errorf("write %s: %w", name, err)
+		}
+		added = append(added, name)
+	}
+	return added, nil
+}
+
+type containerFileKind int
+
+const (
+	containerFileMissing containerFileKind = iota
+	// containerFileOurs is byte-identical to the embedded file.
+	containerFileOurs
+	// containerFileCustom is anything else: other content, a symlink, a directory.
+	containerFileCustom
+)
+
+func containerFileState(path string, embedded []byte) (containerFileKind, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return containerFileMissing, nil
+		}
+		return containerFileMissing, err
+	}
+	if !info.Mode().IsRegular() {
+		return containerFileCustom, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return containerFileMissing, err
+	}
+	if bytes.Equal(data, embedded) {
+		return containerFileOurs, nil
+	}
+	return containerFileCustom, nil
+}
+
+// writeFileViaRename writes data to a temporary file next to path and renames
+// it into place, so path either does not exist or holds the complete content.
+func writeFileViaRename(path string, data []byte, mode os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".forge-upgrade-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpName, mode); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }

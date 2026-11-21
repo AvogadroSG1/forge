@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -26,7 +27,7 @@ const otelComposeAssetDir = "templates/common/otel"
 const otelComposeConfigTimeout = 30 * time.Second
 
 const (
-	otelDashboardImage         = "mcr.microsoft.com/dotnet/aspire-dashboard:13.6.5"
+	otelDashboardImage         = "mcr.microsoft.com/dotnet/aspire-dashboard:13.6.5@sha256:e2b7cf9a4ead932de46c6fa2a289c7d6159cfcf06a51aa65f38253a8fae75407"
 	otelDashboardContainerName = "forge-otel-dashboard"
 )
 
@@ -258,4 +259,23 @@ func serviceNames(compose otelComposeFile) []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+// otelPinnedImage matches `<repository>:<tag>@sha256:<64 hex>`. The tag is
+// documentation; the digest is what Compose pulls (ADR-0023 Pinning).
+var otelPinnedImage = regexp.MustCompile(`^[^@\s]+:[^@\s]+@sha256:[0-9a-f]{64}$`)
+
+func TestOtelComposeImagesPinnedByDigest(t *testing.T) {
+	var compose otelComposeFile
+	if err := yaml.Unmarshal(readOtelAsset(t, "compose.yaml"), &compose); err != nil {
+		t.Fatalf("parse %s/compose.yaml as YAML: %v", otelComposeAssetDir, err)
+	}
+	if len(compose.Services) == 0 {
+		t.Fatal("compose.yaml has no services")
+	}
+	for name, service := range compose.Services {
+		if !otelPinnedImage.MatchString(service.Image) {
+			t.Errorf("service %s image = %q, want <repository>:<tag>@sha256:<64 hex digits>", name, service.Image)
+		}
+	}
 }

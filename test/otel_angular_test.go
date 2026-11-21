@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -808,4 +809,128 @@ func assertNoInjectedFile(t *testing.T, root string) {
 func fileExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
+}
+
+// otelAngularTaskCopies returns the eight copies of the endpoint guard task
+// (dev/build in the standalone overlay, web-dev/web-build in each backend
+// overlay), keyed "<stack>/<task>" and holding the whole `[tasks.<name>]`
+// section as shipped in the template source.
+func otelAngularTaskCopies(t *testing.T) map[string]string {
+	t.Helper()
+
+	copies := map[string]string{}
+	add := func(stack, src string, tasks ...string) {
+		for _, task := range tasks {
+			start := strings.Index(src, "[tasks."+task+"]\n")
+			if start < 0 {
+				t.Fatalf("%s: no [tasks.%s]", stack, task)
+			}
+			section := src[start:]
+			const closer = "\n'''\n"
+			end := strings.Index(section, closer)
+			if end < 0 {
+				t.Fatalf("%s: [tasks.%s] has no closing '''", stack, task)
+			}
+			copies[stack+"/"+task] = section[:end+len(closer)]
+		}
+	}
+
+	standalone, err := fs.ReadFile(forge.Assets(), "templates/golden/angular/.forge-overlay/mise.toml")
+	if err != nil {
+		t.Fatalf("read angular overlay mise.toml: %v", err)
+	}
+	add("angular", string(standalone), "dev", "build")
+	for _, backend := range otelAngularBackends {
+		path := "templates/golden/" + backend + "/.forge-overlay/mise.toml.tmpl"
+		data, err := fs.ReadFile(forge.Assets(), path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		block, err := extractOtelAngularTemplateBlock(string(data))
+		if err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		add(backend, block, "web-dev", "web-build")
+	}
+	return copies
+}
+
+// All eight guard copies MUST stay identical apart from the task name, the
+// description and the npm invocation before --define, and each MUST pin its shell so the
+// POSIX-only bracket expression is never parsed by mise's inline shell
+// (zsh, fish, ...).
+func TestOtelAngularEndpointGuardCopiesIdenticalAndShellPinned(t *testing.T) {
+	copies := otelAngularTaskCopies(t)
+	if len(copies) != 8 {
+		t.Fatalf("found %d guard copies, want 8: %v", len(copies), mapKeys(copies))
+	}
+
+	normalize := func(key, section string) string {
+		task := key[strings.Index(key, "/")+1:]
+		var kept []string
+		for line := range strings.SplitSeq(section, "\n") {
+			if strings.HasPrefix(line, "[tasks.") || strings.HasPrefix(line, "description = ") {
+				continue
+			}
+			if strings.HasPrefix(line, "exec npm ") {
+				// The npm invocation (script, --prefix) legitimately differs.
+				line = "exec npm <invocation> -- " + line[strings.Index(line, "--define"):]
+			}
+			kept = append(kept, line)
+		}
+		out := strings.Join(kept, "\n")
+		return strings.ReplaceAll(out, task+": OTEL_EXPORTER_OTLP_ENDPOINT", "TASK: OTEL_EXPORTER_OTLP_ENDPOINT")
+	}
+
+	shellPin := regexp.MustCompile(`(?m)^shell = "sh -c"$`)
+	var refKey, ref string
+	for _, key := range slices.Sorted(maps.Keys(copies)) {
+		section := copies[key]
+		if !shellPin.MatchString(section) {
+			t.Errorf("%s: task does not carry `shell = \"sh -c\"`:\n%s", key, section)
+		}
+		got := normalize(key, section)
+		if ref == "" {
+			refKey, ref = key, got
+			continue
+		}
+		if got != ref {
+			t.Errorf("%s differs from %s:\n--- %s ---\n%s\n--- %s ---\n%s", key, refKey, refKey, ref, key, got)
+		}
+	}
+}
+
+// Behavioral: even when mise's inline shell is zsh, the pinned task shell
+// keeps the guard rejecting a hostile endpoint before npm runs.
+func TestOtelAngularTasksRejectUnsafeEndpointUnderZshInlineShell(t *testing.T) {
+	zsh, err := exec.LookPath("zsh")
+	if err != nil {
+		t.Skip("zsh is not installed")
+	}
+	for _, target := range otelAngularStubTargets {
+		t.Run(target.name, func(t *testing.T) {
+			h := newOtelAngularStubHarness(t, target.input(t))
+			h.env = append(h.env, "MISE_UNIX_DEFAULT_INLINE_SHELL_ARGS="+zsh+" -c")
+			for _, task := range []string{target.buildTask, target.devTask} {
+				t.Run(task, func(t *testing.T) {
+					h.resetRecord(t)
+					h.writeMiseLocalEndpoint(t, tomlBasicString(`http://collector.example:4318/"x`))
+
+					result := h.run(t, task)
+
+					if result.exitCode != 1 {
+						t.Errorf("mise run %s under zsh: exit = %d, want 1\n%s", task, result.exitCode, result.output)
+					}
+					if !strings.Contains(result.output, "OTEL_EXPORTER_OTLP_ENDPOINT must not contain quotes, backslashes or control characters") {
+						t.Errorf("mise run %s under zsh: missing rejection message\n%s", task, result.output)
+					}
+					for _, argv := range h.stubInvocations(t) {
+						if argv[0] == "npm" {
+							t.Errorf("mise run %s under zsh invoked npm %q; the value MUST be rejected first", task, argv[1:])
+						}
+					}
+				})
+			}
+		})
+	}
 }

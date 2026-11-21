@@ -47,6 +47,11 @@ func wireAssets() fstest.MapFS {
 		"templates/common/mise/conf.d/otel.toml":           &fstest.MapFile{Data: []byte("[env]\nOTEL_EXPORTER_OTLP_ENDPOINT = \"http://localhost:4318\"\n")},
 		"templates/common/otel/compose.yaml":               &fstest.MapFile{Data: []byte("name: forge-otel\n")},
 		"templates/common/otel/collector.yaml":             &fstest.MapFile{Data: []byte("receivers:\n  otlp: {}\n")},
+		// seedStaleRepo records the go-cli-cobra stack, so upgrade also
+		// delivers its container files.
+		"templates/golden/go-cli-cobra/.forge-overlay/Dockerfile":    &fstest.MapFile{Data: []byte("# Dockerfile\n")},
+		"templates/golden/go-cli-cobra/.forge-overlay/.dockerignore": &fstest.MapFile{Data: []byte("*\n")},
+		"templates/golden/go-cli-cobra/.forge-overlay/CONTAINER.md":  &fstest.MapFile{Data: []byte("# Container\n")},
 	}
 }
 

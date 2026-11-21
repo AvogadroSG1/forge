@@ -1,4 +1,18 @@
-# Extended from the minimal secret-scan hook contract; x2k adds lint/format/test gates here.
+# Lefthook owns .git/hooks (ADR-0024). Beads runs as a Lefthook command, so
+# `bd init --skip-hooks` plus plain `lefthook install` is the whole setup: no
+# core.hooksPath, no wrapper scripts, no chain repair. Extended from the minimal
+# secret-scan hook contract; x2k adds lint/format/test gates here.
+#
+# Each beads command mirrors bd's own hook shim: skipped when bd is absent, run
+# with BD_GIT_HOOK=1, and exit 3 (Beads database not initialized, e.g. a fresh
+# clone before `bd bootstrap`) does not block the git operation.
+#
+# Git's hook arguments (a remote URL, a commit message path) are data, and
+# Lefthook splices {0}/{N} into the shell source unescaped. So {0} is never
+# used, and each {N} appears only as the body of a quoted here-document, where
+# the shell expands nothing. That keeps one argument one argument, spaces and
+# all, and executes none of it. An argument git did not pass stays the literal
+# placeholder and is dropped. Do not move a {N} outside its here-document.
 pre-commit:
   parallel: true
   commands:
@@ -8,8 +22,90 @@ pre-commit:
       run: mise run lint
     fmt:
       run: mise run fmt
+    beads:
+      run: |
+        command -v bd >/dev/null 2>&1 || exit 0
+        BD_GIT_HOOK=1 bd hooks run pre-commit || { rc=$?; [ "$rc" -eq 3 ] || exit "$rc"; }
 
 pre-push:
   commands:
     test:
       run: mise run test
+    beads:
+      run: |
+        command -v bd >/dev/null 2>&1 || exit 0
+        open='{'
+        set --
+        arg=$(cat <<'FORGE_HOOK_ARG_7c41d9e2'
+        {1}
+        FORGE_HOOK_ARG_7c41d9e2
+        )
+        [ "$arg" = "${open}1}" ] || set -- "$@" "$arg"
+        arg=$(cat <<'FORGE_HOOK_ARG_7c41d9e2'
+        {2}
+        FORGE_HOOK_ARG_7c41d9e2
+        )
+        [ "$arg" = "${open}2}" ] || set -- "$@" "$arg"
+        BD_GIT_HOOK=1 bd hooks run pre-push "$@" || { rc=$?; [ "$rc" -eq 3 ] || exit "$rc"; }
+
+post-merge:
+  commands:
+    beads:
+      run: |
+        command -v bd >/dev/null 2>&1 || exit 0
+        open='{'
+        set --
+        arg=$(cat <<'FORGE_HOOK_ARG_7c41d9e2'
+        {1}
+        FORGE_HOOK_ARG_7c41d9e2
+        )
+        [ "$arg" = "${open}1}" ] || set -- "$@" "$arg"
+        BD_GIT_HOOK=1 bd hooks run post-merge "$@" || { rc=$?; [ "$rc" -eq 3 ] || exit "$rc"; }
+
+post-checkout:
+  commands:
+    beads:
+      run: |
+        command -v bd >/dev/null 2>&1 || exit 0
+        open='{'
+        set --
+        arg=$(cat <<'FORGE_HOOK_ARG_7c41d9e2'
+        {1}
+        FORGE_HOOK_ARG_7c41d9e2
+        )
+        [ "$arg" = "${open}1}" ] || set -- "$@" "$arg"
+        arg=$(cat <<'FORGE_HOOK_ARG_7c41d9e2'
+        {2}
+        FORGE_HOOK_ARG_7c41d9e2
+        )
+        [ "$arg" = "${open}2}" ] || set -- "$@" "$arg"
+        arg=$(cat <<'FORGE_HOOK_ARG_7c41d9e2'
+        {3}
+        FORGE_HOOK_ARG_7c41d9e2
+        )
+        [ "$arg" = "${open}3}" ] || set -- "$@" "$arg"
+        BD_GIT_HOOK=1 bd hooks run post-checkout "$@" || { rc=$?; [ "$rc" -eq 3 ] || exit "$rc"; }
+
+prepare-commit-msg:
+  commands:
+    beads:
+      run: |
+        command -v bd >/dev/null 2>&1 || exit 0
+        open='{'
+        set --
+        arg=$(cat <<'FORGE_HOOK_ARG_7c41d9e2'
+        {1}
+        FORGE_HOOK_ARG_7c41d9e2
+        )
+        [ "$arg" = "${open}1}" ] || set -- "$@" "$arg"
+        arg=$(cat <<'FORGE_HOOK_ARG_7c41d9e2'
+        {2}
+        FORGE_HOOK_ARG_7c41d9e2
+        )
+        [ "$arg" = "${open}2}" ] || set -- "$@" "$arg"
+        arg=$(cat <<'FORGE_HOOK_ARG_7c41d9e2'
+        {3}
+        FORGE_HOOK_ARG_7c41d9e2
+        )
+        [ "$arg" = "${open}3}" ] || set -- "$@" "$arg"
+        BD_GIT_HOOK=1 bd hooks run prepare-commit-msg "$@" || { rc=$?; [ "$rc" -eq 3 ] || exit "$rc"; }

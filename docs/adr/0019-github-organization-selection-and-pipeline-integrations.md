@@ -2,6 +2,8 @@
 
 **Status:** accepted · 2026-09-12
 
+> **Superseded in part by ADR-0024 (2026-11-20).** `repairBeadsHookChain` and the forced `lefthook install` it followed are gone: `bd init --skip-hooks` plus a plain `lefthook install` now leaves Lefthook as the sole owner of `.git/hooks`, with Beads run as a Lefthook command. The diagram below shows the sequence as originally decided.
+
 ## Context
 
 During the Forge Bug Bash (epic `agentic_template_start-sgz`), multiple operational and integration issues were identified across `forge init`, template assets, and generated repository tooling:

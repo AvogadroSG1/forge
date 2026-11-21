@@ -273,6 +273,25 @@ Overwrite managed files from the embedded template:
 go run ./cmd/forge upgrade
 ```
 
+For a repo whose manifest names a Go stack (`go-cli-cobra`, `go-api-chi`, `go-web-templ`),
+upgrade also adds the container pattern's `Dockerfile`, `.dockerignore` and `CONTAINER.md` when
+they are missing. If a `Dockerfile` or `.dockerignore` of your own already exists nothing is added, and an
+existing `CONTAINER.md` is kept; an upgrade interrupted partway is completed on the next run. Upgrade does not add the `image*` mise tasks, the `hadolint` and
+`trivy` pins, the CI scan step or the `PORT`/`slog` code changes; it prints a notice listing them.
+See `CONTAINER.md` after upgrading.
+
+Git hooks are not migrated by `upgrade`. Repos generated before ADR-0024 still have
+`core.hooksPath=.beads/hooks` and Beads/Lefthook chained through `*.old` / `*.lefthook` files.
+Lefthook now owns `.git/hooks` and runs Beads as a `lefthook.yml` command. To migrate a repo by hand:
+
+```bash
+git config --unset core.hooksPath
+rm -f .beads/hooks/*.old .beads/hooks/*.lefthook
+# copy the `beads` commands (and the post-merge, post-checkout and prepare-commit-msg hooks)
+# from templates/golden/<stack>/.forge-overlay/lefthook.yml into your lefthook.yml
+lefthook install
+```
+
 ### Refresh A Maintained Snapshot
 
 `update` is a maintainer-only path for regenerating vendored stack snapshots from `sources.yaml`.
@@ -363,6 +382,8 @@ bats test/secret-scan.bats
 GOCACHE=$PWD/.cache/go-build go test -tags=integration -timeout 15m -run TestGeneratedGoStacksPassFitnessBaseline ./test/
 # Live Docker lifecycle test for the shared OTel Collector + Aspire viewer (requires Docker; skipped unless set)
 FORGE_DOCKER_TESTS=1 GOCACHE=$PWD/.cache/go-build go test ./test/ -run OtelLifecycle -count=1 -timeout 10m
+# Real `ng build` bundle checks for the Angular OTLP define bridge (requires npm, node and network; skipped unless set)
+FORGE_SMOKE_NETWORK=1 GOCACHE=$PWD/.cache/go-build go test ./test/ -run "TestOtelAngularStandaloneBundleInlinesEndpoint|TestOtelAngularFullstackBundleInlinesEndpoint" -count=1 -timeout 30m
 # Live build-and-run test for the Go stack container images (requires Docker and network; skipped unless set).
 # FORGE_DOCKER_BUILD_ARGS adds arguments to every `docker build`, e.g. for a registry mirror.
 FORGE_DOCKER_TESTS=1 GOCACHE=$PWD/.cache/go-build go test ./test/ -run "TestGoStackContainerImagesBuildAndRun|TestGoWebTemplImageServesTemplateOnlyEdits" -count=1 -timeout 40m

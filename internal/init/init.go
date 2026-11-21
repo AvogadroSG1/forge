@@ -68,10 +68,10 @@ func (i Initializer) Run(ctx context.Context, targetDir string, vars project.Var
 		command string
 		args    []string
 	}{
-		{name: "bd init", command: "bd", args: []string{"init"}},
+		{name: "bd init", command: "bd", args: []string{"init", "--skip-hooks"}},
 		{name: "mise trust", command: "mise", args: []string{"trust", "--all"}},
 		{name: "mise install", command: "mise", args: []string{"install"}},
-		{name: "lefthook install", command: "mise", args: []string{"exec", "--", "lefthook", "install", "--force"}},
+		{name: "lefthook install", command: "mise", args: []string{"exec", "--", "lefthook", "install"}},
 	}
 
 	for _, step := range steps {
@@ -123,9 +123,6 @@ func (i Initializer) Run(ctx context.Context, targetDir string, vars project.Var
 			}
 		}
 		if step.name == "lefthook install" {
-			if err := repairBeadsHookChain(targetDir); err != nil {
-				return failWithRecovery(targetDir, "lefthook chain repair", err)
-			}
 			if err := i.Runner.Run(ctx, targetDir, "fitness functions onboard", "agent-fitness-functions", "client", "onboard", "--enforcement", "advisory"); err != nil {
 				fmt.Fprintf(os.Stderr, "warning: agent-fitness-functions onboarding failed: %v\n", err)
 			}
@@ -206,59 +203,6 @@ func runInstillInit(ctx context.Context, runner delegate.Runner, targetDir strin
 	}
 
 	return initialized, nil
-}
-
-func repairBeadsHookChain(targetDir string) error {
-	hooksDir := filepath.Join(targetDir, ".beads", "hooks")
-	entries, err := os.ReadDir(hooksDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".old") {
-			continue
-		}
-		if err := repairBeadsHook(hooksDir, entry.Name()); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func repairBeadsHook(hooksDir string, oldName string) error {
-	hookName := strings.TrimSuffix(oldName, ".old")
-	hookPath := filepath.Join(hooksDir, hookName)
-	lefthookPath := hookPath + ".lefthook"
-
-	if _, err := os.Stat(hookPath); err != nil {
-		return err
-	}
-	if _, err := os.Stat(lefthookPath); err == nil {
-		return nil
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	if err := os.Rename(hookPath, lefthookPath); err != nil {
-		return err
-	}
-
-	wrapper := chainedHookWrapper(hookName)
-	return os.WriteFile(hookPath, []byte(wrapper), 0o755)
-}
-
-func chainedHookWrapper(hookName string) string {
-	return fmt.Sprintf(`#!/usr/bin/env bash
-set -euo pipefail
-
-script_dir="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
-"$script_dir/%[1]s.old" "$@"
-exec "$script_dir/%[1]s.lefthook" "$@"
-`, hookName)
 }
 
 func cleanupEmptyToolDirs(targetDir string) error {

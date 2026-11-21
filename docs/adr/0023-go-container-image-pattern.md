@@ -2,6 +2,21 @@
 
 **Status:** accepted · 2026-11-20
 
+> **Amended 2026-11-20 (agentic_template_start-49o).** `forge upgrade` now delivers the Go stacks'
+> `Dockerfile`, `.dockerignore` and `CONTAINER.md`, which replaces the "Deferred" alternative and
+> the consequence that repos "do not receive these files" below. They are added **only if
+> missing**, for a repo whose `.forge/manifest.json` names `go-cli-cobra`, `go-api-chi` or
+> `go-web-templ` (a repo with no manifest or an empty `stack` is skipped; the stack is never
+> guessed). If either `Dockerfile` or `.dockerignore` exists with content that is not forge's,
+> nothing is added, because the shipped `.dockerignore` is an allowlist starting with `*` that
+> would break a hand-written Dockerfile; an existing `CONTAINER.md` is never overwritten. A
+> build-pair file byte-identical to the embedded one counts as forge's, so an upgrade interrupted
+> partway is completed on retry; files are written by rename, `Dockerfile` last. Upgrade does **not** touch
+> stack-overlay content: the `image`, `image:lint` and `image:scan` tasks, the `hadolint` and
+> `trivy` pins, the CI scan step, and the `PORT`/`slog` application changes. It prints a notice
+> saying so, and the Dockerfile's Go, golangci-lint (and templ) versions must be aligned with the
+> repo's `mise.toml` by hand. Infrastructure version 10.
+
 ## Context
 
 The Go stacks shipped no container image definition. A generated repo could be built and tested, but anyone who wanted to run it in a container, or hand it to an agent running in a sandbox, had to write a Dockerfile from scratch. The examples people reach for break rules forge already enforces elsewhere: tools installed with `@latest`, a Go version different from the stack's, a hardcoded `GOARCH`, a single stage, and a root user.
@@ -36,6 +51,13 @@ flowchart LR
 **Pinning.** Every image, including the `# syntax=` frontend, is written `tag@sha256:digest`. The tag is documentation; the digest is what is pulled. Digests are multi-platform index digests, so one pin serves `linux/amd64` and `linux/arm64`. Every stage's `FROM` refers to one of the pinned `ARG`s, so no stage can introduce an unpinned image. The Go and golangci-lint versions equal the stack's `mise.toml` pins, and a test enforces that. gopls is an exact module version, verified by the Go checksum database.
 
 This departs from the position recorded in Beads issue `agentic_template_start-3xw.23`, which left image digests unpinned. That position still stands for the OTel Compose images; a tag can be re-pointed, and an image we ship as a pattern for production use should not depend on that.
+
+> **Amended 2026-11-20 (agentic_template_start-1w3).** The OTel Compose images are now digest-pinned
+> too, so the sentence above that this position "still stands for the OTel Compose images" no
+> longer holds. `templates/common/otel/compose.yaml` writes `busybox`, the Aspire dashboard and the
+> Collector as `tag@sha256:<multi-platform index digest>`, and `TestOtelComposeImagesPinnedByDigest`
+> enforces the shape. Moving a Compose image is now a deliberate digest change plus an infra
+> version bump (the file is upgrade-managed), the same as any other pin.
 
 **Alpine packages are not version-pinned.** Alpine removes superseded package versions from its repositories, so exact pins make a Dockerfile unbuildable within weeks. The digest-pinned base fixes the Alpine release, which bounds the drift. hadolint rule `DL3018` is ignored inline, with this reason.
 

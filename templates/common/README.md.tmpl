@@ -34,7 +34,9 @@ Browser bundles cannot read the environment, so the endpoint is inlined at build
 SvelteKit read `VITE_OTEL_EXPORTER_OTLP_ENDPOINT`. Angular uses `mise run dev` / `mise run build`
 (fullstack: `mise run web-dev` / `mise run web-build`), which pass `OTEL_EXPORTER_OTLP_ENDPOINT`
 to `ng` via `--define`; plain `npm start` / `ng build` stays silent by design. Those Angular tasks
-refuse an endpoint containing `"`, `\` or control characters.
+refuse an endpoint containing `"`, `\` or control characters. The endpoint is inlined into the
+public bundle (the Angular define bridge and the `VITE_` variables alike), so the URL MUST NOT
+contain credentials: anyone who can load the app can read it.
 
 To point at a different collector, set `OTEL_EXPORTER_OTLP_ENDPOINT` (and the per-signal and
 `VITE_` variables you use) under `[env]` in `mise.local.toml`. Under `mise`, `mise.local.toml`
