@@ -40,10 +40,10 @@ The three Go stacks and the three Python stacks also ship a container image patt
 |---|---|
 | `internal/piagent/` | A standard-library Go client for `pi --mode rpc`, with tests that need no Pi |
 | `POST /agent/prompt` (api) or the `agent` subcommand (cli) | One wired example; the HTTP route is off unless `PI_AGENT_ENABLED=1` |
-| `Dockerfile.agent` | `agent` (the application binary plus Node and Pi) and `agent-sandbox` (the sandbox plus Node and Pi), built by `mise run image:agent` |
+| `Dockerfile.agent` | `agent` (the application binary plus Node and Pi) and `agent-sandbox` (the sandbox plus Node and Pi), built by `mise run image:agent`; `mise run image:agent:scan` is a CI step |
 | `AGENT.md` | Usage, credentials, and how to refresh the Pi and Node pins |
 
-Without the flag nothing changes: the `runtime` and `sandbox` images stay as they are. See [ADR-0027](./docs/adr/0027-agent-addon-dimension.md).
+Without the flag nothing changes: the `runtime` and `sandbox` images stay as they are. Node base images can carry findings a Go team cannot fix, so a team may remove the scan step. An existing repo can opt in with `forge upgrade --agent pi`. See [ADR-0027](./docs/adr/0027-agent-addon-dimension.md) and [ADR-0028](./docs/adr/0028-upgrade-delivers-agent-addon.md).
 
 ## How It Works
 
@@ -242,7 +242,7 @@ Key flags:
 - `--stack`
 - `--frontend vite-ts|sveltekit|angular` for fullstack projects on an api backend stack
 - `--api-base-url` for frontend projects (fullstack derives it from the backend port)
-- `--agent pi|none` to add the Pi agent add-on to `go-api-chi` or `go-cli-cobra` (default `none`)
+- `--agent pi|none` to add the Pi agent add-on to `go-api-chi` or `go-cli-cobra` (default `none`); `forge upgrade --agent pi` adds it to an existing repo
 - `--author-name`
 - `--author-email`
 - `--remote gh|url|none`
@@ -292,6 +292,22 @@ existing `CONTAINER.md` is kept; an upgrade interrupted partway is completed on 
 `trivy` pins, the CI scan step or the application code changes (`PORT`/`slog` for Go, the `serve` module for Python); it prints a notice listing them.
 For Python it also leaves `pyproject.toml` and `mise.toml` alone, so the Dockerfile builds only once the repo has a `uv.lock` and an `app` console script.
 See `CONTAINER.md` after upgrading.
+
+For a repo whose manifest records `agent: pi`, every stale upgrade overwrites four add-on files from the embedded copy: `Dockerfile.agent`, `.config/mise/conf.d/pi.toml`, `internal/piagent/client.go` and `internal/piagent/client_test.go`. Local edits to them are lost and a deleted one is restored. Change the Node or Pi pins with the Docker build args `NODE_IMAGE` and `PI_VERSION`, not by editing the file.
+
+Add the Pi agent add-on to an existing `go-api-chi` or `go-cli-cobra` repo:
+
+```bash
+go run ./cmd/forge upgrade --agent pi
+```
+
+This needs `.forge/manifest.json` and a `module` line in `go.mod`; otherwise it fails and writes nothing. It cannot be combined with `--check`, and `--agent none` is an error. The run works on a repo that is already current. It writes the four files above, then `AGENT.md` and the stack wiring (`internal/httpapi/agent.go` and `agent_test.go`, or `cmd/agent.go` and `agent_test.go`) only if they are missing. Those files are yours after opt-in: later upgrades never write them. Re-running an interrupted opt-in finishes it.
+
+Upgrade does not edit stack overlay files, so a stderr notice lists the manual steps:
+
+- `go-api-chi`: add `mountAgent(router, logger)` to `internal/httpapi/router.go`. Until then the route is not mounted and lint reports `mountAgent` as unused.
+- Both stacks: set `image:lint` to `hadolint Dockerfile*` in `mise.toml`.
+- Both stacks: add the CI step `mise run image:agent:scan` to `.github/workflows/ci.yml`.
 
 Git hooks are not migrated by `upgrade`. Repos generated before ADR-0024 still have
 `core.hooksPath=.beads/hooks` and Beads/Lefthook chained through `*.old` / `*.lefthook` files.

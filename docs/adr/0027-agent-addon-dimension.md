@@ -2,6 +2,8 @@
 
 **Status:** accepted · 2026-11-21 (agentic_template_start-589)
 
+> **Superseded in part by ADR-0028 (2026-11-21).** `forge upgrade` now delivers the add-on to existing repos (`forge upgrade --agent pi`) and refreshes its wholly-owned files, and `mise run image:agent:scan` is a CI step for repos scaffolded with the add-on. The consequences below that say otherwise no longer hold. The rest of this ADR stands.
+
 ## Context
 
 Go systems built from `go-api-chi` and `go-cli-cobra` should be able to run agentic flows: hand a prompt to a coding agent, let it work, and use the result. The agent wanted is [Pi](https://pi.dev) (`@earendil-works/pi-coding-agent`). The generated images contained no agent and no Node, and the generated Go code had no way to talk to one.
@@ -70,8 +72,8 @@ Pi is pinned to an exact version and installed with `--ignore-scripts`. The Node
 
 - `Writer.Write` now composes more trees than ADR-0013 recorded ("at most two"): common, vanilla, overlay, the optional frontend fragment, then the optional add-on's two trees. That consequence of ADR-0013 is superseded here.
 - `Dockerfile.agent` builds `FROM` locally tagged images, so it needs the default `docker` build driver and `mise run image` first; `image:agent` depends on it.
-- `image:agent:scan` exists but is not a CI step. Node base images carry findings a Go team cannot fix; teams that ship the `agent` image should add the step.
+- `image:agent:scan` exists but is not a CI step. Node base images carry findings a Go team cannot fix; teams that ship the `agent` image should add the step. (Superseded by ADR-0028: it is now a CI step for repos with the add-on; a team may remove it.)
 - The Pi version and one Node digest are new pins to refresh; `AGENT.md` in the generated repo says how.
-- `forge upgrade` does not deliver the add-on to existing repos, and does not refresh its files. Both are follow-up work the manifest field makes possible.
+- `forge upgrade` does not deliver the add-on to existing repos, and does not refresh its files. Both are follow-up work the manifest field makes possible. (Superseded by ADR-0028.)
 - Pi is not added as a harness target: the generated repo's guard hook, allowlists and skills still cover Claude Code, Codex and OpenCode only. Pi has no permission prompts; its boundary is the container.
 - Other stacks can offer the add-on by listing it in the catalog and adding a `templates/addons/pi/<stack>/` tree. `TestPiAddonStacksMatchTheCatalog` fails until the tests cover the new stack.

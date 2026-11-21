@@ -45,7 +45,8 @@ floor, not the ceiling) · ADR-0012 (skill provisioning via APM-backed instill) 
 OpenTelemetry bootstrap in every stack) · ADR-0023 (pinned two-target container image pattern for
 the Go stacks) · ADR-0025 (Python stacks use uv with a committed `uv.lock`) · ADR-0026 (pinned
 two-target container image pattern for the Python stacks) · ADR-0027 (agent add-on dimension:
-opt-in Pi layer for the Go api and cli stacks).
+opt-in Pi layer for the Go api and cli stacks) · ADR-0028 (`forge upgrade` delivers and
+refreshes the agent add-on).
 
 ---
 
@@ -116,6 +117,9 @@ reverse; ownership is declared once, per file, not inferred at write time.
 | **Co-owned (hook config)** | `.claude/settings.json`, `.codex/hooks.json` | Other tools (`bd`, notably) append their own entries into the same top-level `hooks` object. Reconciled by owned-entry identity (`internal/hookcfg.Reconcile`, **ADR-0016**) — never blind-overwritten. |
 | **Co-owned (init-rendered)** | `opencode.jsonc` | Templated with init-time parameters that only exist in memory during `forge init`. `forge upgrade` renders it from `.forge/manifest.json`'s persisted params **only when the file is missing**; once present, upgrade never touches it again (**ADR-0017**). |
 | **Add-if-missing (container files)** | `Dockerfile`, `.dockerignore`, `CONTAINER.md` for the three Go stacks (`go-cli-cobra`, `go-api-chi`, `go-web-templ`) and the three Python stacks (`python-cli-typer`, `python-fastapi`, `python-web-jinja`) | Hand-edited once present. `forge upgrade` writes them from the stack's overlay only when the manifest names one of those six stacks and neither `Dockerfile` nor `.dockerignore` exists with content that is not forge's (**ADR-0023**, **ADR-0026**); see **§19**. |
+| **Wholly-owned (add-on)** | `Dockerfile.agent`, `.config/mise/conf.d/pi.toml`, `internal/piagent/client.go`, `internal/piagent/client_test.go`, for a repo whose manifest records `agent: pi` | Blind byte-copy from the embedded add-on on every stale upgrade, and at opt-in. Overwrites local edits and restores a deleted file (**ADR-0028**); see **§19**. |
+| **Add-on, delivered at opt-in** | `AGENT.md`, and the stack wiring: `internal/httpapi/agent.go` and `agent_test.go` (`go-api-chi`), `cmd/agent.go` and `agent_test.go` (`go-cli-cobra`) | Written by `forge upgrade --agent pi` only if missing. After opt-in they are the user's code and later upgrades never write them. |
+| **Not delivered, named in the notice** | `mountAgent(router, logger)` in `internal/httpapi/router.go`, `image:lint` in `mise.toml`, the `image:agent:scan` step in `.github/workflows/ci.yml` | Stack overlay content that upgrade never edits. The opt-in notice on stderr lists the manual steps. |
 | **Delegated** | `.beads/` (via `bd`), `.apm/` (via `instill`) | Owned entirely by the delegate tool. `forge` does not write their contents; it only repairs directory permissions it is responsible for (`.beads` 0700) and detects drift. |
 
 Co-owned files are the load-bearing case: a blind overwrite of either co-owned class is the exact
@@ -432,6 +436,17 @@ root sits outside `templates/golden/` so `forge update` never touches it. The `p
 on `go-api-chi`, an `agent` subcommand on `go-cli-cobra`. Without `--agent`, scaffold output is
 unchanged. The manifest records the choice as `agent`, omitted when empty.
 
+The two stacks' overlay `ci.yml` is `ci.yml.tmpl` with a `{{ if .Agent }}` step: repos scaffolded
+with the add-on run `mise run image:agent:scan` after the other steps (ADR-0028). Repos without
+the add-on get a `ci.yml` byte-identical to before. Node base images can carry findings a Go team
+cannot fix, so a team may remove the step.
+
+`forge upgrade` delivers the add-on (ADR-0028, §19): `Dockerfile.agent`,
+`.config/mise/conf.d/pi.toml` and `internal/piagent/client.go` + `client_test.go` are wholly-owned
+and refreshed on every stale upgrade of a repo that records `agent: pi`. `forge upgrade --agent pi`
+opts an existing repo in and also adds `AGENT.md` and the stack wiring if missing, rendered by the
+same renderer as init (`scaffold.RenderAddon`).
+
 ### 9.4 Observability baseline
 
 *(Authoritative: ADR-0020.)*
@@ -732,7 +747,8 @@ to the vendored path.
 
 One **language-agnostic** `ci.yml` shape across all stacks: checkout → install mise →
 `mise install` → `mise run ci`. No inline lint/test/format. The Go and Python stacks append one
-further mise-only step, `mise run image:scan` (§10.4); a Python `ci` task begins with
+further mise-only step, `mise run image:scan` (§10.4); a repo scaffolded with the agent add-on
+appends `mise run image:agent:scan` (§9.3, ADR-0028); a Python `ci` task begins with
 `uv sync --locked`, so a stale `uv.lock` fails the gate. Triggers `on: [push, pull_request]`;
 no scheduled run in v1. Verification asserts every shipped overlay's `mise.toml` defines a `ci`
 task that `mise run ci` resolves to — the contract coupling `ud1` to `x2k` (see Seam Inventory §18).
@@ -1198,6 +1214,68 @@ repo to uv is a manual step (ADR-0025). Container delivery brought the infrastru
 11. Owning tests: `TestRunAddsContainerFilesForEachContainerStack` and its siblings in
 `internal/upgrade/upgrade_test.go`.
 
+#### Agent add-on (ADR-0028)
+
+*(Authoritative: ADR-0028; the add-on itself is §9.3, ADR-0027.)*
+
+For a repo whose manifest records `agent: pi`, every stale upgrade byte-copies four **wholly-owned
+(add-on)** files from the embedded add-on: `Dockerfile.agent`, `.config/mise/conf.d/pi.toml`,
+`internal/piagent/client.go` and `internal/piagent/client_test.go`. The copy overwrites local edits
+and restores a deleted file. The files are hash-pinned alongside the other managed files, so any
+change to them requires an `upgrade.Version` bump; that is how new Pi and Node pins and client
+fixes reach existing repos. Customise pins locally with the Docker build args `NODE_IMAGE` and
+`PI_VERSION`. A repo that does not record the add-on gets none of these files. The add-on brought
+the infrastructure version to 12.
+
+`forge upgrade --agent pi` opts an existing repo in. Rules:
+
+- All preconditions are checked before any write. Failing one is an error and nothing is written:
+  `.forge/manifest.json` exists and names a stack that offers the add-on (`go-api-chi`,
+  `go-cli-cobra`), and `go.mod` has a `module` line. The module path is read from `go.mod` because
+  the manifest does not record it; params are never guessed (ADR-0017).
+- `--agent` with `--check` is an error. `--agent none` is an error: removing an add-on is out of
+  scope.
+- The run does not need a stale version. If the repo is stale, the ordinary managed-file steps run
+  too.
+- It writes the four wholly-owned files, then adds `AGENT.md` (rendered with the stack) and the
+  stack wiring (`internal/httpapi/agent.go` + `agent_test.go` for `go-api-chi`, `cmd/agent.go` +
+  `agent_test.go` for `go-cli-cobra`, rendered with the module path) **only if missing**. An
+  existing file at any of those paths is kept. After opt-in these are the user's code; later
+  upgrades never write them, even if deleted.
+- `scaffold.RenderAddon` serves init and upgrade, so the delivered bytes equal what
+  `forge init --agent pi` writes.
+- `Stamp` runs last and records `agent: pi`, so an interrupted opt-in is finished by re-running
+  the same command.
+- Opt-in on a repo whose manifest already records the add-on behaves as a plain upgrade.
+
+```mermaid
+flowchart TD
+    S["forge upgrade"] --> F{"--agent pi given?"}
+    F -->|"yes"| P{"preconditions hold?"}
+    P -->|"no"| E["error, nothing written"]
+    P -->|"yes"| R{"manifest records agent: pi?"}
+    R -->|"yes"| PL["plain upgrade"]
+    R -->|"no"| ST{"stale?"}
+    F -->|"no"| PL
+    ST -->|"yes"| M["ordinary managed-file steps"]
+    ST -->|"no"| O
+    M --> O["write the four wholly-owned files"]
+    O --> W["add AGENT.md and wiring if missing, print notice"]
+    W --> Z["Stamp records agent: pi"]
+    PL --> PA{"stale and manifest records agent: pi?"}
+    PA -->|"yes"| PO["managed steps, then the four wholly-owned files"]
+    PA -->|"no"| PZ["managed steps if stale"]
+    PO --> PS["Stamp"]
+    PZ --> PS
+```
+
+Opt-in prints a notice on stderr naming what upgrade did not do, because it is stack overlay
+content upgrade never edits. For `go-api-chi`: the `mountAgent(router, logger)` line in
+`internal/httpapi/router.go`; until it is added the route is not mounted and lint reports
+`mountAgent` as unused. For both stacks: `image:lint` should be `hadolint Dockerfile*` in
+`mise.toml` so `Dockerfile.agent` is linted, and the CI step `mise run image:agent:scan` belongs
+in `.github/workflows/ci.yml`.
+
 Version state lives in `.forge-infra-version` (repo root). Missing file → version 0 → always stale.
 Managed writes happen first; the version marker and manifest are written last so interrupted
 upgrades re-apply.
@@ -1206,7 +1284,7 @@ upgrades re-apply.
 after the scaffold writer runs and before Phase 3 (`git add`/`commit`), so a freshly scaffolded
 repo is born at the current infrastructure version — never v0 — and both files ride the initial
 scaffold commit. `.forge/manifest.json` is a committed JSON record (`schemaVersion`,
-`infraVersion`, and the init params `language`, `frontend`, `includePersonal`, `stack`) that lets
+`infraVersion`, and the init params `language`, `frontend`, `includePersonal`, `stack`, and `agent` when the add-on was chosen) that lets
 `forge upgrade` re-render templated files using the params the repo was actually scaffolded with,
 instead of only knowing a bare version integer. `.forge-infra-version` remains the legacy fallback
 marker for repos scaffolded before the manifest existed and for v3-and-earlier `forge` binaries
@@ -1280,6 +1358,53 @@ Scenario: Upgrade never writes template syntax to disk
   When the user runs `forge upgrade`
   Then opencode.jsonc is rendered from the .tmpl using text/template, missingkey=error
   And no file written by upgrade contains unrendered "{{" template syntax
+
+Scenario: Stale upgrade refreshes the add-on's owned files
+  Given a repo whose manifest records agent pi, at an older infrastructure version
+  And Dockerfile.agent has a local edit and internal/piagent/client.go is deleted
+  When the user runs `forge upgrade`
+  Then Dockerfile.agent, .config/mise/conf.d/pi.toml, internal/piagent/client.go and
+    internal/piagent/client_test.go equal the embedded add-on bytes
+  And AGENT.md and the stack wiring files are not written
+
+Scenario: No add-on files for a repo without the add-on
+  Given a go-api-chi repo whose manifest has no agent
+  When the user runs `forge upgrade`
+  Then none of Dockerfile.agent, .config/mise/conf.d/pi.toml or internal/piagent/ is created
+
+Scenario: Opt-in on a current repo
+  Given a go-api-chi repo at the current infrastructure version with no add-on, and a go.mod
+    with a module line
+  When the user runs `forge upgrade --agent pi`
+  Then the four wholly-owned files, AGENT.md, internal/httpapi/agent.go and
+    internal/httpapi/agent_test.go are written, rendered with the module path from go.mod
+  And the manifest records agent pi
+  And a stderr notice names mountAgent, image:lint and image:agent:scan
+
+Scenario: Opt-in keeps an existing wiring file
+  Given a go-cli-cobra repo with no add-on and a hand-written cmd/agent.go
+  When the user runs `forge upgrade --agent pi`
+  Then cmd/agent.go is unchanged
+  And the four wholly-owned files and the missing wiring and AGENT.md files are written
+
+Scenario Outline: Opt-in is refused with nothing written
+  Given <repo>
+  When the user runs `<command>`
+  Then the command fails with an error naming the cause
+  And no file is written and the manifest is unchanged
+  Examples:
+    | repo | command |
+    | a repo with no .forge/manifest.json | forge upgrade --agent pi |
+    | a repo whose manifest names a stack without the add-on | forge upgrade --agent pi |
+    | a go-api-chi repo whose go.mod has no module line | forge upgrade --agent pi |
+    | a go-api-chi repo with no add-on | forge upgrade --agent pi --check |
+    | a repo whose manifest records agent pi | forge upgrade --agent none |
+
+Scenario: Interrupted opt-in is completed by re-running
+  Given an opt-in run that wrote the four wholly-owned files and stopped before Stamp
+  When the user runs `forge upgrade --agent pi` again
+  Then the missing add-on files are written, existing ones are kept
+  And the manifest records agent pi
 ```
 
 ---
