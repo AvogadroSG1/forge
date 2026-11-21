@@ -28,6 +28,21 @@ var shippedStacks = []string{
 	"angular",
 }
 
+// ciWorkflowAsset returns the overlay ci.yml path of a stack; the Go api and
+// cli stacks ship it as ci.yml.tmpl (ADR-0028), the others as a plain file.
+func ciWorkflowAsset(t *testing.T, assets fs.FS, stack string) string {
+	t.Helper()
+
+	base := filepath.ToSlash(filepath.Join("templates/golden", stack, ".forge-overlay", ".github", "workflows", "ci.yml"))
+	for _, candidate := range []string{base, base + ".tmpl"} {
+		if _, err := fs.Stat(assets, candidate); err == nil {
+			return candidate
+		}
+	}
+	t.Fatalf("no ci.yml or ci.yml.tmpl for stack %s", stack)
+	return ""
+}
+
 // readMiseOverlay reads a stack's overlay mise.toml, accepting the rendered
 // (.tmpl) form used by fullstack-capable backends.
 func readMiseOverlay(t *testing.T, assets fs.FS, stack string) (string, string) {
@@ -55,9 +70,9 @@ func TestShippedStacksCarryGatePipelineAssets(t *testing.T) {
 			t.Parallel()
 
 			readMiseOverlay(t, assets, stack)
+			ciWorkflowAsset(t, assets, stack)
 			for _, rel := range []string{
 				".forge-overlay/lefthook.yml",
-				".forge-overlay/.github/workflows/ci.yml",
 			} {
 				assetPath := filepath.ToSlash(filepath.Join("templates/golden", stack, rel))
 				if _, err := fs.Stat(assets, assetPath); err != nil {
@@ -108,7 +123,7 @@ func TestSharedCIWorkflowOnlyDelegatesToMise(t *testing.T) {
 		t.Run(stack, func(t *testing.T) {
 			t.Parallel()
 
-			ciPath := filepath.ToSlash(filepath.Join("templates/golden", stack, ".forge-overlay", ".github", "workflows", "ci.yml"))
+			ciPath := ciWorkflowAsset(t, assets, stack)
 			ciData, err := fs.ReadFile(assets, ciPath)
 			if err != nil {
 				t.Fatalf("ReadFile(%s) error = %v", ciPath, err)
@@ -208,7 +223,7 @@ func TestGoStacksDefineContainerImageGates(t *testing.T) {
 				t.Fatalf("%s has no ci task line to check", misePath)
 			}
 
-			ciPath := filepath.ToSlash(filepath.Join("templates/golden", stack, ".forge-overlay", ".github", "workflows", "ci.yml"))
+			ciPath := ciWorkflowAsset(t, assets, stack)
 			ciData, err := fs.ReadFile(assets, ciPath)
 			if err != nil {
 				t.Fatalf("ReadFile(%s) error = %v", ciPath, err)
@@ -299,7 +314,7 @@ func TestPythonStacksDefineContainerImageGates(t *testing.T) {
 				t.Fatalf("%s has %d [tasks.ci] tables, want %d", misePath, ciTasks, wantCI)
 			}
 
-			ciPath := filepath.ToSlash(filepath.Join("templates/golden", stack, ".forge-overlay", ".github", "workflows", "ci.yml"))
+			ciPath := ciWorkflowAsset(t, assets, stack)
 			ciData, err := fs.ReadFile(assets, ciPath)
 			if err != nil {
 				t.Fatalf("ReadFile(%s) error = %v", ciPath, err)

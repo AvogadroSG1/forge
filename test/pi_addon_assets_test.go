@@ -285,3 +285,97 @@ func TestPiAddonWiresIntoEachStack(t *testing.T) {
 		}
 	}
 }
+
+// wantPlainCI is the ci.yml of a repo without the add-on, as it was before
+// ci.yml became a template. It must stay byte-identical.
+const wantPlainCI = `name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
+        with:
+          version: 2026.11.9
+      - run: mise install
+      - run: mise run ci
+      # Needs Docker, so it is a step of its own: mise run ci stays Docker-free.
+      - run: mise run image:scan
+`
+
+const wantAgentCIStep = `      - run: mise run image:scan
+      # The agent image (see AGENT.md); builds on the images above.
+      - run: mise run image:agent:scan
+`
+
+func TestPiAddonCIScansTheAgentImageOnlyWithTheAddon(t *testing.T) {
+	for _, tc := range piAddonStacks {
+		t.Run(tc.stack, func(t *testing.T) {
+			with, err := os.ReadFile(filepath.Join(scaffoldPiAddonStack(t, tc.stack, tc.projectType, "pi"), ".github", "workflows", "ci.yml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := wantPlainCI + "      # The agent image (see AGENT.md); builds on the images above.\n      - run: mise run image:agent:scan\n"; string(with) != want {
+				t.Errorf("--agent pi ci.yml =\n%s\nwant\n%s", with, want)
+			}
+			if !strings.Contains(string(with), wantAgentCIStep) {
+				t.Error("image:agent:scan must directly follow image:scan")
+			}
+
+			without, err := os.ReadFile(filepath.Join(scaffoldPiAddonStack(t, tc.stack, tc.projectType, ""), ".github", "workflows", "ci.yml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(without), "image:agent") {
+				t.Error("no --agent: ci.yml must not mention image:agent")
+			}
+			if string(without) != wantPlainCI {
+				t.Errorf("no --agent ci.yml changed:\n%s", without)
+			}
+		})
+	}
+}
+
+func TestScaffoldedWorkflowsAreRenderedTemplates(t *testing.T) {
+	for _, tc := range piAddonStacks {
+		for _, agent := range []string{"", "pi"} {
+			dir := scaffoldPiAddonStack(t, tc.stack, tc.projectType, agent)
+			entries, err := os.ReadDir(filepath.Join(dir, ".github", "workflows"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, e := range entries {
+				if strings.HasSuffix(e.Name(), ".tmpl") {
+					t.Errorf("%s agent=%q: %s kept its .tmpl suffix", tc.stack, agent, e.Name())
+				}
+				data, err := os.ReadFile(filepath.Join(dir, ".github", "workflows", e.Name()))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if strings.Contains(string(data), "{{") {
+					t.Errorf("%s agent=%q: %s contains an unrendered {{", tc.stack, agent, e.Name())
+				}
+			}
+		}
+	}
+}
+
+func TestPiAddonForgeManagedFilesSayForgeUpgradeOverwritesThem(t *testing.T) {
+	for _, name := range []string{
+		"Dockerfile.agent",
+		filepath.Join("internal", "piagent", "client.go"),
+		filepath.Join("mise", "conf.d", "pi.toml"),
+	} {
+		if !strings.Contains(readPiAddonAsset(t, name), "forge upgrade") {
+			t.Errorf("%s must say that forge upgrade overwrites it", name)
+		}
+	}
+	if first := strings.SplitN(readPiAddonAsset(t, "Dockerfile.agent"), "\n", 2)[0]; !strings.HasPrefix(first, "# syntax=") {
+		t.Errorf("Dockerfile.agent first line = %q, want the # syntax= directive", first)
+	}
+}

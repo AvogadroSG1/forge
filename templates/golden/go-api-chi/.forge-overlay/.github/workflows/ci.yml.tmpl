@@ -16,3 +16,7 @@ jobs:
       - run: mise run ci
       # Needs Docker, so it is a step of its own: mise run ci stays Docker-free.
       - run: mise run image:scan
+{{- if .Agent }}
+      # The agent image (see AGENT.md); builds on the images above.
+      - run: mise run image:agent:scan
+{{- end }}
