@@ -1,7 +1,10 @@
 [tools]
 python = "3.15.2"
+uv = "0.13.9"
 ruff = "0.17.5"
 "npm:pyright" = "1.1.414"
+hadolint = "2.15.1"
+trivy = "0.76.2"
 "pipx:pip-audit" = "2.10.1"
 lefthook = "2.2.2"
 "github:Dicklesworthstone/destructive_command_guard" = "0.16.0"
@@ -13,14 +16,39 @@ node = "26.13.1"
 run = "ruff format ."
 
 [tasks.lint]
-run = "ruff check . && pyright"
+run = "ruff check . && uv run pyright"
 
 [tasks.test]
-run = "pytest -q --cov=."
+run = "uv run pytest -q --cov=."
 
 # opentelemetry-instrument reads OTEL_* from the environment; the endpoint guard keeps exporters off when no OTLP endpoint is set.
 [tasks.serve]
-run = "export OTEL_SERVICE_NAME=\"${OTEL_SERVICE_NAME:-{{.RepoSlug}}}\"; if [ -z \"${OTEL_EXPORTER_OTLP_ENDPOINT:-}${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-}${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:-}\" ]; then export OTEL_TRACES_EXPORTER=none OTEL_METRICS_EXPORTER=none OTEL_LOGS_EXPORTER=none; else export OTEL_EXPORTER_OTLP_PROTOCOL=${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}; fi; opentelemetry-instrument uvicorn {{.PythonPackage}}.main:app --port 8000"
+run = "export OTEL_SERVICE_NAME=\"${OTEL_SERVICE_NAME:-{{.RepoSlug}}}\"; if [ -z \"${OTEL_EXPORTER_OTLP_ENDPOINT:-}${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-}${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:-}\" ]; then export OTEL_TRACES_EXPORTER=none OTEL_METRICS_EXPORTER=none OTEL_LOGS_EXPORTER=none; else export OTEL_EXPORTER_OTLP_PROTOCOL=${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}; fi; uv run opentelemetry-instrument app"
+# Container image gates (see CONTAINER.md). image:lint needs no Docker and is
+# part of ci; image and image:scan need a running Docker daemon and are run on
+# demand and as their own CI step. Bodies stay POSIX sh.
+[tasks."image:lint"]
+description = "Lint the Dockerfile"
+run = "hadolint Dockerfile"
+
+[tasks.image]
+description = "Build the runtime and sandbox images; IMAGE names them, PLATFORM cross-builds"
+run = '''
+set -eu
+image="${IMAGE:-app}"
+revision="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+for target in runtime sandbox; do
+  docker build ${PLATFORM:+--platform "$PLATFORM"} \
+    --target "$target" \
+    --build-arg "REVISION=$revision" \
+    --tag "$image:$target" .
+done
+'''
+
+[tasks."image:scan"]
+description = "Scan the runtime image for fixable HIGH and CRITICAL vulnerabilities"
+depends = ["image"]
+run = 'trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed "${IMAGE:-app}:runtime"'
 {{- if .Frontend }}
 
 [tasks.web-fmt]
@@ -77,9 +105,9 @@ exec npm --prefix web run build -- --define "FORGE_OTLP_ENDPOINT=\"$endpoint\""
 {{- end }}
 
 [tasks.ci]
-run = "mise run fmt && mise run lint && mise run test && pip-audit && mise run web-fmt && mise run web-lint && mise run web-test && npm --prefix web audit --audit-level=high"
+run = "uv sync --locked && mise run fmt && mise run lint && mise run image:lint && mise run test && uv export --locked --no-emit-project --format requirements-txt | pip-audit --disable-pip --require-hashes -r /dev/stdin && mise run web-fmt && mise run web-lint && mise run web-test && npm --prefix web audit --audit-level=high"
 {{- else }}
 
 [tasks.ci]
-run = "mise run fmt && mise run lint && mise run test && pip-audit"
+run = "uv sync --locked && mise run fmt && mise run lint && mise run image:lint && mise run test && uv export --locked --no-emit-project --format requirements-txt | pip-audit --disable-pip --require-hashes -r /dev/stdin"
 {{- end }}
