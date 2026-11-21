@@ -14,7 +14,7 @@ dependencies = [
   "typer==0.29.1",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
   "pytest==9.2.0",
   "pytest-cov==7.1.0",
@@ -25,7 +25,10 @@ dev = [
 packages = ["src/{{.PythonPackage}}"]
 
 [project.scripts]
+app = "{{.PythonPackage}}.main:main"
+{{- if ne .PythonPackage "app" }}
 {{.PythonPackage}} = "{{.PythonPackage}}.main:main"
+{{- end }}
 
 [tool.coverage.run]
 patch = ["subprocess"]
