@@ -58,6 +58,9 @@ func runFakePi(mode string) {
 		}
 
 		switch {
+		case command.Type == "abort" && mode == "slow-abort":
+			// Never confirms: the run is still going as far as a
+			// client can tell.
 		case command.Type == "abort":
 			respond(`"success":true`)
 			emit(`{"type":"agent_settled","aborted":true}`)
@@ -67,8 +70,11 @@ func runFakePi(mode string) {
 			respond(`"success":false,"error":"No model selected"`)
 		case mode == "handled":
 			respond(`"success":true,"data":{"disposition":"handled"}`)
-		case mode == "hang":
+		case mode == "no-ack":
+			// Accepts the prompt without ever acknowledging it.
+		case mode == "hang" || mode == "slow-abort":
 			respond(`"success":true,"data":{"disposition":"started"}`)
+			emit(`{"type":"fake_prompt_received"}`)
 			emit(`{"type":"agent_start"}`)
 		case mode == "provider-error":
 			respond(`"success":true,"data":{"disposition":"started"}`)
@@ -212,6 +218,125 @@ func TestPromptStopsWhenTheContextIsCancelled(t *testing.T) {
 	})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Prompt() error = %v, want context.Canceled", err)
+	}
+}
+
+// A run cancelled and confirmed stopped leaves the session usable.
+func TestClientIsReusableAfterAConfirmedAbort(t *testing.T) {
+	client := startFakePi(t, "hang")
+
+	for range 2 {
+		ctx, cancel := context.WithCancel(testContext(t))
+		_, err := client.Prompt(ctx, "hello", func(event Event) {
+			if event.Type == "agent_start" {
+				cancel()
+			}
+		})
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Prompt() error = %v, want context.Canceled", err)
+		}
+	}
+}
+
+// Cancelled before Pi acknowledged the prompt: Pi may still run it, so the
+// session must not be reusable.
+func TestPromptCancelledBeforeAcknowledgementTerminatesTheSession(t *testing.T) {
+	client := startFakePi(t, "no-ack")
+
+	ctx, cancel := context.WithTimeout(testContext(t), 50*time.Millisecond)
+	defer cancel()
+	if _, err := client.Prompt(ctx, "hello", nil); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Prompt() error = %v, want context.DeadlineExceeded", err)
+	}
+
+	select {
+	case <-client.done:
+	default:
+		t.Fatal("pi is still running after an unacknowledged prompt was cancelled")
+	}
+	if _, err := client.Prompt(testContext(t), "again", nil); !errors.Is(err, ErrTerminated) {
+		t.Fatalf("second Prompt() error = %v, want ErrTerminated", err)
+	}
+}
+
+// Pi never confirms the abort: the old run's agent_settled could otherwise
+// arrive later and end the next prompt early with an empty result.
+func TestPromptWhoseAbortIsNotConfirmedTerminatesTheSession(t *testing.T) {
+	original := abortGrace
+	abortGrace = 100 * time.Millisecond
+	t.Cleanup(func() { abortGrace = original })
+
+	client := startFakePi(t, "slow-abort")
+
+	ctx, cancel := context.WithCancel(testContext(t))
+	_, err := client.Prompt(ctx, "hello", func(event Event) {
+		if event.Type == "agent_start" {
+			cancel()
+		}
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Prompt() error = %v, want context.Canceled", err)
+	}
+
+	result, err := client.Prompt(testContext(t), "again", nil)
+	if !errors.Is(err, ErrTerminated) {
+		t.Fatalf("second Prompt() = %+v, %v; want ErrTerminated", result, err)
+	}
+}
+
+// A prompt waiting for an earlier run gives up when its context ends and is
+// never sent to Pi.
+func TestWaitingPromptHonoursCancellationAndIsNotSent(t *testing.T) {
+	client := startFakePi(t, "hang")
+
+	firstCtx, cancelFirst := context.WithCancel(testContext(t))
+	started := make(chan struct{})
+	received := 0 // written on the reader goroutine, read after the first Prompt returns
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := client.Prompt(firstCtx, "first", func(event Event) {
+			switch event.Type {
+			case "fake_prompt_received":
+				received++
+			case "agent_start":
+				close(started)
+			}
+		})
+		firstDone <- err
+	}()
+	<-started
+
+	waitingCtx, cancelWaiting := context.WithTimeout(testContext(t), 50*time.Millisecond)
+	defer cancelWaiting()
+	begin := time.Now()
+	if _, err := client.Prompt(waitingCtx, "second", nil); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("waiting Prompt() error = %v, want context.DeadlineExceeded", err)
+	}
+	if waited := time.Since(begin); waited > 5*time.Second {
+		t.Fatalf("waiting Prompt() returned after %v; it must not wait for the running prompt", waited)
+	}
+
+	// An already-expired context is refused even when the session is free.
+	cancelFirst()
+	if err := <-firstDone; !errors.Is(err, context.Canceled) {
+		t.Fatalf("first Prompt() error = %v, want context.Canceled", err)
+	}
+	if _, err := client.Prompt(waitingCtx, "third", nil); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expired Prompt() error = %v, want context.DeadlineExceeded", err)
+	}
+
+	// A marker prompt flushes anything the fake received in between.
+	ctx, cancel := context.WithCancel(testContext(t))
+	_, _ = client.Prompt(ctx, "marker", func(event Event) {
+		switch event.Type {
+		case "fake_prompt_received":
+			received++
+		case "agent_start":
+			cancel()
+		}
+	})
+	if received != 2 {
+		t.Fatalf("pi received %d prompts, want 2 (first and marker); a cancelled waiting prompt was sent", received)
 	}
 }
 

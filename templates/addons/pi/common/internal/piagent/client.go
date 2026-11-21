@@ -25,6 +25,15 @@ import (
 // before killing it. Pi finishes pending work during an orderly shutdown.
 const closeGrace = 10 * time.Second
 
+// abortGrace is how long a cancelled Prompt waits for Pi to confirm that the
+// run has stopped. Past it the session is terminated, because a run that may
+// still be going must never be mistaken for the next prompt's.
+var abortGrace = 5 * time.Second
+
+// ErrTerminated reports that the session was killed because a cancelled run
+// could not be confirmed stopped. Start a new Client to continue.
+var ErrTerminated = errors.New("piagent: session terminated: a cancelled run could not be confirmed stopped")
+
 // Options configures the Pi child process.
 type Options struct {
 	// Bin is the Pi executable. Empty means "pi", resolved on PATH.
@@ -83,7 +92,9 @@ type Client struct {
 	stdin io.WriteCloser
 
 	writeMu sync.Mutex // serializes records written to stdin
-	runMu   sync.Mutex // one prompt run at a time
+	// run admits one prompt at a time. It is a channel, not a mutex, so a
+	// prompt waiting its turn can give up when its context ends.
+	run chan struct{}
 
 	mu       sync.Mutex
 	nextID   int
@@ -92,6 +103,9 @@ type Client struct {
 
 	done    chan struct{} // closed when the reader goroutine ends
 	readErr error         // set before done is closed
+
+	terminateOnce sync.Once
+	terminated    bool // guarded by mu
 }
 
 type response struct {
@@ -133,6 +147,7 @@ func Start(opts Options) (*Client, error) {
 	c := &Client{
 		cmd:     cmd,
 		stdin:   stdin,
+		run:     make(chan struct{}, 1),
 		pending: make(map[string]chan response),
 		done:    make(chan struct{}),
 	}
@@ -199,7 +214,8 @@ func (c *Client) dispatch(line []byte) {
 	}
 }
 
-// call sends one command and waits for its response.
+// call sends one command and waits for its response. The command is written
+// before ctx is consulted, so a ctx error means Pi may still act on it.
 func (c *Client) call(ctx context.Context, command map[string]any) (response, error) {
 	c.mu.Lock()
 	c.nextID++
@@ -247,7 +263,24 @@ func (c *Client) call(ctx context.Context, command map[string]any) (response, er
 func (c *Client) exitErr() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.terminated {
+		return ErrTerminated
+	}
 	return c.readErr
+}
+
+// terminate kills Pi and makes every later call fail with ErrTerminated. It
+// is the fallback when a cancelled run cannot be confirmed stopped: the
+// session's state is then unknown, and reusing it could attribute the old
+// run's events to a new prompt or leave abandoned work running.
+func (c *Client) terminate() {
+	c.terminateOnce.Do(func() {
+		c.mu.Lock()
+		c.terminated = true
+		c.mu.Unlock()
+		_ = c.cmd.Process.Kill()
+	})
+	<-c.done
 }
 
 // Prompt sends one prompt and blocks until Pi has no work left for it.
@@ -256,11 +289,34 @@ func (c *Client) exitErr() error {
 // Event.TextDelta to stream the answer. It is called on the reader goroutine,
 // so it must return promptly and must not call back into the Client.
 //
-// A run that the model provider fails is an error. Cancelling ctx aborts the
-// run and returns ctx.Err.
+// A run that the model provider fails is an error.
+//
+// Cancelling ctx returns ctx.Err. A prompt still waiting for an earlier one
+// is never sent. A prompt already sent is aborted, and Prompt returns only
+// once Pi confirms the run stopped; if Pi does not confirm in time, or the
+// prompt was cancelled before Pi acknowledged it, the session is terminated
+// and later calls fail with ErrTerminated.
 func (c *Client) Prompt(ctx context.Context, message string, onEvent func(Event)) (Result, error) {
-	c.runMu.Lock()
-	defer c.runMu.Unlock()
+	select {
+	case c.run <- struct{}{}:
+	case <-c.done:
+		return Result{}, c.exitErr()
+	case <-ctx.Done():
+		return Result{}, ctx.Err()
+	}
+	defer func() { <-c.run }()
+
+	// select picks at random when several cases are ready, so the slot may
+	// have been won by an expired caller or on a dead session. Recheck both
+	// before anything is sent.
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
+	select {
+	case <-c.done:
+		return Result{}, c.exitErr()
+	default:
+	}
 
 	var (
 		text     strings.Builder
@@ -308,6 +364,12 @@ func (c *Client) Prompt(ctx context.Context, message string, onEvent func(Event)
 
 	resp, err := c.call(ctx, map[string]any{"type": "prompt", "message": message})
 	if err != nil {
+		if ctx.Err() != nil {
+			// The prompt was written but not acknowledged, so Pi may
+			// yet accept and run it, and nothing ties a later
+			// agent_settled to it. The session cannot be trusted.
+			c.terminate()
+		}
 		return Result{}, err
 	}
 	var accepted struct {
@@ -325,11 +387,7 @@ func (c *Client) Prompt(ctx context.Context, message string, onEvent func(Event)
 	case <-c.done:
 		return Result{}, c.exitErr()
 	case <-ctx.Done():
-		// Best effort: tell Pi to stop, but do not wait on a context that
-		// is already done.
-		abortCtx, cancel := context.WithTimeout(context.Background(), time.Second)
-		_ = c.Abort(abortCtx)
-		cancel()
+		c.stopRun(settled)
 		return Result{}, ctx.Err()
 	}
 
@@ -338,6 +396,26 @@ func (c *Client) Prompt(ctx context.Context, message string, onEvent func(Event)
 		return Result{}, fmt.Errorf("piagent: run failed: %s", runErr)
 	}
 	return Result{Text: text.String(), Aborted: aborted}, nil
+}
+
+// stopRun aborts the current run and returns once it is known to be over:
+// Pi both answered the abort and emitted the run's agent_settled. The caller
+// still holds the run slot, so no other prompt can see that event. If Pi does
+// not confirm within abortGrace, the session is terminated instead.
+func (c *Client) stopRun(settled <-chan struct{}) {
+	abortCtx, cancel := context.WithTimeout(context.Background(), abortGrace)
+	defer cancel()
+
+	if err := c.Abort(abortCtx); err != nil {
+		c.terminate()
+		return
+	}
+	select {
+	case <-settled:
+	case <-c.done:
+	case <-abortCtx.Done():
+		c.terminate()
+	}
 }
 
 func (c *Client) setListener(listener func(Event)) {

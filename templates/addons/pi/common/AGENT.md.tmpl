@@ -42,7 +42,8 @@ result, err := client.Prompt(ctx, "Summarize the open TODOs in this repository",
 
 - `Prompt` returns when Pi has no work left for the prompt. `result.Text` is the final assistant message.
 - A `Client` keeps the conversation between prompts and runs one prompt at a time. Start one per conversation.
-- Cancelling the context aborts the run.
+- Cancelling the context aborts the run, and `Prompt` returns once Pi confirms it stopped. If Pi does not confirm within a few seconds, or the prompt was cancelled before Pi acknowledged it, the client kills Pi and later calls return `piagent.ErrTerminated`; start a new `Client`.
+- A `Prompt` waiting for an earlier one gives up when its context ends and is never sent.
 - `Options.Args` takes any Pi flag, for example `--tools read,grep` to limit what the agent can do, or `--no-tools` for plain text generation.
 
 {{ if eq .Stack "go-api-chi" -}}
