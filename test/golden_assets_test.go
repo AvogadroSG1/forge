@@ -124,6 +124,9 @@ func TestGoldenCatalogPackagesVanillaAndOverlayAssetsForEveryV1Stack(t *testing.
 			name: "python-cli-typer",
 			files: []string{
 				"templates/golden/python-cli-typer/pyproject.toml.tmpl",
+				"templates/golden/python-cli-typer/.forge-overlay/Dockerfile",
+				"templates/golden/python-cli-typer/.forge-overlay/.dockerignore",
+				"templates/golden/python-cli-typer/.forge-overlay/CONTAINER.md",
 				"templates/golden/python-cli-typer/src/{{.PythonPackage}}/__init__.py",
 				"templates/golden/python-cli-typer/src/{{.PythonPackage}}/main.py",
 				"templates/golden/python-cli-typer/.forge-overlay/tests/test_cli.py.tmpl",
@@ -135,6 +138,11 @@ func TestGoldenCatalogPackagesVanillaAndOverlayAssetsForEveryV1Stack(t *testing.
 			name: "python-fastapi",
 			files: []string{
 				"templates/golden/python-fastapi/pyproject.toml.tmpl",
+				"templates/golden/python-fastapi/.forge-overlay/Dockerfile",
+				"templates/golden/python-fastapi/.forge-overlay/.dockerignore",
+				"templates/golden/python-fastapi/.forge-overlay/CONTAINER.md",
+				"templates/golden/python-fastapi/.forge-overlay/{{.PythonPackage}}/serve.py",
+				"templates/golden/python-fastapi/.forge-overlay/tests/test_serve.py.tmpl",
 				"templates/golden/python-fastapi/{{.PythonPackage}}/__init__.py",
 				"templates/golden/python-fastapi/{{.PythonPackage}}/main.py",
 				"templates/golden/python-fastapi/.forge-overlay/tests/test_health.py.tmpl",
@@ -193,6 +201,11 @@ func TestGoldenCatalogPackagesVanillaAndOverlayAssetsForEveryV1Stack(t *testing.
 			name: "python-web-jinja",
 			files: []string{
 				"templates/golden/python-web-jinja/pyproject.toml.tmpl",
+				"templates/golden/python-web-jinja/.forge-overlay/Dockerfile",
+				"templates/golden/python-web-jinja/.forge-overlay/.dockerignore",
+				"templates/golden/python-web-jinja/.forge-overlay/CONTAINER.md",
+				"templates/golden/python-web-jinja/.forge-overlay/{{.PythonPackage}}/serve.py",
+				"templates/golden/python-web-jinja/.forge-overlay/tests/test_serve.py.tmpl",
 				"templates/golden/python-web-jinja/{{.PythonPackage}}/__init__.py",
 				"templates/golden/python-web-jinja/.forge-overlay/{{.PythonPackage}}/main.py",
 				"templates/golden/python-web-jinja/.forge-overlay/{{.PythonPackage}}/templates/index.html",
