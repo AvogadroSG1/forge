@@ -48,6 +48,19 @@ func (w Writer) Write(targetDir string, vars project.Variables) error {
 		}
 	}
 
+	if vars.Agent != "" {
+		// An agent add-on is its own template root, composed last so it
+		// wins: a shared tree for every stack that offers it, then the
+		// stack-specific wiring. See ADR-0027.
+		addonRoot := filepath.ToSlash(filepath.Join(addonsRoot, vars.Agent))
+		if err := w.copyTree(addonRoot+"/common", targetDir, "", vars, nil); err != nil {
+			return err
+		}
+		if err := w.copyTree(addonRoot+"/"+vars.Stack, targetDir, "", vars, nil); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+	}
+
 	stem, err := gitignoreStem(vars.Language)
 	if err != nil {
 		return err
@@ -89,6 +102,10 @@ func ensureWritableDir(targetDir string) error {
 
 	return nil
 }
+
+// addonsRoot holds the opt-in add-on trees, outside templates/golden so
+// `forge update` (which replaces a stack's vanilla layer) never touches them.
+const addonsRoot = "templates/addons"
 
 // frontendFragmentDir is where a fullstack repo hosts its frontend tree.
 const frontendFragmentDir = "web"

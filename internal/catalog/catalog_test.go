@@ -7,8 +7,8 @@ import (
 
 func TestV1StacksReturnsOnlyTheShippedStacks(t *testing.T) {
 	want := []Stack{
-		{Key: "go-cli-cobra", Language: "go", ProjectType: "cli"},
-		{Key: "go-api-chi", Language: "go", ProjectType: "api", FullstackBackend: true},
+		{Key: "go-cli-cobra", Language: "go", ProjectType: "cli", AgentAddons: []string{"pi"}},
+		{Key: "go-api-chi", Language: "go", ProjectType: "api", FullstackBackend: true, AgentAddons: []string{"pi"}},
 		{Key: "python-cli-typer", Language: "python", ProjectType: "cli"},
 		{Key: "python-fastapi", Language: "python", ProjectType: "api", FullstackBackend: true},
 		{Key: "csharp-cli", Language: "csharp", ProjectType: "cli"},
@@ -171,4 +171,13 @@ func stackKeys(stacks []Stack) []string {
 	}
 
 	return keys
+}
+
+func TestAgentAddonStacksListsTheStacksThatOfferAnAddon(t *testing.T) {
+	if got, want := AgentAddonStacks("pi"), []string{"go-cli-cobra", "go-api-chi"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("AgentAddonStacks(pi) = %#v, want %#v", got, want)
+	}
+	if got := AgentAddonStacks("unknown"); len(got) != 0 {
+		t.Fatalf("AgentAddonStacks(unknown) = %#v, want none", got)
+	}
 }

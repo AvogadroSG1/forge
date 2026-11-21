@@ -23,6 +23,7 @@ type Inputs struct {
 	ProjectType string
 	Stack       string
 	Frontend    string
+	Agent       string
 	APIBaseURL  string
 	AuthorName  string
 	AuthorEmail string
@@ -89,6 +90,11 @@ func Resolve(input Inputs, prompter Prompter) (project.Input, error) {
 	}
 
 	apiBaseURL, err := resolveAPIBaseURL(input, prompter, projectType)
+	if err != nil {
+		return project.Input{}, err
+	}
+
+	agent, err := resolveAgent(input, prompter, stack)
 	if err != nil {
 		return project.Input{}, err
 	}
@@ -180,6 +186,7 @@ func Resolve(input Inputs, prompter Prompter) (project.Input, error) {
 		ProjectType: projectType,
 		Stack:       stack,
 		Frontend:    frontend,
+		Agent:       agent,
 		APIBaseURL:  apiBaseURL,
 		AuthorName:  authorName,
 		AuthorEmail: authorEmail,
@@ -255,6 +262,49 @@ func resolveFrontend(input Inputs, prompter Prompter, projectType, stackKey stri
 	}
 
 	return frontend, nil
+}
+
+// agentNone is the explicit "no add-on" answer to the agent question.
+const agentNone = "none"
+
+// resolveAgent resolves the opt-in agent add-on. It is offered only on stacks
+// whose catalog entry lists add-ons; --agent anywhere else fails loudly.
+// Unlike every other init input, an absent flag without a TTY resolves to
+// "none" instead of erroring: an add-on is opt-in, so scripted callers that
+// predate it keep working (ADR-0027). The returned value is "" for none.
+func resolveAgent(input Inputs, prompter Prompter, stackKey string) (string, error) {
+	stack, _ := catalog.Get(stackKey)
+	requested := normalize(input.Agent)
+
+	if len(stack.AgentAddons) == 0 {
+		if requested != "" && requested != agentNone {
+			return "", fmt.Errorf("--agent %s only applies to stacks that offer it (valid stacks: %s)", requested, strings.Join(catalog.AgentAddonStacks(requested), ", "))
+		}
+		return "", nil
+	}
+
+	choices := append([]string{agentNone}, stack.AgentAddons...)
+	if requested == "" {
+		if !input.IsTTY {
+			return "", nil
+		}
+		if prompter == nil {
+			return "", fmt.Errorf("interactive prompt requested for --agent but no prompter is available")
+		}
+		answer, err := prompter.Ask("agent", "Agent add-on", choices, agentNone)
+		if err != nil {
+			return "", err
+		}
+		requested = normalize(answer)
+	}
+	if !contains(choices, requested) {
+		return "", fmt.Errorf("invalid --agent %q (valid choices: %s)", requested, strings.Join(choices, ", "))
+	}
+	if requested == agentNone {
+		return "", nil
+	}
+
+	return requested, nil
 }
 
 // resolveAPIBaseURL asks for the API base URL only on frontend-only
@@ -379,5 +429,3 @@ func defaultGHUserOrgs() []string {
 	}
 	return orgs
 }
-
-

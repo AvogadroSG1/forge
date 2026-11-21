@@ -23,8 +23,8 @@ run = "mise run fmt && mise run lint && mise run image:lint && mise run test && 
 # part of ci; image and image:scan need a running Docker daemon and are run on
 # demand and as their own CI step. Bodies stay POSIX sh.
 [tasks."image:lint"]
-description = "Lint the Dockerfile"
-run = "hadolint Dockerfile"
+description = "Lint the Dockerfile and any add-on Dockerfile beside it"
+run = "hadolint Dockerfile*"
 
 [tasks.image]
 description = "Build the runtime and sandbox images; IMAGE names them, PLATFORM cross-builds"

@@ -1,0 +1,26 @@
+# forge-managed: image tasks for the Pi agent add-on (see AGENT.md). mise
+# merges every file under .config/mise/conf.d/ with this repo's mise.toml.
+# Both tasks need a running Docker daemon, so neither is part of `ci`;
+# Dockerfile.agent is linted by `image:lint`, which is. Task bodies MUST stay
+# POSIX sh (`set -eu`, no bashisms).
+
+[tasks."image:agent"]
+description = "Build the agent and agent-sandbox images on top of the runtime and sandbox images"
+depends = ["image"]
+run = '''
+set -eu
+image="${IMAGE:-app}"
+for target in agent agent-sandbox; do
+  docker build ${PLATFORM:+--platform "$PLATFORM"} \
+    --file Dockerfile.agent \
+    --target "$target" \
+    --build-arg "APP_IMAGE=$image:runtime" \
+    --build-arg "SANDBOX_IMAGE=$image:sandbox" \
+    --tag "$image:$target" .
+done
+'''
+
+[tasks."image:agent:scan"]
+description = "Scan the agent image for fixable HIGH and CRITICAL vulnerabilities"
+depends = ["image:agent"]
+run = 'trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed "${IMAGE:-app}:agent"'

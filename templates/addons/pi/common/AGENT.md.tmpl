@@ -1,0 +1,102 @@
+# Pi agent
+
+This repository was scaffolded with the Pi agent add-on. It lets the application run agentic flows by driving the [Pi coding agent](https://pi.dev) from Go, and adds two images that contain Pi.
+
+```mermaid
+flowchart LR
+    A["application code"] --> C["internal/piagent<br/>Go RPC client"]
+    C -->|"JSON lines on stdin/stdout"| P["pi --mode rpc"]
+    P --> M["model provider"]
+    R["runtime image"] --> AG["agent image<br/>binary + Node + Pi"]
+    S["sandbox image"] --> AS["agent-sandbox image<br/>toolchain + Node + Pi"]
+```
+
+## What was added
+
+| Path | What it is |
+|---|---|
+| `internal/piagent/` | A Go client for `pi --mode rpc`, standard library only |
+{{- if eq .Stack "go-api-chi" }}
+| `internal/httpapi/agent.go` | `POST /agent/prompt`, off unless `PI_AGENT_ENABLED=1` |
+{{- else }}
+| `cmd/agent.go` | The `agent` subcommand |
+{{- end }}
+| `Dockerfile.agent` | The `agent` and `agent-sandbox` image targets |
+| `.config/mise/conf.d/pi.toml` | The `image:agent` and `image:agent:scan` tasks |
+
+Pi's SDK is TypeScript-only. RPC mode is the interface Pi documents for other languages, so `internal/piagent` starts Pi as a child process and exchanges JSON records with it.
+
+## Using the client
+
+```go
+client, err := piagent.Start(piagent.Options{Args: []string{"--model", "sonnet"}})
+if err != nil {
+	return err
+}
+defer func() { _ = client.Close() }()
+
+result, err := client.Prompt(ctx, "Summarize the open TODOs in this repository", func(event piagent.Event) {
+	fmt.Print(event.TextDelta()) // streams the answer as it arrives
+})
+```
+
+- `Prompt` returns when Pi has no work left for the prompt. `result.Text` is the final assistant message.
+- A `Client` keeps the conversation between prompts and runs one prompt at a time. Start one per conversation.
+- Cancelling the context aborts the run.
+- `Options.Args` takes any Pi flag, for example `--tools read,grep` to limit what the agent can do, or `--no-tools` for plain text generation.
+
+{{ if eq .Stack "go-api-chi" -}}
+## The HTTP endpoint
+
+```sh
+PI_AGENT_ENABLED=1 ANTHROPIC_API_KEY=... go run ./cmd/api
+curl -s localhost:8080/agent/prompt --json '{"prompt":"Say hello"}'
+```
+
+The route exists only when `PI_AGENT_ENABLED=1`. It has no authentication, and by default Pi can read and write files and run shell commands in its working directory, so put it behind your own authentication before exposing it. `PI_AGENT_ARGS` passes space-separated flags to Pi, for example `PI_AGENT_ARGS="--no-tools"`. Each request gets a fresh Pi process.
+{{- else -}}
+## The subcommand
+
+```sh
+ANTHROPIC_API_KEY=... go run . agent "Say hello"
+go run . agent "Review this repository" -- --model sonnet --tools read,grep
+```
+
+Arguments after `--` are passed to Pi.
+{{- end }}
+
+## Images
+
+| Target | Contents | Runs as | Use it for |
+|---|---|---|---|
+| `agent` | The application binary, Node, Pi, bash, git, ripgrep | UID 10001, in `/workspace` | Running the application where it needs Pi |
+| `agent-sandbox` | Everything in `sandbox`, plus Node, Pi, ripgrep | UID 10001, in `/workspace` | Agents and jobs that work on this code with Pi |
+
+| Command | What it does | Needs Docker |
+|---|---|---|
+| `mise run image:lint` | Lints `Dockerfile` and `Dockerfile.agent`; part of `mise run ci` | No |
+| `mise run image:agent` | Builds `app:runtime` and `app:sandbox`, then `app:agent` and `app:agent-sandbox` on top of them | Yes |
+| `mise run image:agent:scan` | Builds, then fails on fixable HIGH or CRITICAL findings in the agent image | Yes |
+
+`Dockerfile.agent` reads the two base images from the local Docker image store, so build with the default `docker` build driver. The `runtime` and `sandbox` targets are unchanged: an image without Pi is still the default.
+
+```sh
+docker run --rm -e ANTHROPIC_API_KEY {{ if eq .Stack "go-api-chi" }}-e PI_AGENT_ENABLED=1 -p 8080:8080 app:agent{{ else }}app:agent agent "Say hello"{{ end }}
+docker run --rm -it -e ANTHROPIC_API_KEY -v "$PWD:/workspace" app:agent-sandbox pi
+```
+
+## Credentials and configuration
+
+- Pi reads provider keys from the environment: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY` and others. Pass them at run time; nothing is baked into the images.
+- Pi keeps settings and credentials under `~/.pi/agent` (`/home/agent/.pi/agent` in the images). Mount a volume there only if they should persist.
+- Pi has no permission prompts. The container is the boundary: mount only the files, and pass only the credentials, a run needs.
+- The images set `PI_SKIP_VERSION_CHECK=1` because Pi is pinned. Set `PI_TELEMETRY=0` to turn off Pi's install telemetry and provider attribution headers.
+
+## Refreshing the pins
+
+- `PI_VERSION` in `Dockerfile.agent` is an exact npm version. `npm view @earendil-works/pi-coding-agent version` prints the latest.
+- The Node image is `tag@sha256:digest`. Pi needs Node 22.19 or newer. Replace the digest with the one this prints:
+
+```sh
+docker buildx imagetools inspect node:26.13.1-alpine3.24 --format '{{ "{{.Manifest.Digest}}" }}'
+```

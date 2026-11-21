@@ -630,3 +630,93 @@ func TestMapOutputPath(t *testing.T) {
 		})
 	}
 }
+
+// An agent add-on is a template root of its own, composed after the stack
+// overlay: the shared tree, then the stack-specific wiring. Without the
+// option none of it is written.
+func TestWriterComposesAgentAddonOnlyWhenRequested(t *testing.T) {
+	t.Parallel()
+
+	assets := fstest.MapFS{
+		"templates/common/AGENTS.md.tmpl":                    {Data: []byte("Project {{.ProjectName}}\n")},
+		"templates/common/gitignore.base":                    {Data: []byte(".DS_Store\n")},
+		"templates/gitignore/Go.gitignore":                   {Data: []byte("bin/\n")},
+		"templates/golden/go-api-chi/go.mod.tmpl":            {Data: []byte("module {{.ModulePath}}\n")},
+		"templates/golden/go-api-chi/.forge-overlay/NOTE.md": {Data: []byte("overlay\n")},
+		"templates/golden/go-api-chi/.forge-overlay/router.go.tmpl": {
+			Data: []byte("package httpapi\n{{- if .Agent }}\n// agent: {{.Agent}}\n{{- end }}\n"),
+		},
+		"templates/addons/pi/common/Dockerfile.agent":            {Data: []byte("FROM scratch\n")},
+		"templates/addons/pi/common/NOTE.md":                     {Data: []byte("addon\n")},
+		"templates/addons/pi/common/mise/conf.d/pi.toml":         {Data: []byte("[tasks]\n")},
+		"templates/addons/pi/go-api-chi/agent.go.tmpl":           {Data: []byte("// {{.ModulePath}}/internal/piagent\n")},
+		"templates/addons/pi/go-cli-cobra/cmd/agent.go.tmpl":     {Data: []byte("package cmd\n")},
+		"templates/addons/other/common/SHOULD_NOT_BE_WRITTEN.md": {Data: []byte("other\n")},
+	}
+	write := func(t *testing.T, agent string) string {
+		t.Helper()
+
+		vars, err := project.ResolveVariables(project.Input{
+			ProjectName: "Agent App",
+			Language:    "go",
+			ProjectType: "api",
+			Stack:       "go-api-chi",
+			Agent:       agent,
+			AuthorName:  "Ada Lovelace",
+			AuthorEmail: "ada@example.com",
+			Remote:      project.RemoteNone,
+			ModulePath:  "example.com/agent-app",
+		})
+		if err != nil {
+			t.Fatalf("ResolveVariables() error = %v", err)
+		}
+		dir := t.TempDir()
+		if err := (Writer{Assets: assets}).Write(dir, vars); err != nil {
+			t.Fatalf("Write() error = %v", err)
+		}
+		return dir
+	}
+
+	addonPaths := []string{"Dockerfile.agent", ".config/mise/conf.d/pi.toml", "agent.go"}
+
+	t.Run("requested", func(t *testing.T) {
+		t.Parallel()
+
+		dir := write(t, "pi")
+		for _, path := range addonPaths {
+			if _, err := os.Stat(filepath.Join(dir, path)); err != nil {
+				t.Fatalf("add-on file %s missing: %v", path, err)
+			}
+		}
+		assertFileContains(t, filepath.Join(dir, "agent.go"), "example.com/agent-app/internal/piagent")
+		assertFileContains(t, filepath.Join(dir, "router.go"), "// agent: pi")
+		// The add-on is composed last, so it wins over the overlay.
+		assertFileContains(t, filepath.Join(dir, "NOTE.md"), "addon")
+		for _, path := range []string{"cmd/agent.go", "SHOULD_NOT_BE_WRITTEN.md"} {
+			if _, err := os.Stat(filepath.Join(dir, path)); !os.IsNotExist(err) {
+				t.Fatalf("%s belongs to another stack or add-on and must not be written (err = %v)", path, err)
+			}
+		}
+	})
+
+	for _, agent := range []string{"", "none"} {
+		t.Run("not requested "+agent, func(t *testing.T) {
+			t.Parallel()
+
+			dir := write(t, agent)
+			for _, path := range addonPaths {
+				if _, err := os.Stat(filepath.Join(dir, path)); !os.IsNotExist(err) {
+					t.Fatalf("add-on file %s written without --agent (err = %v)", path, err)
+				}
+			}
+			assertFileContains(t, filepath.Join(dir, "NOTE.md"), "overlay")
+			data, err := os.ReadFile(filepath.Join(dir, "router.go"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(data) != "package httpapi\n" {
+				t.Fatalf("router.go = %q, want no agent wiring", data)
+			}
+		})
+	}
+}

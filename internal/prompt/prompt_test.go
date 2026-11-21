@@ -715,3 +715,158 @@ func TestResolveRejectsAnInvalidPythonPackageOverride(t *testing.T) {
 		t.Fatalf("Resolve() error = %v, want invalid python package override error", err)
 	}
 }
+
+func agentInputs(stack string) Inputs {
+	projectType := map[string]string{"go-cli-cobra": "cli", "go-api-chi": "api", "python-cli-typer": "cli"}[stack]
+	language := "go"
+	if stack == "python-cli-typer" {
+		language = "python"
+	}
+	return Inputs{
+		ProjectName: "Sample App",
+		Language:    language,
+		ProjectType: projectType,
+		Stack:       stack,
+		AuthorName:  "Ada",
+		AuthorEmail: "ada@example.com",
+		Remote:      "none",
+	}
+}
+
+// An agent add-on is opt-in: without a TTY an absent --agent means none, so
+// scripted callers that predate the flag keep working (ADR-0027).
+func TestResolveDefaultsAgentToNoneWithoutATTY(t *testing.T) {
+	t.Parallel()
+
+	for _, stack := range []string{"go-cli-cobra", "go-api-chi"} {
+		resolved, err := Resolve(agentInputs(stack), nil)
+		if err != nil {
+			t.Fatalf("%s: Resolve() error = %v", stack, err)
+		}
+		if resolved.Agent != "" {
+			t.Fatalf("%s: Agent = %q, want empty", stack, resolved.Agent)
+		}
+	}
+}
+
+func TestResolveAcceptsAgentFlagOnStacksThatOfferIt(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct{ flag, want string }{{"pi", "pi"}, {" PI ", "pi"}, {"none", ""}} {
+		for _, stack := range []string{"go-cli-cobra", "go-api-chi"} {
+			inputs := agentInputs(stack)
+			inputs.Agent = tc.flag
+			resolved, err := Resolve(inputs, nil)
+			if err != nil {
+				t.Fatalf("%s --agent %q: Resolve() error = %v", stack, tc.flag, err)
+			}
+			if resolved.Agent != tc.want {
+				t.Fatalf("%s --agent %q: Agent = %q, want %q", stack, tc.flag, resolved.Agent, tc.want)
+			}
+		}
+	}
+}
+
+func TestResolveOffersAgentOnAFullstackGoAPIBackend(t *testing.T) {
+	t.Parallel()
+
+	inputs := agentInputs("go-api-chi")
+	inputs.ProjectType = "fullstack"
+	inputs.Frontend = "vite-ts"
+	inputs.Agent = "pi"
+	resolved, err := Resolve(inputs, nil)
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if resolved.Agent != "pi" || resolved.Frontend != "vite-ts" {
+		t.Fatalf("Agent, Frontend = %q, %q; want pi, vite-ts", resolved.Agent, resolved.Frontend)
+	}
+}
+
+func TestResolveRejectsAnUnknownAgent(t *testing.T) {
+	t.Parallel()
+
+	inputs := agentInputs("go-cli-cobra")
+	inputs.Agent = "skynet"
+	_, err := Resolve(inputs, nil)
+	if err == nil || !strings.Contains(err.Error(), `invalid --agent "skynet" (valid choices: none, pi)`) {
+		t.Fatalf("Resolve() error = %v, want invalid --agent listing the choices", err)
+	}
+}
+
+func TestResolveRejectsAgentFlagOnStacksWithoutAddons(t *testing.T) {
+	t.Parallel()
+
+	inputs := agentInputs("python-cli-typer")
+	inputs.Agent = "pi"
+	_, err := Resolve(inputs, nil)
+	if err == nil || !strings.Contains(err.Error(), "valid stacks: go-cli-cobra, go-api-chi") {
+		t.Fatalf("Resolve() error = %v, want the stacks that offer pi", err)
+	}
+
+	// An explicit "none" is harmless anywhere.
+	inputs.Agent = "none"
+	if _, err := Resolve(inputs, nil); err != nil {
+		t.Fatalf("--agent none: Resolve() error = %v", err)
+	}
+}
+
+func TestResolvePromptsForAgentOnlyWhereOfferedAndDefaultsToNone(t *testing.T) {
+	t.Parallel()
+
+	asked := func(prompter *stubPrompter) *promptCall {
+		for i := range prompter.calls {
+			if prompter.calls[i].name == "agent" {
+				return &prompter.calls[i]
+			}
+		}
+		return nil
+	}
+
+	inputs := agentInputs("go-api-chi")
+	inputs.IsTTY = true
+
+	accepting := &stubPrompter{}
+	resolved, err := Resolve(inputs, accepting)
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	call := asked(accepting)
+	if call == nil {
+		t.Fatal("agent question was not asked on go-api-chi")
+	}
+	if call.defaultValue != "none" || strings.Join(call.choices, ",") != "none,pi" {
+		t.Fatalf("agent question = %+v, want choices none,pi defaulting to none", *call)
+	}
+	if resolved.Agent != "" {
+		t.Fatalf("Agent = %q after accepting the default, want empty", resolved.Agent)
+	}
+
+	choosing := &stubPrompter{responses: map[string]string{"agent": "pi"}}
+	resolved, err = Resolve(inputs, choosing)
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if resolved.Agent != "pi" {
+		t.Fatalf("Agent = %q, want pi", resolved.Agent)
+	}
+
+	flagged := &stubPrompter{}
+	inputs.Agent = "none"
+	if _, err := Resolve(inputs, flagged); err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if asked(flagged) != nil {
+		t.Fatal("agent question was asked although --agent was given")
+	}
+
+	other := agentInputs("python-cli-typer")
+	other.IsTTY = true
+	unoffered := &stubPrompter{}
+	if _, err := Resolve(other, unoffered); err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if asked(unoffered) != nil {
+		t.Fatal("agent question was asked on a stack that offers no add-on")
+	}
+}

@@ -54,6 +54,7 @@ func (i Initializer) Run(ctx context.Context, targetDir string, vars project.Var
 		Frontend:        vars.Frontend,
 		IncludePersonal: vars.IncludePersonal,
 		Stack:           vars.Stack,
+		Agent:           vars.Agent,
 	}); err != nil {
 		return failWithRecovery(targetDir, "infra version stamp", err)
 	}

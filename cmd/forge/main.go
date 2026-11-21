@@ -114,6 +114,7 @@ func initFlagSet() (*flag.FlagSet, *prompt.Inputs) {
 	flags.StringVar(&inputs.ProjectType, "project-type", "", "Project type")
 	flags.StringVar(&inputs.Stack, "stack", "", "Stack key")
 	flags.StringVar(&inputs.Frontend, "frontend", "", "Frontend fragment for fullstack projects (vite-ts|sveltekit|angular)")
+	flags.StringVar(&inputs.Agent, "agent", "", "Agent add-on for go-api-chi and go-cli-cobra (pi|none); defaults to none")
 	flags.StringVar(&inputs.APIBaseURL, "api-base-url", "", "API base URL the frontend client targets")
 	flags.StringVar(&inputs.AuthorName, "author-name", gitConfig("user.name"), "Author name")
 	flags.StringVar(&inputs.AuthorEmail, "author-email", gitConfig("user.email"), "Author email")

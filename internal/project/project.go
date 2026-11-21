@@ -21,6 +21,7 @@ type Input struct {
 	ProjectType string
 	Stack       string
 	Frontend    string
+	Agent       string
 	APIBaseURL  string
 	AuthorName  string
 	AuthorEmail string
@@ -35,11 +36,14 @@ type Input struct {
 }
 
 type Variables struct {
-	ProjectName     string
-	Language        string
-	ProjectType     string
-	Stack           string
-	Frontend        string
+	ProjectName string
+	Language    string
+	ProjectType string
+	Stack       string
+	Frontend    string
+	// Agent names the opt-in agent add-on composed onto the stack ("pi"),
+	// or is empty when none was requested.
+	Agent           string
 	APIBaseURL      string
 	BackendPort     string
 	NpmPackage      string
@@ -134,6 +138,7 @@ func ResolveVariables(input Input) (Variables, error) {
 		ProjectType:     normalize(input.ProjectType),
 		Stack:           stack,
 		Frontend:        strings.TrimSpace(input.Frontend),
+		Agent:           normalizeAgent(input.Agent),
 		APIBaseURL:      apiBaseURL,
 		BackendPort:     backendPort,
 		NpmPackage:      slugKebab(slugWords),
@@ -150,6 +155,16 @@ func ResolveVariables(input Input) (Variables, error) {
 		RepoSlug:        slugKebab(slugWords),
 		IncludePersonal: false,
 	}, nil
+}
+
+// normalizeAgent maps the explicit "none" answer to the empty value templates
+// test with {{ if .Agent }}.
+func normalizeAgent(value string) string {
+	value = normalize(value)
+	if value == "none" {
+		return ""
+	}
+	return value
 }
 
 func derivePythonPackage(slugWords []string, override string) string {

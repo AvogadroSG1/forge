@@ -1,0 +1,58 @@
+package cmd
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"strings"
+
+	"github.com/spf13/cobra"
+
+	"{{.ModulePath}}/internal/piagent"
+)
+
+// agentRun sends one prompt to Pi and streams the answer to out. It is a
+// variable so tests can replace the real agent.
+var agentRun = runPi
+
+var agentCmd = &cobra.Command{
+	Use:   "agent <prompt>",
+	Short: "Send a prompt to the Pi agent and print its answer",
+	Long: `Send a prompt to the Pi agent and print its answer as it streams.
+
+Needs the pi binary on PATH (the agent image target provides it) and a
+provider key such as ANTHROPIC_API_KEY in the environment. Arguments after
+-- are passed to pi, for example: agent "review this repo" -- --model sonnet`,
+	Args: cobra.MinimumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		prompt, piArgs := args, []string(nil)
+		if dash := cmd.ArgsLenAtDash(); dash >= 0 {
+			prompt, piArgs = args[:dash], args[dash:]
+		}
+		if len(prompt) == 0 {
+			return fmt.Errorf("a prompt is required before --")
+		}
+		return agentRun(cmd.Context(), strings.Join(prompt, " "), piArgs, cmd.OutOrStdout())
+	},
+}
+
+func runPi(ctx context.Context, prompt string, piArgs []string, out io.Writer) error {
+	client, err := piagent.Start(piagent.Options{Args: piArgs})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = client.Close() }()
+
+	_, err = client.Prompt(ctx, prompt, func(event piagent.Event) {
+		_, _ = io.WriteString(out, event.TextDelta())
+	})
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(out)
+	return err
+}
+
+func init() {
+	rootCmd.AddCommand(agentCmd)
+}

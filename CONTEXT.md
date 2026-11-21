@@ -44,6 +44,14 @@ governed by (and tested against) the canonical language guideline files. There i
 tooling is one *part* of the overlay, not a separate layer. `forge update` regenerates the
 snapshot beneath it but never touches the overlay.
 
+### Add-on
+An opt-in layer some repos of a stack ask for at init, selected with a flag (`--agent pi`) and
+composed after the overlay from its own root, `templates/addons/<name>/`. It is not a second
+overlay: the overlay is what every repo of a stack receives, so "one overlay per stack" still
+holds. `forge update` never touches an add-on, and the forge manifest records which one a repo
+was scaffolded with. An add-on is embedded and vetted like the rest of the templates; it is not
+a plugin. See ADR-0027.
+
 ### Telemetry bootstrap
 The observability slice of every shipped stack's overlay: one telemetry module that installs
 OpenTelemetry tracer + meter providers and `service.name` unconditionally, attaches OTLP/HTTP

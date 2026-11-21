@@ -1177,3 +1177,68 @@ func TestInitializeFitnessFunctions(t *testing.T) {
 	})
 }
 
+
+// The agent add-on is an init input, so it is recorded in the manifest; a
+// repo scaffolded without one keeps the manifest it had before the field
+// existed.
+func TestInitializerRecordsAgentAddonInManifest(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct{ agent, wantField string }{
+		{agent: "pi", wantField: `"agent": "pi"`},
+		{agent: "", wantField: ""},
+	} {
+		t.Run("agent="+tc.agent, func(t *testing.T) {
+			t.Parallel()
+
+			tempDir := t.TempDir()
+			writer := scaffold.Writer{Assets: fstest.MapFS{
+				"templates/common/AGENTS.md.tmpl":              {Data: []byte("Project {{.ProjectName}}\n")},
+				"templates/common/gitignore.base":              {Data: []byte(".DS_Store\n")},
+				"templates/seed/skills.json.tmpl":              {Data: []byte("{\"skills\":[\"golang-cli\"]}\n")},
+				"templates/common/claude/hooks/secret-scan.sh": {Data: []byte("#!/usr/bin/env bash\n")},
+				"templates/common/codex/hooks.json":            {Data: []byte("{\"hooks\":{}}\n")},
+				"templates/gitignore/Go.gitignore":             {Data: []byte("bin/\n")},
+				"templates/golden/go-cli-cobra/main.go.tmpl":   {Data: []byte("package main\n")},
+				"templates/addons/pi/common/AGENT.md":          {Data: []byte("# Pi agent\n")},
+			}}
+			init := Initializer{Writer: writer, Runner: &recordingRunner{}}
+
+			vars, err := project.ResolveVariables(project.Input{
+				ProjectName: "Sample App",
+				Language:    "go",
+				ProjectType: "cli",
+				Stack:       "go-cli-cobra",
+				Agent:       tc.agent,
+				AuthorName:  "Ada Lovelace",
+				AuthorEmail: "ada@example.com",
+				Remote:      project.RemoteNone,
+			})
+			if err != nil {
+				t.Fatalf("ResolveVariables() error = %v", err)
+			}
+			if err := init.Run(context.Background(), tempDir, vars); err != nil {
+				t.Fatalf("Run() error = %v", err)
+			}
+
+			m, err := upgrade.ReadManifest(tempDir)
+			if err != nil {
+				t.Fatalf("ReadManifest() error = %v", err)
+			}
+			if m.Agent != tc.agent {
+				t.Fatalf("manifest agent = %q, want %q", m.Agent, tc.agent)
+			}
+
+			raw, err := os.ReadFile(filepath.Join(tempDir, ".forge", "manifest.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantField == "" && strings.Contains(string(raw), `"agent"`) {
+				t.Fatalf("manifest without an add-on must omit the agent field:\n%s", raw)
+			}
+			if tc.wantField != "" && !strings.Contains(string(raw), tc.wantField) {
+				t.Fatalf("manifest missing %s:\n%s", tc.wantField, raw)
+			}
+		})
+	}
+}

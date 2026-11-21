@@ -176,7 +176,7 @@ func TestGoStacksDefineContainerImageGates(t *testing.T) {
 				`hadolint = "`,
 				`trivy = "`,
 				`[tasks."image:lint"]`,
-				`run = "hadolint Dockerfile"`,
+				`run = "hadolint Dockerfile`,
 				"[tasks.image]",
 				"--target \"$target\"",
 				`[tasks."image:scan"]`,

@@ -12,6 +12,24 @@ import (
 func TestWalkingSkeletonGoCLIInitRunsThroughMiseCI(t *testing.T) {
 	t.Parallel()
 
+	runGoCLIWalkingSkeleton(t, nil, []string{"mise.toml", "lefthook.yml", ".github/workflows/ci.yml", "cmd/root_test.go"})
+}
+
+// The Pi agent add-on (ADR-0027) must leave the composed repo a walking
+// skeleton: `forge init --agent pi` output passes the same `mise run ci`,
+// which now also runs the scaffolded piagent and agent command tests.
+func TestWalkingSkeletonGoCLIWithPiAgentRunsThroughMiseCI(t *testing.T) {
+	t.Parallel()
+
+	runGoCLIWalkingSkeleton(t, []string{"--agent", "pi"}, []string{
+		"mise.toml", "Dockerfile.agent", "AGENT.md", ".config/mise/conf.d/pi.toml",
+		"cmd/agent.go", "cmd/agent_test.go", "internal/piagent/client.go", "internal/piagent/client_test.go",
+	})
+}
+
+func runGoCLIWalkingSkeleton(t *testing.T, extraInitArgs []string, wantFiles []string) {
+	t.Helper()
+
 	buildDir := t.TempDir()
 	binaryPath := filepath.Join(buildDir, "forge")
 	if runtime.GOOS == "windows" {
@@ -84,7 +102,7 @@ esac
 	}
 	pathEnv := stubDir + string(os.PathListSeparator) + os.Getenv("PATH")
 
-	initCmd := exec.Command(binaryPath,
+	initArgs := append([]string{
 		"init",
 		"--project-name", "Sample App",
 		"--language", "go",
@@ -93,14 +111,15 @@ esac
 		"--author-name", "Ada Lovelace",
 		"--author-email", "ada@example.com",
 		"--remote", "none",
-	)
+	}, extraInitArgs...)
+	initCmd := exec.Command(binaryPath, initArgs...)
 	initCmd.Dir = targetDir
 	initCmd.Env = append(os.Environ(), "PATH="+pathEnv)
 	if output, err := initCmd.CombinedOutput(); err != nil {
 		t.Fatalf("forge init error = %v\n%s", err, output)
 	}
 
-	for _, rel := range []string{"mise.toml", "lefthook.yml", ".github/workflows/ci.yml", "cmd/root_test.go"} {
+	for _, rel := range wantFiles {
 		if _, err := os.Stat(filepath.Join(targetDir, rel)); err != nil {
 			t.Fatalf("Stat(%s) error = %v", rel, err)
 		}
