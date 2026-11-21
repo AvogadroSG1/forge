@@ -49,15 +49,19 @@ func (w Writer) Write(targetDir string, vars project.Variables) error {
 	}
 
 	if vars.Agent != "" {
-		// An agent add-on is its own template root, composed last so it
-		// wins: a shared tree for every stack that offers it, then the
-		// stack-specific wiring. See ADR-0027.
-		addonRoot := filepath.ToSlash(filepath.Join(addonsRoot, vars.Agent))
-		if err := w.copyTree(addonRoot+"/common", targetDir, "", vars, nil); err != nil {
+		// Composed last so it wins; RenderAddon owns the layering. See ADR-0027.
+		files, err := RenderAddon(w.Assets, vars)
+		if err != nil {
 			return err
 		}
-		if err := w.copyTree(addonRoot+"/"+vars.Stack, targetDir, "", vars, nil); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return err
+		for _, f := range files {
+			targetPath := filepath.Join(targetDir, filepath.FromSlash(f.Path))
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+				return err
+			}
+			if err := os.WriteFile(targetPath, f.Data, f.Mode); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -127,7 +131,24 @@ func skipRootGateFiles(path string) bool {
 }
 
 func (w Writer) copyTree(root string, targetDir string, destPrefix string, vars project.Variables, skip func(relPath string) bool) error {
-	sub, err := fs.Sub(w.Assets, root)
+	return walkTree(w.Assets, root, destPrefix, vars, skip,
+		func(dir string) error {
+			return os.MkdirAll(filepath.Join(targetDir, filepath.FromSlash(dir)), 0o755)
+		},
+		func(f File) error {
+			targetPath := filepath.Join(targetDir, filepath.FromSlash(f.Path))
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+				return err
+			}
+			return os.WriteFile(targetPath, f.Data, f.Mode)
+		})
+}
+
+// walkTree renders one template tree, reporting each directory and file with
+// its destination path (slash-separated, relative to the repo root). It is
+// the single rendering path for Writer and RenderAddon.
+func walkTree(assets fs.FS, root string, destPrefix string, vars project.Variables, skip func(relPath string) bool, onDir func(path string) error, onFile func(File) error) error {
+	sub, err := fs.Sub(assets, root)
 	if err != nil {
 		return err
 	}
@@ -156,16 +177,12 @@ func (w Writer) copyTree(root string, targetDir string, destPrefix string, vars 
 		if err != nil {
 			return err
 		}
-		targetPath := filepath.Join(targetDir, destPrefix, mapOutputPath(renderedPath))
+		outPath := filepath.ToSlash(filepath.Join(destPrefix, mapOutputPath(renderedPath)))
 		if d.IsDir() {
-			return os.MkdirAll(targetPath, 0o755)
+			return onDir(outPath)
 		}
 
 		mode := fs.FileMode(0o644)
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-			return err
-		}
-
 		data, err := fs.ReadFile(sub, path)
 		if err != nil {
 			return err
@@ -176,15 +193,14 @@ func (w Writer) copyTree(root string, targetDir string, destPrefix string, vars 
 			if renderErr != nil {
 				return renderErr
 			}
-			targetPath = strings.TrimSuffix(targetPath, ".tmpl")
-			return os.WriteFile(targetPath, rendered, mode)
+			return onFile(File{Path: strings.TrimSuffix(outPath, ".tmpl"), Data: rendered, Mode: mode})
 		}
 
 		if filepath.Base(path) == "guard" || filepath.Base(path) == "secret-scan.sh" {
 			mode = 0o755
 		}
 
-		return os.WriteFile(targetPath, data, mode)
+		return onFile(File{Path: outPath, Data: data, Mode: mode})
 	})
 }
 
