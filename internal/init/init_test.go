@@ -134,7 +134,7 @@ func TestInitializerStampsForgeManifest(t *testing.T) {
 	}
 }
 
-func TestInitializerRunsPipInstallForPythonProjects(t *testing.T) {
+func TestInitializerRunsUvSyncForPythonProjects(t *testing.T) {
 	t.Parallel()
 
 	tempDir := t.TempDir()
@@ -180,7 +180,7 @@ func TestInitializerRunsPipInstallForPythonProjects(t *testing.T) {
 		"instill sync",
 		"mise trust",
 		"mise install",
-		"pip install",
+		"uv sync",
 		"lefthook install",
 		"fitness functions onboard",
 		"git add",
@@ -190,7 +190,7 @@ func TestInitializerRunsPipInstallForPythonProjects(t *testing.T) {
 		t.Fatalf("step order = %#v, want %#v", got, want)
 	}
 
-	assertRecordedStepArgs(t, runner.steps, "pip install", "exec", "--", "pip", "install", "-e", ".[dev]")
+	assertRecordedStepArgs(t, runner.steps, "uv sync", "exec", "--", "uv", "sync")
 }
 
 func TestInitializerPassesSeedSkillsToInstillInit(t *testing.T) {

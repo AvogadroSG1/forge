@@ -17,10 +17,13 @@ dependencies = [
   "uvicorn[standard]==0.54.0",
 ]
 
+[project.scripts]
+app = "{{.PythonPackage}}.serve:main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["{{.PythonPackage}}"]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
   "httpx2==2.16.2",
   "pytest==9.2.0",

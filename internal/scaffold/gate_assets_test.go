@@ -226,6 +226,97 @@ func TestGoStacksDefineContainerImageGates(t *testing.T) {
 	}
 }
 
+// pythonContainerGateStacks ship the Python container image pattern (ADR-0026).
+var pythonContainerGateStacks = []string{"python-cli-typer", "python-fastapi", "python-web-jinja"}
+
+// TestPythonStacksDefineContainerImageGates is the Python counterpart of the Go
+// gate test: image:lint is part of the Docker-free ci task, build and scan are
+// separate tasks reached from CI only through mise.
+func TestPythonStacksDefineContainerImageGates(t *testing.T) {
+	t.Parallel()
+
+	assets := forge.Assets()
+	for _, stack := range pythonContainerGateStacks {
+		stack := stack
+		t.Run(stack, func(t *testing.T) {
+			t.Parallel()
+
+			misePath, miseText := readMiseOverlay(t, assets, stack)
+			for _, snippet := range []string{
+				`hadolint = "2.15.1"`,
+				`trivy = "0.76.2"`,
+				`[tasks."image:lint"]`,
+				`run = "hadolint Dockerfile"`,
+				"[tasks.image]",
+				"--target \"$target\"",
+				`[tasks."image:scan"]`,
+				`depends = ["image"]`,
+				"trivy image --exit-code 1 --severity HIGH,CRITICAL",
+			} {
+				if !strings.Contains(miseText, snippet) {
+					t.Fatalf("%s missing %q", misePath, snippet)
+				}
+			}
+
+			// The run line that follows each [tasks.ci] header is the ci task.
+			ciTasks := 0
+			lines := strings.Split(miseText, "\n")
+			for i, line := range lines {
+				if strings.TrimSpace(line) != "[tasks.ci]" {
+					continue
+				}
+				var run string
+				for _, next := range lines[i+1:] {
+					if strings.HasPrefix(next, "[") {
+						break
+					}
+					if strings.HasPrefix(next, "run = ") {
+						run = next
+						break
+					}
+				}
+				if run == "" {
+					t.Fatalf("%s [tasks.ci] has no run line", misePath)
+				}
+				ciTasks++
+				for _, required := range []string{"mise run image:lint", "uv sync --locked"} {
+					if !strings.Contains(run, required) {
+						t.Fatalf("%s ci task must contain %q: %s", misePath, required, run)
+					}
+				}
+				// ci must stay runnable without a Docker daemon.
+				for _, forbidden := range []string{"mise run image &&", "mise run image:scan", "docker ", "trivy"} {
+					if strings.Contains(run, forbidden) {
+						t.Fatalf("%s ci task must not need Docker (%q): %s", misePath, forbidden, run)
+					}
+				}
+			}
+			wantCI := 1
+			if stack == "python-fastapi" {
+				wantCI = 2 // frontend and non-frontend variants
+			}
+			if ciTasks != wantCI {
+				t.Fatalf("%s has %d [tasks.ci] tables, want %d", misePath, ciTasks, wantCI)
+			}
+
+			ciPath := filepath.ToSlash(filepath.Join("templates/golden", stack, ".forge-overlay", ".github", "workflows", "ci.yml"))
+			ciData, err := fs.ReadFile(assets, ciPath)
+			if err != nil {
+				t.Fatalf("ReadFile(%s) error = %v", ciPath, err)
+			}
+			ciText := string(ciData)
+			if !strings.Contains(ciText, "- run: mise run image:scan") {
+				t.Fatalf("%s must run the image scan through mise", ciPath)
+			}
+			for _, forbidden := range []string{"docker build", "trivy", "hadolint"} {
+				if strings.Contains(ciText, forbidden) {
+					t.Fatalf("%s should not inline %q", ciPath, forbidden)
+				}
+			}
+		})
+	}
+}
+
 // ADR-0024: Lefthook owns .git/hooks and Beads runs as a Lefthook command in
 // every hook it supports. All twelve overlays MUST stay byte-identical.
 var (

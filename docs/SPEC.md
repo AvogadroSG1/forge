@@ -43,7 +43,8 @@ ADR-0003 (one shared gate pipeline) · ADR-0004 (init fail-fast, no rollback) ·
 floor, not the ceiling) · ADR-0012 (skill provisioning via APM-backed instill) · ADR-0013
 (frontend dimension: fragments under web/) · ADR-0014 (typescript toolchain) · ADR-0020 (env-gated
 OpenTelemetry bootstrap in every stack) · ADR-0023 (pinned two-target container image pattern for
-the Go stacks).
+the Go stacks) · ADR-0025 (Python stacks use uv with a committed `uv.lock`) · ADR-0026 (pinned
+two-target container image pattern for the Python stacks).
 
 ---
 
@@ -113,7 +114,7 @@ reverse; ownership is declared once, per file, not inferred at write time.
 | **Wholly-owned** | `.claude/hooks/guard`, `.claude/hooks/secret-scan.sh`, `.opencode/plugins/forge-hooks.js` | Nothing else ever writes to these. Blind byte-copy from the embedded template, unconditionally. |
 | **Co-owned (hook config)** | `.claude/settings.json`, `.codex/hooks.json` | Other tools (`bd`, notably) append their own entries into the same top-level `hooks` object. Reconciled by owned-entry identity (`internal/hookcfg.Reconcile`, **ADR-0016**) — never blind-overwritten. |
 | **Co-owned (init-rendered)** | `opencode.jsonc` | Templated with init-time parameters that only exist in memory during `forge init`. `forge upgrade` renders it from `.forge/manifest.json`'s persisted params **only when the file is missing**; once present, upgrade never touches it again (**ADR-0017**). |
-| **Add-if-missing (Go container files)** | `Dockerfile`, `.dockerignore`, `CONTAINER.md` for `go-cli-cobra`, `go-api-chi`, `go-web-templ` | Hand-edited once present. `forge upgrade` writes them from the stack's overlay only when the manifest names a Go stack and neither `Dockerfile` nor `.dockerignore` exists with content that is not forge's (**ADR-0023**); see **§19**. |
+| **Add-if-missing (container files)** | `Dockerfile`, `.dockerignore`, `CONTAINER.md` for the three Go stacks (`go-cli-cobra`, `go-api-chi`, `go-web-templ`) and the three Python stacks (`python-cli-typer`, `python-fastapi`, `python-web-jinja`) | Hand-edited once present. `forge upgrade` writes them from the stack's overlay only when the manifest names one of those six stacks and neither `Dockerfile` nor `.dockerignore` exists with content that is not forge's (**ADR-0023**, **ADR-0026**); see **§19**. |
 | **Delegated** | `.beads/` (via `bd`), `.apm/` (via `instill`) | Owned entirely by the delegate tool. `forge` does not write their contents; it only repairs directory permissions it is responsible for (`.beads` 0700) and detects drift. |
 
 Co-owned files are the load-bearing case: a blind overwrite of either co-owned class is the exact
@@ -429,7 +430,8 @@ test, shipped as a vetted extra (ADR-0010, §10.2) with no guideline edit.
   build-time `FORGE_OTLP_ENDPOINT` global through a `typeof` guard; see §9.5). Unset means
   providers only — no exporter, no retry noise. Signals are traces + metrics; logs are a filed
   follow-up. Python stacks add a `mise run serve` (`run-cli` on typer) task that runs the app under
-  `opentelemetry-instrument`, with the same endpoint guard exporting `OTEL_*_EXPORTER=none` when
+  `opentelemetry-instrument` through `uv run` (the servers start the fixed `app` console script,
+  §9.6; typer runs its package), with the same endpoint guard exporting `OTEL_*_EXPORTER=none` when
   no collector is configured.
 - **Non-vacuous test.** The module's test injects an in-memory span exporter and metric reader,
   starts one span, records one metric, and asserts both arrive — the observability slice of the
@@ -549,37 +551,52 @@ viewer HTTP reachability, Collector recreation, dashboard-container stability, a
 trace exporter path. These three assets are wholly owned members of the managed upgrade set
 (§19).
 
-### 9.6 Container image pattern — Go stacks
+### 9.6 Container image pattern — Go and Python stacks
 
-*(Authoritative: ADR-0023.)*
+*(Authoritative: ADR-0023 for Go, ADR-0026 for Python, which extends ADR-0023.)*
 
-Each Go stack's overlay root ships `Dockerfile`, `.dockerignore`, and `CONTAINER.md`. They are
-plain files (no template variables): the main package is fixed per stack (`.`, `./cmd/api`,
-`./cmd/web`). The pattern defines images only; registries and deployment are out of scope.
+Each Go stack and each Python stack's overlay root ships `Dockerfile`, `.dockerignore`, and
+`CONTAINER.md`. They are plain files (no template variables) so `forge upgrade` can deliver them
+byte for byte (§19). The pattern defines images only; registries and deployment are out of scope.
+
+**Shared rules (Go and Python).**
+
+- **Two targets.** One `Dockerfile`; `runtime` is the last stage (a plain `docker build .`), and
+  `sandbox` is selected with `--target sandbox`.
+- **Pinning.** Every image and the `# syntax=` frontend MUST be `tag@sha256:<multi-platform index
+  digest>`, declared as an `ARG *_IMAGE`; every stage's `FROM` MUST reference one of those ARGs.
+  Language and tool versions in the `Dockerfile` MUST equal the stack's `mise.toml` pins; a test
+  enforces each equality. OS packages are deliberately not version-pinned (ADR-0023, ADR-0026).
+- **Platform.** The `Dockerfile` MUST NOT hardcode a CPU architecture.
+- **Build context.** `.dockerignore` is an allowlist: it starts with `*` and re-includes only what
+  the build needs.
+- **Twelve-Factor code.** The server stacks log one JSON object per line to stdout.
+  `CONTAINER.md` maps all twelve factors.
+- **Gates.** See §10.4.
+- **Upgrade.** The three files are delivered add-if-missing by `forge upgrade`; the stack
+  overlay content around them is not (§19).
+
+#### Go stacks
+
+*(ADR-0023.)* The main package is fixed per stack (`.`, `./cmd/api`, `./cmd/web`).
 
 | Target | Base | User | Contents |
 |---|---|---|---|
 | `runtime` (default, last stage) | `gcr.io/distroless/static-debian13:nonroot` | 65532 | Static binary at `/app`, exec-form `ENTRYPOINT`; server stacks add `ENV PORT=8080` + `EXPOSE 8080` |
 | `sandbox` | the pinned `golang` Alpine image | 10001 | Go, gopls, golangci-lint, bash, coreutils, curl, git, jq; `WORKDIR /workspace`, `CGO_ENABLED=0` |
 
-- **Pinning.** Every image and the `# syntax=` frontend MUST be `tag@sha256:<digest>`, declared as
-  an `ARG *_IMAGE`; every stage's `FROM` MUST reference one of those ARGs. The Go and
-  golangci-lint versions MUST equal the stack's `mise.toml` pins. gopls is an exact version.
-  apk packages are deliberately not version-pinned (ADR-0023).
-- **Platform.** The Dockerfile MUST NOT hardcode `GOARCH`. The build stage runs on
-  `BUILDPLATFORM` and cross-compiles to `TARGETOS`/`TARGETARCH`.
+- **Pinned tools.** The Go and golangci-lint versions MUST equal the stack's `mise.toml` pins.
+  gopls is an exact version. apk packages are not version-pinned.
+- **Platform.** The build stage runs on `BUILDPLATFORM` and cross-compiles to
+  `TARGETOS`/`TARGETARCH`.
 - **Runtime stage.** No `RUN`, no `HEALTHCHECK`, numeric non-root `USER`.
 - **Generated code.** `go-web-templ` MUST run `templ generate` in the build stage before
   `go build`, with templ pinned once as `ARG TEMPL_VERSION` equal to the mise tool and `go.mod`
   module versions, and MUST re-include `**/*.templ` in `.dockerignore`. Its sandbox ships templ.
-- **Build context.** `.dockerignore` starts with `*` and re-includes only `go.mod`, `go.sum`, Go
-  sources, and embedded assets.
+- **Build context.** `.dockerignore` re-includes only `go.mod`, `go.sum`, Go sources, and
+  embedded assets.
 - **Twelve-Factor code.** The server stacks (`go-api-chi`, `go-web-templ`) read the listen port
-  from `PORT` (default `8080`, matching the backend port in §6) and log JSON lines to stdout with
-  `log/slog`. `CONTAINER.md` maps all twelve factors.
-- **Gates.** See §10.4.
-- **Not propagated.** These files are stack overlay files, not members of the managed upgrade
-  set (§19).
+  from `PORT` (default `8080`, matching the backend port in §6) and log with `log/slog`.
 
 Owning tests: `TestGoStacksShipPinnedMultiStageDockerfile`,
 `TestGoStackDockerfileToolVersionsMatchMise`, `TestGoStacksShipAllowlistDockerignore`,
@@ -588,6 +605,63 @@ Owning tests: `TestGoStacksShipPinnedMultiStageDockerfile`,
 (`test/go_container_assets_test.go`), and the opt-in live tests
 `TestGoStackContainerImagesBuildAndRun` and `TestGoWebTemplImageServesTemplateOnlyEdits`
 (`FORGE_DOCKER_TESTS=1`).
+
+#### Python stacks
+
+*(ADR-0026; lock and package manager: ADR-0025.)* The three Python stacks use **uv** and a
+committed `uv.lock` (§16.1). Python wheels are platform-specific, so nothing is cross-compiled.
+
+```mermaid
+flowchart LR
+    P["PYTHON_IMAGE<br/>slim, tag@digest"] --> S["sandbox<br/>UID 10001"]
+    P --> B["build<br/>uv sync --locked --no-dev --no-editable"]
+    P --> R["runtime (default)<br/>/app/.venv only, UID 65532"]
+    B -->|/app/.venv| R
+```
+
+| ARG | Image | MUST equal in `mise.toml` |
+|---|---|---|
+| `PYTHON_IMAGE` | `python:<version>-slim-trixie` | `python` |
+| `UV_IMAGE` | `ghcr.io/astral-sh/uv` | `uv` |
+| `RUFF_IMAGE` | `ghcr.io/astral-sh/ruff` | `ruff` |
+| `NODE_IMAGE` | `node:<version>-trixie-slim` | `node`, where the stack pins it |
+| `ARG PYRIGHT_VERSION` | pyright from npm (not an image) | `npm:pyright` |
+
+- **Static Dockerfile.** It names no package. Each stack declares a fixed console script `app` in
+  `[project.scripts]`, and the runtime `ENTRYPOINT` is `["/app/.venv/bin/app"]`.
+- **Build stage.** Runs on the target platform. It copies `pyproject.toml` and `uv.lock`, runs
+  `uv sync --locked --no-dev --no-install-project`, then copies the source and runs
+  `uv sync --locked --no-dev --no-editable`, so a stale lock fails the build.
+- **Runtime target.** Slim Python (not distroless: the interpreter MUST be the one mise pins),
+  numeric UID 65532, only `/app/.venv` copied from the build stage, `PYTHONDONTWRITEBYTECODE=1`,
+  `PYTHONUNBUFFERED=1`, no `HEALTHCHECK`. Unlike Go it contains a shell, and it has exactly one
+  `RUN`: Debian security updates plus removal of pip, setuptools and wheel, so `image:scan` does
+  not fail on base-image findings the repo cannot fix (hadolint `DL3005` ignored inline).
+- **Sandbox target.** Python slim plus bash, curl, git, jq, `libatomic1`, uv, ruff and Node with
+  pyright; UID 10001 in `/workspace`; `UV_PYTHON_DOWNLOADS=never`.
+- **Twelve-Factor code.** `python-fastapi` and `python-web-jinja` ship a `serve` module whose
+  `main()` is the `app` script. It reads `HOST` and `PORT` and logs JSON to stdout, uvicorn's
+  own logs included.
+
+  | Setting | Default in code | Set by the image |
+  |---|---|---|
+  | `HOST` | `127.0.0.1` | `0.0.0.0` |
+  | `PORT` | `8000` | `8080` |
+
+  The code defaults keep local development on loopback port 8000, where the frontend fragments
+  expect the API (§6). The image sets `8080`, as the Go stacks do.
+  `python-cli-typer` has no server: its `app` script is the CLI entry point.
+- **Build context.** `.dockerignore` excludes everything, re-includes `pyproject.toml`,
+  `uv.lock`, `README.md` and `**/*.py` (`python-web-jinja` also `**/templates/**` and
+  `**/static/**`), then excludes `.venv/`, `tests/` and `web/` again.
+
+Owning tests: `TestPythonStacksShipPinnedMultiStageDockerfile`,
+`TestPythonStackDockerfileToolVersionsMatchMise`, `TestPythonStacksShipAllowlistDockerignore`,
+`TestPythonStacksDocumentTheContainerPattern`, `TestPythonStacksLockDependenciesWithUv`,
+`TestPythonServerStacksReadHostPortFromEnvironmentAndLogJSON`
+(`test/python_container_assets_test.go`), and the opt-in live tests
+`TestPythonStackContainerImagesBuildAndRun` and `TestPythonWebJinjaImageServesTemplateOnlyEdits`
+(`test/python_container_image_test.go`, `FORGE_DOCKER_TESTS=1`).
 
 ---
 
@@ -610,7 +684,7 @@ Every overlay tool traces to a canonical guideline file; the conformance test (`
 | | Format | Lint | Test | Mock | Coverage | Type | Audit | Telemetry |
 |---|---|---|---|---|---|---|---|---|
 | **Go** | `gofmt` | `golangci-lint` | `testing` + `go-cmp` | *(none — idiomatic fakes)* | `go test -cover` | — | `govulncheck` | `otel` + `otelhttp` + runtime metrics |
-| **Python** | `ruff format` | `ruff` | `pytest` | `pytest-mock` | `pytest-cov` | `pyright` | `pip-audit` | `opentelemetry-distro` / `opentelemetry-instrument` + `instrumentation-fastapi` |
+| **Python** (`uv`) | `ruff format` | `ruff` | `pytest` | `pytest-mock` | `pytest-cov` | `pyright` | `pip-audit` (on the set locked by `uv.lock`) | `opentelemetry-distro` / `opentelemetry-instrument` + `instrumentation-fastapi` |
 | **C#** | `dotnet format` | StyleCop.Analyzers | **xUnit** | NSubstitute | coverlet | nullable refs | `dotnet list package --vulnerable` | `OpenTelemetry.Extensions.Hosting` + AspNetCore/Http/Runtime instrumentation |
 | **TypeScript** | `prettier` | `eslint` (typescript-eslint / angular-eslint / eslint-plugin-svelte) | `vitest` | *(vi stubs)* | vitest coverage | `tsc --noEmit` / `svelte-check` | `npm audit --audit-level=high` | `sdk-trace` + `sdk-metrics` + `instrumentation-fetch` |
 
@@ -634,8 +708,9 @@ to the vendored path.
 ### 10.3 CI workflow shape
 
 One **language-agnostic** `ci.yml` shape across all stacks: checkout → install mise →
-`mise install` → `mise run ci`. No inline lint/test/format. The Go stacks append one further
-mise-only step, `mise run image:scan` (§10.4). Triggers `on: [push, pull_request]`;
+`mise install` → `mise run ci`. No inline lint/test/format. The Go and Python stacks append one
+further mise-only step, `mise run image:scan` (§10.4); a Python `ci` task begins with
+`uv sync --locked`, so a stale `uv.lock` fails the gate. Triggers `on: [push, pull_request]`;
 no scheduled run in v1. Verification asserts every shipped overlay's `mise.toml` defines a `ci`
 task that `mise run ci` resolves to — the contract coupling `ud1` to `x2k` (see Seam Inventory §18).
 
@@ -654,19 +729,20 @@ Scenario: One CI workflow calls mise run ci and references a real task
        contains no inline lint/test/format, and the stack's mise.toml defines a resolvable `ci` task
 ```
 
-### 10.4 Container image gates — Go stacks
+### 10.4 Container image gates — Go and Python stacks
 
-*(Authoritative: ADR-0023; pattern §9.6.)*
+*(Authoritative: ADR-0023 and ADR-0026; pattern §9.6.)*
 
 | Task | Runs | Needs Docker | Caller |
 |---|---|---|---|
 | `image:lint` | `hadolint Dockerfile` | No | part of `mise run ci` |
 | `image` | builds the `runtime` and `sandbox` targets (`IMAGE`, `PLATFORM` env) | Yes | on demand; dependency of `image:scan` |
-| `image:scan` | `trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed` on the runtime image | Yes | second step of the Go `ci.yml` |
+| `image:scan` | `trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed` on the runtime image | Yes | second step of the Go and Python `ci.yml` |
 
 `mise run ci` MUST stay runnable without a Docker daemon: it calls `image:lint` and MUST NOT call
 `image` or `image:scan`. `hadolint` and `trivy` are exact-pinned `[tools]` entries. Owning test:
-`TestGoStacksDefineContainerImageGates` (`internal/scaffold/gate_assets_test.go`).
+`TestGoStacksDefineContainerImageGates` and `TestPythonStacksDefineContainerImageGates`
+(`internal/scaffold/gate_assets_test.go`).
 
 ---
 
@@ -913,6 +989,10 @@ and the real JS toolchain proof moves to a **network-gated tier** (`FORGE_SMOKE_
 Once installed, `mise run ci` is local except `npm audit` (kept in ci deliberately, like
 `pip-audit`/`govulncheck`).
 
+**Python lock (ADR-0025):** the Python stacks' `uv.lock` is likewise generated at init, by
+`mise exec -- uv sync` (network needed, as `pip install` was before), and is part of the initial
+commit; it is not vendored in the template. `mise run ci` starts with `uv sync --locked`.
+
 ### 16.2 Full golden path (gated behind gh credentials; nightly/opt-in)
 
 `--remote gh` end to end → remote created → first push passes pre-push → CI green on the remote.
@@ -995,7 +1075,8 @@ myproject/
 ├── .forge/manifest.json   [render]     ├── .forge-infra-version   [render, legacy fallback]
 ├── mise.toml, lefthook.yml, .github/workflows/ci.yml
 ├── .config/mise/conf.d/otel.toml       ├── .otel/{compose.yaml, collector.yaml}
-├── Dockerfile, .dockerignore, CONTAINER.md   [verbatim, Go stacks only; §9.6]
+├── Dockerfile, .dockerignore, CONTAINER.md   [verbatim, Go and Python stacks; §9.6]
+├── uv.lock                [generated at init, Python stacks; ADR-0025]
 └── <composed golden tree>  vanilla + overlay, rendered
 ```
 
@@ -1016,7 +1097,7 @@ Feature's `all-children` gate IS the seam test.)*
 | **Conformance fixture** | `zz8` (publish guidelines) → `ebp` (conformance test) | Precondition, not a composition seam: `ebp` reads the guideline files from the in-repo vendored snapshots (`test/testdata/guidelines/`, **ADR-0018**), refreshed from the canonical path by `cp -f` after `zz8` publishes. | Plain `blockedBy` edge (`ebp` blocked-by `zz8`). |
 | **Chain-mode hooks** | `485` (verify beads hooks survive `lefthook install`) → `x2k` (real multi-job lefthook) | *Superseded in part by ADR-0024: Lefthook owns `.git/hooks` and runs Beads as a command; `TestLefthookOwnsGitHooksAndRunsBeadsOncePerHook` proves it in isolation.* `485` proved chain mode in isolation; the local smoke (§16.1) exercises pre-commit/pre-push at runtime without duplicating the `485` proof. | `x2k` blocked-by `485` (existing edge). |
 | **Telemetry bootstrap** | overlay telemetry module + test × stack manifest OpenTelemetry dependency (`agentic_template_start-6cf`, ADR-0020) | `TestGoldenStacksShipTelemetryBootstrap` (`test/golden_assets_test.go`): for every v1 stack, the manifest pins the OpenTelemetry dependency **and** the overlay ships the telemetry module and its test; `TestPythonStacksRunUnderOpentelemetryInstrument` pins the `serve`/`run-cli` wrapper task. | Epic `all-children` gate; each platform child (`.3`–`.6`) turns its rows green. |
-| **Container image** | Go overlay `Dockerfile` × overlay `mise.toml` tool pins and image tasks × Go `ci.yml` (ADR-0023) | `TestGoStackDockerfileToolVersionsMatchMise` (`test/go_container_assets_test.go`): the image's Go and golangci-lint versions equal the mise pins. `TestGoStacksDefineContainerImageGates` (`internal/scaffold/gate_assets_test.go`): `ci` lints without Docker and `ci.yml` reaches the scan only through mise. | Feature gate of the container-image epic (`agentic_template_start-ee5`) |
+| **Container image** | Go and Python overlay `Dockerfile` × overlay `mise.toml` tool pins and image tasks × `ci.yml` (ADR-0023, ADR-0026) | `TestGoStackDockerfileToolVersionsMatchMise` (`test/go_container_assets_test.go`): the image's Go and golangci-lint versions equal the mise pins. `TestPythonStackDockerfileToolVersionsMatchMise` (`test/python_container_assets_test.go`): the Python, uv, ruff, Node and pyright pins equal the mise pins. `TestGoStacksDefineContainerImageGates` and `TestPythonStacksDefineContainerImageGates` (`internal/scaffold/gate_assets_test.go`): `ci` lints without Docker and `ci.yml` reaches the scan only through mise. Opt-in live builds: `TestPythonStackContainerImagesBuildAndRun`, `TestPythonWebJinjaImageServesTemplateOnlyEdits` (`FORGE_DOCKER_TESTS=1`). | Feature gate of the container-image epic (`agentic_template_start-ee5`) |
 
 ### 18.1 Work hierarchy (Epic → Feature → Story)
 
@@ -1071,9 +1152,9 @@ parameters, so blind-copying the raw template would write unrendered `{{ }}` syn
 allow-block (kept in sync via `forge sync-allowlist`) both survive. A repo with no manifest yet
 (uninferable params) skips the render silently rather than guessing.
 
-The Go stacks' container files (`Dockerfile`, `.dockerignore`, `CONTAINER.md`; ADR-0023) are
+The six container-pattern stacks' files (`Dockerfile`, `.dockerignore`, `CONTAINER.md`; ADR-0023 for Go, ADR-0026 for Python) are
 delivered **add-if-missing**, only for a repo whose `.forge/manifest.json` names `go-cli-cobra`,
-`go-api-chi` or `go-web-templ`; a repo with no manifest, or an empty `stack`, is skipped silently
+`go-api-chi`, `go-web-templ`, `python-cli-typer`, `python-fastapi` or `python-web-jinja`; a repo with no manifest, or an empty `stack`, is skipped silently
 because the stack is never guessed. The build pair is all-or-nothing against a custom setup: if either
 `Dockerfile` or `.dockerignore` exists with content that differs from the embedded file, nothing
 is added, because the shipped `.dockerignore` is an allowlist (it starts with `*`) that would
@@ -1082,11 +1163,16 @@ decided by content, with no progress record: a build-pair file byte-identical to
 one was written by forge, so an upgrade interrupted partway is completed on retry instead of
 being mistaken for a custom setup. Each file is written under a temporary name and renamed into
 place, `.dockerignore` first and `Dockerfile` last, and the version is stamped only afterwards. Added files are reported in the upgrade's updated list and
-one stderr notice says what upgrade did *not* deliver: the `image`, `image:lint` and `image:scan`
-mise tasks, the `hadolint` and `trivy` pins, the CI scan step, and the `PORT`/`slog` application
-changes are stack-overlay content, and the Dockerfile's Go, golangci-lint (and templ) versions
-must be aligned with the repo's `mise.toml`. Owning tests: `TestRunAddsGoContainerFilesForEachGoStack`
-and its siblings in `internal/upgrade/upgrade_test.go`.
+one stderr notice, chosen per language by stack key, says what upgrade did *not* deliver. For Go:
+the `image`, `image:lint` and `image:scan` mise tasks, the `hadolint` and `trivy` pins, the CI scan
+step, and the `PORT`/`slog` application changes are stack-overlay content, and the Dockerfile's Go,
+golangci-lint (and templ) versions must be aligned with the repo's `mise.toml`. For Python: upgrade
+does not change `pyproject.toml`, `mise.toml`, CI or application code; the Dockerfile builds only
+once the repo has a `uv.lock` (`uv lock`) and an `app` console script in `[project.scripts]`, and
+its Python, uv, ruff and pyright versions must be aligned with `mise.toml`. Moving an existing pip
+repo to uv is a manual step (ADR-0025). Container delivery brought the infrastructure version to
+11. Owning tests: `TestRunAddsContainerFilesForEachContainerStack` and its siblings in
+`internal/upgrade/upgrade_test.go`.
 
 Version state lives in `.forge-infra-version` (repo root). Missing file → version 0 → always stale.
 Managed writes happen first; the version marker and manifest are written last so interrupted

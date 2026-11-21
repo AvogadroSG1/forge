@@ -16,7 +16,7 @@ import (
 	"forge/internal/hookcfg"
 )
 
-const Version = 10
+const Version = 11
 
 const versionFile = ".forge-infra-version"
 
@@ -134,13 +134,13 @@ func Run(assets fs.FS, targetDir string, checkOnly bool) (Status, error) {
 	}
 
 	if manifestErr == nil {
-		added, err := addGoContainerFilesIfMissing(assets, targetDir, m)
+		added, err := addContainerFilesIfMissing(assets, targetDir, m)
 		if err != nil {
 			return Status{}, err
 		}
 		if len(added) > 0 {
 			status.Updated = append(status.Updated, added...)
-			fmt.Fprintln(os.Stderr, goContainerNotice)
+			fmt.Fprintln(os.Stderr, containerStacks[m.Stack])
 		}
 	}
 
@@ -359,16 +359,23 @@ func readOnDiskVersion(targetDir string) int {
 	return v
 }
 
-// goContainerFiles are the static container files the Go stacks ship in their
-// overlay (ADR-0023). upgrade delivers them add-if-missing; they are hand-
-// edited once present, so they are never part of managedFiles.
-var goContainerFiles = []string{"Dockerfile", ".dockerignore", "CONTAINER.md"}
+// containerFiles are the static container files every container-pattern stack
+// ships in its overlay (Go, ADR-0023; Python, ADR-0026). upgrade delivers them
+// add-if-missing; they are hand-edited once present, so they are never part of
+// managedFiles.
+var containerFiles = []string{"Dockerfile", ".dockerignore", "CONTAINER.md"}
 
-// goStacks are the stacks whose overlay carries goContainerFiles.
-var goStacks = map[string]bool{
-	"go-cli-cobra": true,
-	"go-api-chi":   true,
-	"go-web-templ": true,
+// containerStacks maps each stack whose overlay carries containerFiles to the
+// notice printed when upgrade adds them. The notice is chosen by stack key,
+// not by manifest Language.
+var containerStacks = map[string]string{
+	"go-cli-cobra": goContainerNotice,
+	"go-api-chi":   goContainerNotice,
+	"go-web-templ": goContainerNotice,
+
+	"python-cli-typer": pythonContainerNotice,
+	"python-fastapi":   pythonContainerNotice,
+	"python-web-jinja": pythonContainerNotice,
 }
 
 const goContainerNotice = "forge upgrade: added Dockerfile, .dockerignore and CONTAINER.md for the Go container image pattern (ADR-0023).\n" +
@@ -376,9 +383,15 @@ const goContainerNotice = "forge upgrade: added Dockerfile, .dockerignore and CO
 	"  the CI image scan step, and the PORT / slog changes in the application code.\n" +
 	"  Align the Go and golangci-lint (and templ) versions in the Dockerfile with this repo's mise.toml before building; see CONTAINER.md."
 
-// addGoContainerFilesIfMissing delivers the Go container files to an existing
-// Go-stack repo. A repo whose manifest names no Go stack (including a legacy
-// repo with no stack) is skipped: the stack is never guessed.
+const pythonContainerNotice = "forge upgrade: added Dockerfile, .dockerignore and CONTAINER.md for the Python container image pattern (ADR-0026).\n" +
+	"  Upgrade did not change pyproject.toml, mise.toml, CI or application code.\n" +
+	"  The Dockerfile builds only once the repo has a uv.lock (run `uv lock`) and an `app` console script in [project.scripts];\n" +
+	"  align the Python, uv, ruff and pyright versions in the Dockerfile with this repo's mise.toml before building; see CONTAINER.md."
+
+// addContainerFilesIfMissing delivers the container files to an existing repo
+// whose manifest names a container-pattern stack (Go or Python). A repo whose
+// manifest names any other stack (including a legacy repo with no stack) is
+// skipped: the stack is never guessed.
 //
 // The build pair (Dockerfile, .dockerignore) is all-or-nothing against a
 // custom setup: if either exists with content that is not forge's, nothing is
@@ -393,14 +406,14 @@ const goContainerNotice = "forge upgrade: added Dockerfile, .dockerignore and CO
 // and renamed into place, so a partial write can never be mistaken for a
 // hand-written file. The Dockerfile goes last: without the allowlist
 // .dockerignore its `COPY . .` would take the whole checkout.
-func addGoContainerFilesIfMissing(assets fs.FS, targetDir string, m Manifest) (added []string, err error) {
-	if !goStacks[m.Stack] {
+func addContainerFilesIfMissing(assets fs.FS, targetDir string, m Manifest) (added []string, err error) {
+	if _, ok := containerStacks[m.Stack]; !ok {
 		return nil, nil
 	}
 
 	// Read every source first so a missing embedded file fails before any write.
-	contents := make(map[string][]byte, len(goContainerFiles))
-	for _, name := range goContainerFiles {
+	contents := make(map[string][]byte, len(containerFiles))
+	for _, name := range containerFiles {
 		src := "templates/golden/" + m.Stack + "/.forge-overlay/" + name
 		data, err := fs.ReadFile(assets, src)
 		if err != nil {

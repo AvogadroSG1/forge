@@ -1,0 +1,65 @@
+import json
+import logging
+import sys
+
+import pytest
+
+from {{.PythonPackage}} import serve
+
+
+def test_json_formatter_emits_one_json_line() -> None:
+    record = logging.LogRecord(
+        "demo", logging.INFO, __file__, 1, "hello %s", ("world",), None
+    )
+
+    line = serve.JSONFormatter().format(record)
+
+    assert "\n" not in line
+    entry = json.loads(line)
+    assert entry["level"] == "INFO"
+    assert entry["logger"] == "demo"
+    assert entry["msg"] == "hello world"
+    assert "time" in entry
+
+
+def test_json_formatter_includes_exception_text() -> None:
+    try:
+        raise ValueError("boom")
+    except ValueError:
+        record = logging.LogRecord(
+            "demo", logging.ERROR, __file__, 1, "failed", (), sys.exc_info()
+        )
+
+    line = serve.JSONFormatter().format(record)
+
+    assert "\n" not in line
+    assert "ValueError: boom" in json.loads(line)["exception"]
+
+
+def test_main_reads_host_and_port_from_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        serve.uvicorn, "run", lambda app, **kwargs: calls.append(kwargs)
+    )
+    monkeypatch.setenv("HOST", "0.0.0.0")
+    monkeypatch.setenv("PORT", "9090")
+
+    serve.main()
+
+    assert calls == [{"host": "0.0.0.0", "port": 9090, "log_config": serve.LOG_CONFIG}]
+
+
+def test_main_defaults_to_loopback_port_8000(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        serve.uvicorn, "run", lambda app, **kwargs: calls.append(kwargs)
+    )
+    monkeypatch.delenv("HOST", raising=False)
+    monkeypatch.delenv("PORT", raising=False)
+
+    serve.main()
+
+    assert calls[0]["host"] == "127.0.0.1"
+    assert calls[0]["port"] == 8000

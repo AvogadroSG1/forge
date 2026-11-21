@@ -1,0 +1,14 @@
+# Allowlist: nothing enters the build context unless it is re-included here.
+# This keeps secrets, VCS data and local state out of every image layer.
+*
+
+!pyproject.toml
+!uv.lock
+!README.md
+!**/*.py
+
+# Exclusions below the allowlist win over the re-includes above.
+# A local virtualenv is rebuilt from uv.lock, never copied.
+.venv/
+# Tests are not needed to build the application.
+tests/

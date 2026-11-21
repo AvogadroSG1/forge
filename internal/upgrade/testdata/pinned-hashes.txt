@@ -1,4 +1,4 @@
-version: 10
+version: 11
 templates/common/claude/hooks/guard cbb9a8051bbae8642065fcc952dacd818c03884c276f2f9dc13ba56c70bffc70
 templates/common/claude/hooks/secret-scan.sh 5bcacad216038526a573bdf6394466cddfde58a027b235a70d107dc86c51d0f6
 templates/common/claude/settings.json 89add3015d704fe1b30a18bc39f7396c3c41416beb9a70f3b64d1c018345f753

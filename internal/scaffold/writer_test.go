@@ -153,6 +153,71 @@ func TestWriterRendersPythonPackageFromEmbeddedTemplates(t *testing.T) {
 	}
 }
 
+func TestWriterTyperScriptsHaveNoDuplicateAppEntry(t *testing.T) {
+	t.Parallel()
+
+	render := func(t *testing.T, packageOverride string) string {
+		t.Helper()
+
+		tempDir := t.TempDir()
+		vars, err := project.ResolveVariables(project.Input{
+			ProjectName:           "My Cool CLI",
+			Language:              "python",
+			ProjectType:           "cli",
+			Stack:                 "python-cli-typer",
+			AuthorName:            "Ada Lovelace",
+			AuthorEmail:           "ada@example.com",
+			Remote:                project.RemoteNone,
+			PythonPackageOverride: packageOverride,
+		})
+		if err != nil {
+			t.Fatalf("ResolveVariables() error = %v", err)
+		}
+		if err := (Writer{Assets: forge.Assets()}).Write(tempDir, vars); err != nil {
+			t.Fatalf("Write() error = %v", err)
+		}
+		return readFile(t, filepath.Join(tempDir, "pyproject.toml"))
+	}
+
+	// scriptLines returns the key lines of the [project.scripts] table.
+	scriptLines := func(pyproject string) []string {
+		var lines []string
+		inScripts := false
+		for _, line := range strings.Split(pyproject, "\n") {
+			switch {
+			case strings.HasPrefix(line, "["):
+				inScripts = strings.TrimSpace(line) == "[project.scripts]"
+			case inScripts && strings.TrimSpace(line) != "":
+				lines = append(lines, line)
+			}
+		}
+		return lines
+	}
+
+	t.Run("package named app", func(t *testing.T) {
+		t.Parallel()
+
+		lines := scriptLines(render(t, "app"))
+		if len(lines) != 1 || !strings.HasPrefix(lines[0], "app = ") {
+			t.Fatalf("[project.scripts] lines = %q, want exactly one `app = ` line", lines)
+		}
+	})
+
+	t.Run("package with another name", func(t *testing.T) {
+		t.Parallel()
+
+		lines := scriptLines(render(t, "my_cool_cli"))
+		var hasApp, hasPackage bool
+		for _, line := range lines {
+			hasApp = hasApp || strings.HasPrefix(line, "app = ")
+			hasPackage = hasPackage || strings.HasPrefix(line, "my_cool_cli = ")
+		}
+		if len(lines) != 2 || !hasApp || !hasPackage {
+			t.Fatalf("[project.scripts] lines = %q, want one `app = ` and one `my_cool_cli = ` line", lines)
+		}
+	})
+}
+
 func TestWriterRendersPythonFastAPIPackageDirectory(t *testing.T) {
 	t.Parallel()
 

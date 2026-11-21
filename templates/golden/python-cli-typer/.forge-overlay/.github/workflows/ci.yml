@@ -14,3 +14,5 @@ jobs:
           version: 2026.11.9
       - run: mise install
       - run: mise run ci
+      # Needs Docker, so it is a step of its own: mise run ci stays Docker-free.
+      - run: mise run image:scan
