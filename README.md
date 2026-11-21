@@ -32,7 +32,7 @@ Each shipped stack is expected to scaffold a repo that can run `mise install` an
 
 Every stack's overlay also ships an env-gated OpenTelemetry bootstrap (traces + metrics) with a real test: providers are always installed, and OTLP/HTTP export turns on only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (see ADR-0020). Every repo also ships a `mise run otel` task that starts the shared, system-wide Collector + Aspire Dashboard stack, points OTLP endpoints at the Collector under `mise`, and exposes the local viewer at `http://127.0.0.1:18888` (see ADR-0021 and ADR-0022).
 
-The three Go stacks also ship a container image pattern: one digest-pinned, multi-stage `Dockerfile` with a minimal non-root `runtime` target and a `sandbox` toolchain target for agents, plus `mise run image:lint`, `mise run image`, and `mise run image:scan`. The generated `CONTAINER.md` explains usage and Twelve-Factor compliance; see [ADR-0023](./docs/adr/0023-go-container-image-pattern.md).
+The three Go stacks and the three Python stacks also ship a container image pattern: one digest-pinned, multi-stage `Dockerfile` with a non-root `runtime` target and a `sandbox` toolchain target for agents, plus `mise run image:lint`, `mise run image`, and `mise run image:scan`. The generated `CONTAINER.md` explains usage and Twelve-Factor compliance; see [ADR-0023](./docs/adr/0023-go-container-image-pattern.md) for Go and [ADR-0026](./docs/adr/0026-python-container-image-pattern.md) for Python. The Python stacks install with `uv` and commit a `uv.lock` generated at init, which the image build requires; see [ADR-0025](./docs/adr/0025-python-stacks-use-uv-with-a-committed-lock.md).
 
 ## How It Works
 
@@ -273,11 +273,12 @@ Overwrite managed files from the embedded template:
 go run ./cmd/forge upgrade
 ```
 
-For a repo whose manifest names a Go stack (`go-cli-cobra`, `go-api-chi`, `go-web-templ`),
-upgrade also adds the container pattern's `Dockerfile`, `.dockerignore` and `CONTAINER.md` when
+For a repo whose manifest names one of the six container-pattern stacks (`go-cli-cobra`, `go-api-chi`, `go-web-templ`,
+`python-cli-typer`, `python-fastapi`, `python-web-jinja`), upgrade also adds the container pattern's `Dockerfile`, `.dockerignore` and `CONTAINER.md` when
 they are missing. If a `Dockerfile` or `.dockerignore` of your own already exists nothing is added, and an
 existing `CONTAINER.md` is kept; an upgrade interrupted partway is completed on the next run. Upgrade does not add the `image*` mise tasks, the `hadolint` and
-`trivy` pins, the CI scan step or the `PORT`/`slog` code changes; it prints a notice listing them.
+`trivy` pins, the CI scan step or the application code changes (`PORT`/`slog` for Go, the `serve` module for Python); it prints a notice listing them.
+For Python it also leaves `pyproject.toml` and `mise.toml` alone, so the Dockerfile builds only once the repo has a `uv.lock` and an `app` console script.
 See `CONTAINER.md` after upgrading.
 
 Git hooks are not migrated by `upgrade`. Repos generated before ADR-0024 still have
@@ -384,9 +385,9 @@ GOCACHE=$PWD/.cache/go-build go test -tags=integration -timeout 15m -run TestGen
 FORGE_DOCKER_TESTS=1 GOCACHE=$PWD/.cache/go-build go test ./test/ -run OtelLifecycle -count=1 -timeout 10m
 # Real `ng build` bundle checks for the Angular OTLP define bridge (requires npm, node and network; skipped unless set)
 FORGE_SMOKE_NETWORK=1 GOCACHE=$PWD/.cache/go-build go test ./test/ -run "TestOtelAngularStandaloneBundleInlinesEndpoint|TestOtelAngularFullstackBundleInlinesEndpoint" -count=1 -timeout 30m
-# Live build-and-run test for the Go stack container images (requires Docker and network; skipped unless set).
+# Live build-and-run tests for the Go and Python stack container images (requires Docker and network; skipped unless set).
 # FORGE_DOCKER_BUILD_ARGS adds arguments to every `docker build`, e.g. for a registry mirror.
-FORGE_DOCKER_TESTS=1 GOCACHE=$PWD/.cache/go-build go test ./test/ -run "TestGoStackContainerImagesBuildAndRun|TestGoWebTemplImageServesTemplateOnlyEdits" -count=1 -timeout 40m
+FORGE_DOCKER_TESTS=1 GOCACHE=$PWD/.cache/go-build go test ./test/ -run "TestGoStackContainerImagesBuildAndRun|TestGoWebTemplImageServesTemplateOnlyEdits|TestPythonStackContainerImagesBuildAndRun|TestPythonWebJinjaImageServesTemplateOnlyEdits" -count=1 -timeout 40m
 ```
 
 ### BDD And Review Expectations

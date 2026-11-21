@@ -2,6 +2,8 @@
 
 **Status:** accepted · 2026-11-20
 
+> Extended to the Python stacks by ADR-0026 (2026-11-21); upgrade delivery now covers six stacks.
+
 > **Amended 2026-11-20 (agentic_template_start-49o).** `forge upgrade` now delivers the Go stacks'
 > `Dockerfile`, `.dockerignore` and `CONTAINER.md`, which replaces the "Deferred" alternative and
 > the consequence that repos "do not receive these files" below. They are added **only if

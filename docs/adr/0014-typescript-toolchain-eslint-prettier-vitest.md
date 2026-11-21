@@ -24,7 +24,7 @@ npm expects it. Angular's `test` script is `ng test --watch=false` — since Ang
 `ng test` IS vitest, so all three frameworks converge on one runner.
 
 **3. Vanilla never vendors `node_modules` or `package-lock.json`.** The lockfile is
-generated at init by `npm install` (consistent with `go mod tidy` / `pip install` already
+generated at init by `npm install` (consistent with `go mod tidy` / `pip install` [now `uv sync`, ADR-0025, 2026-11-21] already
 requiring network during init). Recipe rows use `strip_paths` to drop installs, caches
 (`.angular`, `.svelte-kit`), and scaffolder `.gitignore`s before snapshotting.
 
