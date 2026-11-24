@@ -9,5 +9,11 @@
 # Tests are not needed to build the binary.
 **/*_test.go
 
+# Whole directories are excluded with /**: BuildKit lets a file-level
+# re-include beat a bare directory rule.
 # A frontend under web/ is built and shipped separately.
-web/
+web/**
+# Hidden directories and apm_modules/ hold agent tooling whose example sources
+# match the re-includes above; they are not part of this module.
+.*/**
+apm_modules/**

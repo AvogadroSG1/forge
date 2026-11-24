@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -193,10 +194,15 @@ func TestGoStacksShipAllowlistDockerignore(t *testing.T) {
 			ignore := readGoContainerAsset(t, tc.stack, ".dockerignore")
 
 			var rules []string
+			lastInclude := -1
 			for _, line := range strings.Split(ignore, "\n") {
 				line = strings.TrimSpace(line)
-				if line != "" && !strings.HasPrefix(line, "#") {
-					rules = append(rules, line)
+				if line == "" || strings.HasPrefix(line, "#") {
+					continue
+				}
+				rules = append(rules, line)
+				if strings.HasPrefix(line, "!") {
+					lastInclude = len(rules) - 1
 				}
 			}
 			if len(rules) == 0 || rules[0] != "*" {
@@ -205,6 +211,21 @@ func TestGoStacksShipAllowlistDockerignore(t *testing.T) {
 			for _, want := range []string{"!go.mod", "!go.sum", "!**/*.go"} {
 				if !strings.Contains(ignore, want+"\n") {
 					t.Errorf(".dockerignore missing %q", want)
+				}
+			}
+			// instill installs skills with example .go files into hidden agent
+			// directories and apm_modules/; `!**/*.go` would pull them all in.
+			// The /** form is required: BuildKit lets a file-level re-include
+			// beat a bare `dir/` rule.
+			excludes := []string{".*/**", "apm_modules/**"}
+			if tc.stack == "go-api-chi" {
+				excludes = append(excludes, "web/**")
+			}
+			for _, want := range excludes {
+				if at := slices.Index(rules, want); at < 0 {
+					t.Errorf(".dockerignore missing exclusion %q", want)
+				} else if at < lastInclude {
+					t.Errorf(".dockerignore exclusion %q must come after the last `!` re-include (re-includes would override it)", want)
 				}
 			}
 		})

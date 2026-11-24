@@ -81,6 +81,9 @@ To run `forge init` end to end, you also need:
   - TypeScript stacks (and fullstack frontends): `node` / `npm`
 - optional remote publishing:
   - `gh` for `--remote gh`
+- optional architectural governance:
+  - `agent-fitness-functions` (onboarding is advisory; its hooks need PyYAML importable by the
+    `python3` on `PATH`, otherwise its doctor fails and each commit prints a `pyyaml` warning)
 
 ### Install The CLI
 

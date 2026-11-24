@@ -17,12 +17,19 @@ type Writer struct {
 	Assets fs.FS
 }
 
+// skipGitignoreBase keeps the base .gitignore section out of the copied
+// tree: writeGitIgnore merges it into .gitignore, so copying it too would
+// leave a stray gitignore.base at the repo root.
+func skipGitignoreBase(path string) bool {
+	return path == "gitignore.base"
+}
+
 func (w Writer) Write(targetDir string, vars project.Variables) error {
 	if err := ensureWritableDir(targetDir); err != nil {
 		return err
 	}
 
-	if err := w.copyTree("templates/common", targetDir, "", vars, nil); err != nil {
+	if err := w.copyTree("templates/common", targetDir, "", vars, skipGitignoreBase); err != nil {
 		return err
 	}
 

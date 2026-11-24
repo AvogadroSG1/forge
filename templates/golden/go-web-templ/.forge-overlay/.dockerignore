@@ -13,3 +13,9 @@
 
 # Tests are not needed to build the binary.
 **/*_test.go
+
+# Hidden directories and apm_modules/ hold agent tooling whose example sources
+# match the re-includes above; they are not part of this module. BuildKit lets
+# a file-level re-include beat a bare directory rule, so these end in /**.
+.*/**
+apm_modules/**

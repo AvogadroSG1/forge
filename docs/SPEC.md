@@ -632,7 +632,8 @@ byte for byte (§19). The pattern defines images only; registries and deployment
   `go build`, with templ pinned once as `ARG TEMPL_VERSION` equal to the mise tool and `go.mod`
   module versions, and MUST re-include `**/*.templ` in `.dockerignore`. Its sandbox ships templ.
 - **Build context.** `.dockerignore` re-includes only `go.mod`, `go.sum`, Go sources, and
-  embedded assets.
+  embedded assets, then excludes tests, hidden directories and `apm_modules/` again (installed
+  skills ship example Go sources there).
 - **Twelve-Factor code.** The server stacks (`go-api-chi`, `go-web-templ`) read the listen port
   from `PORT` (default `8080`, matching the backend port in §6) and log with `log/slog`.
 

@@ -11,7 +11,7 @@ node = "26.13.1"
 {{- end }}
 
 [tasks.fmt]
-run = "gofmt -w $(find . -name '*.go' -not -path './.git/*' -not -path './web/*')"
+run = "gofmt -w $(find . -name '*.go' -not -path '*/.*' -not -path './apm_modules/*' -not -path './web/*')"
 
 [tasks.lint]
 run = "golangci-lint run ./..."

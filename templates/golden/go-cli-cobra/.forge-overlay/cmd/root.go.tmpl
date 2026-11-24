@@ -1,0 +1,19 @@
+package cmd
+
+import "github.com/spf13/cobra"
+
+// The root command is named after the repository: help output and generated
+// shell completions register under this name.
+var rootCmd = &cobra.Command{
+	Use:          "{{.RepoSlug}}",
+	Short:        "Walking-skeleton Cobra CLI",
+	SilenceUsage: true,
+}
+
+func Execute() error {
+	return rootCmd.Execute()
+}
+
+func RootCommand() *cobra.Command {
+	return rootCmd
+}

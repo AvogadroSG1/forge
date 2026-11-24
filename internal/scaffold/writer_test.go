@@ -52,6 +52,9 @@ func TestWriterComposesCommonVanillaAndOverlayAssets(t *testing.T) {
 	assertFileContains(t, filepath.Join(tempDir, ".gitignore"), ".DS_Store")
 	assertFileContains(t, filepath.Join(tempDir, ".gitignore"), "# ===== go gitignore =====")
 	assertFileContains(t, filepath.Join(tempDir, ".gitignore"), "bin/")
+	if _, err := os.Lstat(filepath.Join(tempDir, "gitignore.base")); !os.IsNotExist(err) {
+		t.Fatalf("gitignore.base must be merged into .gitignore, not copied to the repo root (Lstat err = %v)", err)
+	}
 
 	linkTarget, err := os.Readlink(filepath.Join(tempDir, "CLAUDE.md"))
 	if err != nil {
@@ -151,6 +154,32 @@ func TestWriterRendersPythonPackageFromEmbeddedTemplates(t *testing.T) {
 	if _, err := os.Stat(templateLiteral); err == nil {
 		t.Fatal("literal {{.PythonPackage}} directory should not exist in output")
 	}
+}
+
+// The root command's name is what help output and generated shell completions
+// register under, so it has to be the repo's own name, not a fixed one.
+func TestWriterNamesCobraRootCommandAfterRepoSlug(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	vars, err := project.ResolveVariables(project.Input{
+		ProjectName: "Sesame Street Reader",
+		Language:    "go",
+		ProjectType: "cli",
+		Stack:       "go-cli-cobra",
+		AuthorName:  "Ada Lovelace",
+		AuthorEmail: "ada@example.com",
+		Remote:      project.RemoteNone,
+	})
+	if err != nil {
+		t.Fatalf("ResolveVariables() error = %v", err)
+	}
+
+	if err := (Writer{Assets: forge.Assets()}).Write(tempDir, vars); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+
+	assertFileContains(t, filepath.Join(tempDir, "cmd", "root.go"), `Use:          "sesame-street-reader",`)
 }
 
 func TestWriterTyperScriptsHaveNoDuplicateAppEntry(t *testing.T) {

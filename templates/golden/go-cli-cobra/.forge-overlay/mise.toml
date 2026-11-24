@@ -8,7 +8,7 @@ lefthook = "2.2.2"
 "github:Dicklesworthstone/destructive_command_guard" = "0.16.0"
 
 [tasks.fmt]
-run = "gofmt -w $(find . -name '*.go' -not -path './.git/*')"
+run = "gofmt -w $(find . -name '*.go' -not -path '*/.*' -not -path './apm_modules/*')"
 
 [tasks.lint]
 run = "golangci-lint run ./..."
