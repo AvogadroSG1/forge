@@ -1,0 +1,172 @@
+// <copyright file="WeatherForecastEndpointTests.cs" company="{{.AuthorName}}">
+// Copyright (c) {{.AuthorName}}. All rights reserved.
+// </copyright>
+
+using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
+using System.Reflection;
+using System.Text;
+using Xunit;
+
+/// <summary>
+/// Verifies the scaffolded weather forecast endpoint responds successfully.
+/// </summary>
+public sealed class WeatherForecastEndpointTests
+{
+    private static readonly object OutputSync = new();
+
+    /// <summary>
+    /// Ensures the weather forecast endpoint returns HTTP 200 from the real app process.
+    /// </summary>
+    /// <returns>A task that completes when the assertion finishes.</returns>
+    [Fact]
+    public async Task WeatherForecastEndpointReturnsOk()
+    {
+        var port = ReserveLoopbackPort();
+        var projectPath = Path.GetFullPath(GetRequiredMetadata("ForgeAppProjectPath"));
+        var buildConfiguration = GetRequiredMetadata("ForgeBuildConfiguration");
+        var projectDirectory = Path.GetDirectoryName(projectPath)
+            ?? throw new InvalidOperationException($"Could not determine application directory from '{projectPath}'.");
+        var output = new StringBuilder();
+
+        using var process = StartApplicationProcess(projectPath, projectDirectory, buildConfiguration, port, output);
+        using var handler = new SocketsHttpHandler
+        {
+            UseCookies = false,
+            UseProxy = false,
+        };
+        using var client = new HttpClient(handler)
+        {
+            Timeout = TimeSpan.FromSeconds(2),
+        };
+        using var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var cancellationToken = cancellationSource.Token;
+        var endpoint = $"http://127.0.0.1:{port}/Weatherforecast";
+        string? lastProbe = null;
+
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    using var response = await client.GetAsync(endpoint, cancellationToken);
+                    var content = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                    Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                    Assert.Contains("temperatureC", content, StringComparison.OrdinalIgnoreCase);
+                    return;
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    lastProbe = "request timed out";
+                }
+                catch (HttpRequestException ex)
+                {
+                    lastProbe = ex.Message;
+                }
+
+                try
+                {
+                    await Task.Delay(500, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync();
+            }
+        }
+
+        Assert.Fail(
+            $"Weather forecast endpoint did not become ready. Last probe: {lastProbe}{Environment.NewLine}--- output ---{Environment.NewLine}{output}");
+    }
+
+    private static string GetRequiredMetadata(string key)
+    {
+        foreach (var attribute in typeof(WeatherForecastEndpointTests).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>())
+        {
+            if (string.Equals(attribute.Key, key, StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(attribute.Value))
+            {
+                return attribute.Value;
+            }
+        }
+
+        throw new InvalidOperationException($"Missing required assembly metadata '{key}'.");
+    }
+
+    private static int ReserveLoopbackPort()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+
+        try
+        {
+            return ((IPEndPoint)listener.LocalEndpoint).Port;
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
+    private static Process StartApplicationProcess(
+        string projectPath,
+        string projectDirectory,
+        string buildConfiguration,
+        int port,
+        StringBuilder output)
+    {
+        var process = new Process
+        {
+            StartInfo = new ProcessStartInfo("dotnet")
+            {
+                WorkingDirectory = projectDirectory,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            },
+        };
+
+        process.StartInfo.ArgumentList.Add("run");
+        process.StartInfo.ArgumentList.Add("--project");
+        process.StartInfo.ArgumentList.Add(projectPath);
+        process.StartInfo.ArgumentList.Add("--configuration");
+        process.StartInfo.ArgumentList.Add(buildConfiguration);
+        process.StartInfo.ArgumentList.Add("--no-build");
+        process.StartInfo.ArgumentList.Add("--no-launch-profile");
+        process.StartInfo.Environment["ASPNETCORE_URLS"] = $"http://127.0.0.1:{port}";
+        process.OutputDataReceived += (_, args) => AppendOutput(output, args.Data);
+        process.ErrorDataReceived += (_, args) => AppendOutput(output, args.Data);
+
+        if (!process.Start())
+        {
+            throw new InvalidOperationException("Failed to start dotnet run for the scaffolded web API.");
+        }
+
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+        return process;
+    }
+
+    private static void AppendOutput(StringBuilder output, string? line)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return;
+        }
+
+        lock (OutputSync)
+        {
+            _ = output.AppendLine(line);
+        }
+    }
+}
